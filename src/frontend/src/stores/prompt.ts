@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { promptApi } from '@/api/promptApi'
+import { categoryApi } from '@/api/categoryApi'
 import { mockCategories, mockPrompts } from '@/mock/prompts'
 import type { Prompt, Category } from '@/types'
 
@@ -9,13 +10,14 @@ export const usePromptStore = defineStore('prompt', () => {
   const currentPrompt = ref<Prompt | null>(null)
   const categories = ref<Category[]>([])
   const loading = ref(false)
+  const detailLoading = ref(false)
   const usingMockData = ref(false)
 
   const setPrompts = (list: Prompt[]) => {
     prompts.value = list
   }
 
-  const setCurrentPrompt = (prompt: Prompt) => {
+  const setCurrentPrompt = (prompt: Prompt | null) => {
     currentPrompt.value = prompt
   }
 
@@ -29,6 +31,14 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const featuredPrompts = computed(() => prompts.value.slice(0, 3))
   const latestPrompts = computed(() => prompts.value.slice(3))
+
+  const ensurePromptSeed = async () => {
+    if (prompts.value.length > 0 && categories.value.length > 0) {
+      return
+    }
+
+    await loadHomeFeed()
+  }
 
   const loadHomeFeed = async () => {
     loading.value = true
@@ -45,7 +55,7 @@ export const usePromptStore = defineStore('prompt', () => {
 
     try {
       const [categoryRes, promptRes] = await Promise.all([
-        promptApi.getCategories(),
+        categoryApi.getCategoryList(),
         promptApi.getPromptList({ page: 1, pageSize: 12, sort: 'latest' })
       ])
 
@@ -61,19 +71,61 @@ export const usePromptStore = defineStore('prompt', () => {
     }
   }
 
+  const loadPromptDetail = async (id: number) => {
+    detailLoading.value = true
+
+    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
+
+    if (!enablePromptApi) {
+      const prompt = mockPrompts.find((item) => item.id === id) ?? null
+      currentPrompt.value = prompt
+      usingMockData.value = true
+      detailLoading.value = false
+      return prompt
+    }
+
+    try {
+      const response = await promptApi.getPromptDetail(id)
+      currentPrompt.value = response.data
+      usingMockData.value = false
+
+      if (!prompts.value.some((item) => item.id === response.data.id)) {
+        prompts.value = [response.data, ...prompts.value]
+      }
+
+      return response.data
+    } catch {
+      const prompt = mockPrompts.find((item) => item.id === id) ?? null
+      currentPrompt.value = prompt
+      usingMockData.value = true
+      return prompt
+    } finally {
+      detailLoading.value = false
+    }
+  }
+
+  const getRelatedPrompts = (promptId: number, categoryId: number) => {
+    return prompts.value
+      .filter((item) => item.id !== promptId && item.categoryId === categoryId)
+      .slice(0, 3)
+  }
+
   return {
     prompts,
     currentPrompt,
     categories,
     loading,
+    detailLoading,
     usingMockData,
     featuredPrompts,
     latestPrompts,
     setPrompts,
     setCurrentPrompt,
     setCategories,
-    setLoading
-,
-    loadHomeFeed
+    setLoading,
+    ensurePromptSeed,
+    loadHomeFeed,
+    loadPromptDetail,
+    getRelatedPrompts
   }
 })

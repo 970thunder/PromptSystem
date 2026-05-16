@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -24,12 +25,14 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/publish',
     name: 'Publish',
-    component: () => import('@/views/PublishView.vue')
+    component: () => import('@/views/PublishView.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/profile/:userId?',
     name: 'Profile',
-    component: () => import('@/views/ProfileView.vue')
+    component: () => import('@/views/ProfileView.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/search',
@@ -47,6 +50,29 @@ const router = createRouter({
     }
     return { top: 0 }
   }
+})
+
+router.beforeEach(async (to) => {
+  const userStore = useUserStore()
+
+  if (userStore.token && !userStore.userInfo) {
+    await userStore.fetchUserInfo()
+  }
+
+  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+    return {
+      path: '/login',
+      query: {
+        redirect: to.fullPath
+      }
+    }
+  }
+
+  if ((to.path === '/login' || to.path === '/register') && userStore.isLoggedIn) {
+    return '/'
+  }
+
+  return true
 })
 
 export default router

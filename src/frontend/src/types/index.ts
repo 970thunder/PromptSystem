@@ -126,6 +126,11 @@ export interface RegisterRequest {
   captcha: string
 }
 
+export interface LoginResponse {
+  token: string
+  user: User
+}
+
 export interface PublishPromptRequest {
   title: string
   description: string

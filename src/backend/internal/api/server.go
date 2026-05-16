@@ -5,22 +5,34 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"promptos-backend/internal/auth"
 	"promptos-backend/internal/config"
 	"promptos-backend/internal/store"
 )
 
 type server struct {
-	config config.Config
+	config       config.Config
+	tokenManager *auth.TokenManager
+	userStore    *store.UserStore
 }
 
 func NewServer(cfg config.Config) http.Handler {
-	s := &server{config: cfg}
+	s := &server{
+		config:       cfg,
+		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
+		userStore:    store.NewUserStore(),
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/categories", s.handleCategories)
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
 	mux.HandleFunc("/api/v1/prompts/", s.handlePromptDetail)
+	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
+	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
+	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
+	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
 
 	return s.withCORS(mux)
 }

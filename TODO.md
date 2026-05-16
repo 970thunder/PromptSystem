@@ -75,7 +75,7 @@
 - [ ] 配置 Go Router / middleware 约定
 - [x] 配置 MySQL 环境变量
 - [x] 配置 Redis 环境变量
-- [ ] 配置 JWT 基础能力
+- [x] 配置 JWT 基础能力
 - [x] 创建初版数据库 schema
 
 ---
@@ -130,8 +130,8 @@
 ### 3.2 前端 Prompt 数据层
 
 - [x] 定义 Prompt / Category / User 类型
-- [ ] 封装 Prompt API
-- [ ] 封装 Category API
+- [x] 封装 Prompt API
+- [x] 封装 Category API
 - [x] 建立 Prompt Pinia store
 - [x] 首页支持接口数据与 mock 数据降级
 
@@ -177,15 +177,15 @@
 
 ### 5.1 页面结构
 
-- [ ] AI 结果展示区
+- [x] AI 结果展示区
 - [ ] 图片轮播
-- [ ] Prompt 信息区
-- [ ] 参数展示
-- [ ] Prompt 正文
-- [ ] System Prompt
+- [x] Prompt 信息区
+- [x] 参数展示
+- [x] Prompt 正文
+- [x] System Prompt
 - [ ] Few-shot 展示
 - [ ] Workflow 展示
-- [ ] 相关推荐
+- [x] 相关推荐
 
 ### 5.2 交互功能
 
@@ -203,9 +203,9 @@
 
 ### 6.1 用户功能
 
-- [ ] 登录
-- [ ] 注册
-- [ ] JWT 鉴权
+- [x] 登录
+- [x] 注册
+- [x] JWT 鉴权
 - [ ] 邮箱验证码开发环境方案
 - [ ] 找回密码
 - [ ] 修改资料

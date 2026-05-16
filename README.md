@@ -42,6 +42,10 @@ Available MVP APIs:
 - `GET /api/v1/categories`
 - `GET /api/v1/prompts`
 - `GET /api/v1/prompts/:id`
+- `POST /api/v1/user/login`
+- `POST /api/v1/user/register`
+- `GET /api/v1/user/info`
+- `PUT /api/v1/user/info`
 
 ## Database
 
@@ -51,7 +55,7 @@ Initialize the local database with:
 mysql -u root -p < src/backend/sql/schema.sql
 ```
 
-The backend reads runtime configuration from environment variables such as `PORT`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
+The backend reads runtime configuration from environment variables such as `PORT`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
 
 ## Docker
 
@@ -60,6 +64,8 @@ docker compose up --build
 ```
 
 If your local machine already has MySQL or Redis on the default ports, copy `.env.docker.example` to `.env` and adjust the published host ports before starting Compose.
+
+For authentication, always set a real `PROMPTOS_JWT_SECRET` in `.env` before moving beyond local development.
 
 Docker services:
 
@@ -77,6 +83,7 @@ All development should follow `TODO.md`. Update the checklist after each verifie
 - Frontend env vars use the `VITE_` prefix, for example `VITE_API_BASE_URL` and `VITE_APP_TITLE`.
 - The home feed prefers live prompt APIs and falls back to mock content if the backend is unavailable.
 - Backend runtime config is environment-driven for local runs and Docker Compose.
+- Passwords are hashed with `bcrypt`, and protected API routes require a bearer JWT.
 
 ## Verification Commands
 
