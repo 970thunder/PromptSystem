@@ -53,6 +53,7 @@ All development should follow `TODO.md`. Update the checklist after each verifie
 ## Environment Naming
 
 - Frontend env vars use the `VITE_` prefix, for example `VITE_API_BASE_URL` and `VITE_APP_TITLE`.
+- The home feed defaults to mock content until prompt APIs are ready. Switch `VITE_ENABLE_PROMPT_API=true` to enable live prompt/category requests.
 - Backend runtime config stays in Spring Boot `application.yml` under `spring.*`, `server.*`, `jwt.*`, and `app.*`.
 
 ## Verification Commands

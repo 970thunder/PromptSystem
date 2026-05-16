@@ -126,11 +126,11 @@
 
 ### 3.2 前端 Prompt 数据层
 
-- [ ] 定义 Prompt / Category / User 类型
+- [x] 定义 Prompt / Category / User 类型
 - [ ] 封装 Prompt API
 - [ ] 封装 Category API
-- [ ] 建立 Prompt Pinia store
-- [ ] 首页支持接口数据与 mock 数据降级
+- [x] 建立 Prompt Pinia store
+- [x] 首页支持接口数据与 mock 数据降级
 
 ---
 
@@ -138,35 +138,35 @@
 
 ### 4.1 顶部导航
 
-- [ ] Logo
-- [ ] 搜索框
-- [ ] 分类导航
-- [ ] 登录按钮
+- [x] Logo
+- [x] 搜索框
+- [x] 分类导航
+- [x] 登录按钮
 - [ ] 用户菜单
 - [ ] 移动端导航
 
 ### 4.2 Banner 区域
 
-- [ ] 热门推荐 Banner
+- [x] 热门推荐 Banner
 - [ ] 活动 Banner
 - [ ] 动态轮播或精选横滑
 
 ### 4.3 Prompt 瀑布流
 
-- [ ] Prompt 卡片组件
+- [x] Prompt 卡片组件
 - [ ] 瀑布流布局
 - [ ] 卡片 hover 动画
-- [ ] 响应式适配
+- [x] 响应式适配
 - [ ] 空状态
-- [ ] 加载状态
+- [x] 加载状态
 - [ ] 无限滚动或分页加载
 
 ### 4.4 分类系统
 
-- [ ] Prompt 分类
+- [x] Prompt 分类
 - [ ] Skill 分类入口占位
 - [ ] 标签筛选
-- [ ] 热门标签
+- [x] 热门标签
 
 ---
 
