@@ -50,3 +50,18 @@ The development datasource is configured in `src/backend/src/main/resources/appl
 
 All development should follow `TODO.md`. Update the checklist after each verified task, then commit the verified changes.
 
+## Environment Naming
+
+- Frontend env vars use the `VITE_` prefix, for example `VITE_API_BASE_URL` and `VITE_APP_TITLE`.
+- Backend runtime config stays in Spring Boot `application.yml` under `spring.*`, `server.*`, `jwt.*`, and `app.*`.
+
+## Verification Commands
+
+```bash
+cd src/frontend
+npm run lint
+npm run build
+
+cd ../backend
+mvn test -DskipTests
+```

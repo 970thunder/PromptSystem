@@ -35,23 +35,23 @@
 - [x] 将登录响应、用户信息、更新用户资料请求拆到独立 DTO/VO 文件
 - [x] 修正 `application.yml` 数据库名 `prompos` 为 `promptos`
 - [x] 确认 `mvn test -DskipTests` 编译通过
-- [ ] 确认后端服务可启动
+- [x] 确认后端服务可启动
 
 ## 0.3 本地联调环境
 
-- [ ] 确认 MySQL 本地库 `promptos` 可用
+- [ ] 确认 MySQL 本地库 `promptos` 可用（当前阻塞：`root/root` 登录失败，需要确认本地凭据）
 - [ ] 执行 `src/backend/sql/schema.sql`
-- [ ] 确认 Redis 本地服务可用，或提供开发环境降级方案
-- [ ] 确认 Vite `/api` 代理到 `http://localhost:8080`
-- [ ] 前端调用后端健康接口或用户接口成功
+- [ ] 确认 Redis 本地服务可用，或提供开发环境降级方案（当前阻塞：`127.0.0.1:6379` 未监听）
+- [x] 确认 Vite `/api` 代理到 `http://localhost:8080`
+- [x] 前端调用后端健康接口或用户接口成功
 
 ## 0.4 项目规范
 
 - [x] 初始化 Git 仓库或确认已有版本管理方案
 - [x] 添加根目录 `.gitignore`
 - [x] 添加根目录 `README.md`，写明启动、构建、数据库初始化方式
-- [ ] 确认前后端环境变量命名规范
-- [ ] 确认提交前检查命令：前端 build/lint，后端 compile/test
+- [x] 确认前后端环境变量命名规范
+- [x] 确认提交前检查命令：前端 build/lint，后端 compile/test
 
 ---
 
