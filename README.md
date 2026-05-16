@@ -7,7 +7,7 @@ AI Prompt & Skill community platform. The current MVP focuses on the Prompt comm
 ```text
 src/
   frontend/   Vue 3 + TypeScript + Vite + TailwindCSS
-  backend/    Spring Boot + MyBatis Plus + MySQL + Redis
+  backend/    Go + net/http + MySQL + Redis
 ```
 
 ## Frontend
@@ -26,8 +26,8 @@ The frontend dev server runs on `http://localhost:3000` and proxies `/api` to `h
 
 ```bash
 cd src/backend
-mvn spring-boot:run
-mvn test -DskipTests
+go run ./cmd/api
+go test ./...
 ```
 
 Backend defaults:
@@ -35,6 +35,13 @@ Backend defaults:
 - Server: `http://localhost:8080`
 - MySQL database: `promptos`
 - Redis: `localhost:6379`
+
+Available MVP APIs:
+
+- `GET /api/v1/health`
+- `GET /api/v1/categories`
+- `GET /api/v1/prompts`
+- `GET /api/v1/prompts/:id`
 
 ## Database
 
@@ -44,7 +51,22 @@ Initialize the local database with:
 mysql -u root -p < src/backend/sql/schema.sql
 ```
 
-The development datasource is configured in `src/backend/src/main/resources/application.yml`.
+The backend reads runtime configuration from environment variables such as `PORT`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+If your local machine already has MySQL or Redis on the default ports, copy `.env.docker.example` to `.env` and adjust the published host ports before starting Compose.
+
+Docker services:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8080`
+- MySQL: `localhost:3306`
+- Redis: `localhost:6379`
 
 ## Development Order
 
@@ -53,8 +75,8 @@ All development should follow `TODO.md`. Update the checklist after each verifie
 ## Environment Naming
 
 - Frontend env vars use the `VITE_` prefix, for example `VITE_API_BASE_URL` and `VITE_APP_TITLE`.
-- The home feed defaults to mock content until prompt APIs are ready. Switch `VITE_ENABLE_PROMPT_API=true` to enable live prompt/category requests.
-- Backend runtime config stays in Spring Boot `application.yml` under `spring.*`, `server.*`, `jwt.*`, and `app.*`.
+- The home feed prefers live prompt APIs and falls back to mock content if the backend is unavailable.
+- Backend runtime config is environment-driven for local runs and Docker Compose.
 
 ## Verification Commands
 
@@ -64,5 +86,9 @@ npm run lint
 npm run build
 
 cd ../backend
-mvn test -DskipTests
+go test ./...
+go build ./cmd/api
+
+cd ../..
+docker compose config
 ```

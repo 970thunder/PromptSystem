@@ -478,12 +478,21 @@ Element Plus（后台）
 # 后端
 
 ```text
-Spring Boot
+Golang
+net/http or Gin
 MySQL
 Redis
 ElasticSearch
 MinIO
 RabbitMQ
+```
+
+# 容器化
+
+```text
+Docker
+Docker Compose
+Nginx
 ```
 
 # AI层
@@ -666,19 +675,17 @@ TypeScript
 # 后端开发提示词
 
 ```text
-请使用 Spring Boot 开发 AI Prompt 平台后端。
+请使用 Golang 开发 AI Prompt 平台后端。
 
 项目结构要求：
 
-controller
-service
-serviceImpl
-mapper
-entity
-dto
-vo
-config
-utils
+cmd
+internal/handler
+internal/service
+internal/repository
+internal/model
+internal/config
+internal/platform
 
 功能包括：
 
@@ -694,7 +701,8 @@ utils
 10. ElasticSearch搜索
 
 数据库：MySQL
-ORM：MyBatis Plus
+缓存：Redis
+部署：Docker Compose
 ```
 
 ---

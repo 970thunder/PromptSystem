@@ -15,6 +15,7 @@
 2. Phase 1 只做 Prompt 社区 MVP，不提前扩展 Skill、比赛、学院、企业版。
 3. 所有页面先完成可用体验，再接真实后端接口。
 4. 组件、类型、接口优先复用，避免一次性页面代码堆叠。
+5. 后端统一使用 Go，并优先提供 Docker 化开发与部署链路。
 
 ---
 
@@ -29,21 +30,23 @@
 - [x] 确认 `npm run lint` 通过
 - [x] 启动前端开发服务并确认首页可访问
 
-## 0.2 后端编译修复
+## 0.2 Go 后端编译修复
 
-- [x] 修复 `UserService` / `UserServiceImpl` 对 `UserController` 内部 DTO 的引用问题
-- [x] 将登录响应、用户信息、更新用户资料请求拆到独立 DTO/VO 文件
-- [x] 修正 `application.yml` 数据库名 `prompos` 为 `promptos`
-- [x] 确认 `mvn test -DskipTests` 编译通过
-- [x] 确认后端服务可启动
+- [x] 移除 Spring Boot 主路径骨架
+- [x] 创建 Go 后端项目结构
+- [x] 提供 `health` / `categories` / `prompts` MVP 接口
+- [x] 确认 `go test ./...` 通过
+- [x] 确认 Go 后端服务可启动
 
 ## 0.3 本地联调环境
 
-- [ ] 确认 MySQL 本地库 `promptos` 可用（当前阻塞：`root/root` 登录失败，需要确认本地凭据）
-- [ ] 执行 `src/backend/sql/schema.sql`
-- [ ] 确认 Redis 本地服务可用，或提供开发环境降级方案（当前阻塞：`127.0.0.1:6379` 未监听）
+- [x] 提供 Docker Compose MySQL 服务
+- [x] 提供 Docker Compose Redis 服务
+- [x] 提供 Docker Compose 前后端联调链路
+- [x] 确认 Docker Compose 下 MySQL schema 自动初始化通过
+- [x] 确认 Docker Compose 下 Redis 服务可访问
 - [x] 确认 Vite `/api` 代理到 `http://localhost:8080`
-- [x] 前端调用后端健康接口或用户接口成功
+- [x] 前端调用后端健康接口或 Prompt 接口成功
 
 ## 0.4 项目规范
 
@@ -51,7 +54,7 @@
 - [x] 添加根目录 `.gitignore`
 - [x] 添加根目录 `README.md`，写明启动、构建、数据库初始化方式
 - [x] 确认前后端环境变量命名规范
-- [x] 确认提交前检查命令：前端 build/lint，后端 compile/test
+- [x] 确认提交前检查命令：前端 build/lint，后端 build/test
 
 ---
 
@@ -68,11 +71,11 @@
 - [x] 配置环境变量
 - [ ] 配置 Git Hooks
 - [x] 配置前端项目目录结构
-- [x] 创建后端项目（Spring Boot）
-- [x] 配置 MyBatis Plus
-- [x] 配置 MySQL 数据源
-- [x] 配置 Redis
-- [x] 配置 JWT 基础能力
+- [x] 创建后端项目（Go）
+- [ ] 配置 Go Router / middleware 约定
+- [x] 配置 MySQL 环境变量
+- [x] 配置 Redis 环境变量
+- [ ] 配置 JWT 基础能力
 - [x] 创建初版数据库 schema
 
 ---
@@ -113,16 +116,16 @@
 
 ### 3.1 后端 Prompt 基础接口
 
-- [ ] Prompt entity 字段与 schema 对齐
-- [ ] PromptMapper
-- [ ] PromptService
-- [ ] PromptController
-- [ ] 获取 Prompt 列表接口
-- [ ] 获取 Prompt 详情接口
+- [x] Prompt struct 字段与前端类型对齐
+- [ ] Prompt repository
+- [ ] Prompt service
+- [ ] Prompt handler
+- [x] 获取 Prompt 列表接口
+- [x] 获取 Prompt 详情接口
 - [ ] 创建 Prompt 接口
 - [ ] 更新 Prompt 接口
 - [ ] 删除/下架 Prompt 接口
-- [ ] 分类列表接口
+- [x] 分类列表接口
 
 ### 3.2 前端 Prompt 数据层
 
@@ -448,7 +451,7 @@
 
 ## 运维部署
 
-- [ ] Docker 部署
+- [x] Docker 部署
 - [ ] CI/CD
 - [ ] Nginx 配置
 - [ ] HTTPS 配置
