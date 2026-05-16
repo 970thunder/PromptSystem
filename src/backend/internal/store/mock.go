@@ -1,7 +1,5 @@
 package store
 
-import "sort"
-
 type User struct {
 	ID         int    `json:"id"`
 	Username   string `json:"username"`
@@ -51,38 +49,6 @@ type Category struct {
 
 func Categories() []Category {
 	return append([]Category(nil), categories...)
-}
-
-func FilterPrompts(categoryID int, sortBy string) []Prompt {
-	list := make([]Prompt, 0, len(prompts))
-	for _, prompt := range prompts {
-		if categoryID == 0 || prompt.CategoryID == categoryID {
-			list = append(list, prompt)
-		}
-	}
-
-	switch sortBy {
-	case "popular":
-		sort.SliceStable(list, func(i, j int) bool {
-			return list[i].Likes > list[j].Likes
-		})
-	default:
-		sort.SliceStable(list, func(i, j int) bool {
-			return list[i].CreatedAt > list[j].CreatedAt
-		})
-	}
-
-	return list
-}
-
-func FindPromptByID(id int) (Prompt, bool) {
-	for _, prompt := range prompts {
-		if prompt.ID == id {
-			return prompt, true
-		}
-	}
-
-	return Prompt{}, false
 }
 
 var categories = []Category{

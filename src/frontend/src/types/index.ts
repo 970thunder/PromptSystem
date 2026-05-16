@@ -131,6 +131,10 @@ export interface LoginResponse {
   user: User
 }
 
+export interface UploadImageResponse {
+  url: string
+}
+
 export interface PublishPromptRequest {
   title: string
   description: string

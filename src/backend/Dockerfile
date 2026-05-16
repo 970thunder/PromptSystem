@@ -13,6 +13,7 @@ FROM alpine:3.20
 RUN adduser -D -H promptos
 
 WORKDIR /app
+RUN mkdir -p /app/uploads && chown -R promptos:promptos /app
 COPY --from=builder /promptos-api /usr/local/bin/promptos-api
 
 USER promptos

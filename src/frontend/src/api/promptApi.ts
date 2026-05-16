@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { ApiResponse, PageResponse, Prompt, PublishPromptRequest, Category } from '@/types'
+import type { ApiResponse, PageResponse, Prompt, PublishPromptRequest, Category, UploadImageResponse } from '@/types'
 
 export const promptApi = {
   // Get prompt list with pagination
@@ -20,6 +20,17 @@ export const promptApi = {
   // Publish a new prompt
   publishPrompt(data: PublishPromptRequest): Promise<ApiResponse<Prompt>> {
     return request.post('/prompts', data)
+  },
+
+  uploadCover(file: File): Promise<ApiResponse<UploadImageResponse>> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return request.post('/uploads/images', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
   },
 
   // Update prompt

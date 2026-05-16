@@ -29,6 +29,10 @@ export const usePromptStore = defineStore('prompt', () => {
     loading.value = status
   }
 
+  const prependPrompt = (prompt: Prompt) => {
+    prompts.value = [prompt, ...prompts.value.filter((item) => item.id !== prompt.id)]
+  }
+
   const featuredPrompts = computed(() => prompts.value.slice(0, 3))
   const latestPrompts = computed(() => prompts.value.slice(3))
 
@@ -123,6 +127,7 @@ export const usePromptStore = defineStore('prompt', () => {
     setCurrentPrompt,
     setCategories,
     setLoading,
+    prependPrompt,
     ensurePromptSeed,
     loadHomeFeed,
     loadPromptDetail,

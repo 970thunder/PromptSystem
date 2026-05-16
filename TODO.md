@@ -1,5 +1,11 @@
 # AI Prompt & Skill Platform TODO
 
+## 2026-05-17 Additions
+
+- [~] Add cover image upload flow for Prompt publish
+- [~] Support local object storage and Cloudflare R2-compatible storage
+- [ ] Persist prompts beyond in-memory mock data
+
 > 后续开发严格按本文件推进。每完成一个任务，必须同步勾选；新增需求先写入 TODO，再开发。
 
 ## 状态约定

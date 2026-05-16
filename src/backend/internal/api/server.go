@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"promptos-backend/internal/auth"
 	"promptos-backend/internal/config"
+	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
 )
 
@@ -16,23 +18,32 @@ type server struct {
 	config       config.Config
 	tokenManager *auth.TokenManager
 	userStore    *store.UserStore
+	imageStorage storage.ImageStorage
 }
 
 func NewServer(cfg config.Config) http.Handler {
+	imageStorage, err := storage.NewImageStorage(cfg)
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize image storage: %v", err))
+	}
+
 	s := &server{
 		config:       cfg,
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
 		userStore:    store.NewUserStore(),
+		imageStorage: imageStorage,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/categories", s.handleCategories)
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
 	mux.HandleFunc("/api/v1/prompts/", s.handlePromptDetail)
+	mux.HandleFunc("/api/v1/uploads/images", s.withAuth(s.handleImageUpload))
 	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
 	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
 	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir))))
 
 	return s.withCORS(mux)
 }
@@ -69,11 +80,17 @@ func (s *server) handleCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlePrompts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		s.handlePromptList(w, r)
+	case http.MethodPost:
+		s.withAuth(s.handlePromptCreate).ServeHTTP(w, r)
+	default:
 		writeMethodNotAllowed(w)
-		return
 	}
+}
 
+func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	page := parseInt(query.Get("page"), 1)
 	pageSize := parseInt(query.Get("pageSize"), 12)
@@ -100,6 +117,91 @@ func (s *server) handlePrompts(w http.ResponseWriter, r *http.Request) {
 			Page:     page,
 			PageSize: pageSize,
 		},
+	})
+}
+
+type promptPayload struct {
+	Title        string             `json:"title"`
+	Description  string             `json:"description"`
+	Cover        string             `json:"cover"`
+	Content      string             `json:"content"`
+	SystemPrompt string             `json:"systemPrompt"`
+	Model        string             `json:"model"`
+	Params       store.PromptParams `json:"params"`
+	CategoryID   int                `json:"categoryId"`
+	Tags         []string           `json:"tags"`
+}
+
+func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
+	var payload promptPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:    400,
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if message := validatePromptPayload(payload); message != "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:    400,
+			Message: message,
+		})
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+			Code:    401,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	userRecord, found := s.userStore.FindByID(userID)
+	if !found {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+			Code:    401,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	prompt, err := store.CreatePrompt(store.CreatePromptInput{
+		Title:        payload.Title,
+		Description:  payload.Description,
+		Cover:        payload.Cover,
+		Content:      payload.Content,
+		SystemPrompt: payload.SystemPrompt,
+		Model:        payload.Model,
+		Params:       payload.Params,
+		CategoryID:   payload.CategoryID,
+		Tags:         payload.Tags,
+		User: store.User{
+			ID:         userRecord.ID,
+			Username:   userRecord.Username,
+			Avatar:     userRecord.Avatar,
+			Email:      userRecord.Email,
+			Bio:        userRecord.Bio,
+			Level:      userRecord.Level,
+			Experience: userRecord.Experience,
+			Status:     userRecord.Status,
+			CreatedAt:  userRecord.CreatedAt,
+		},
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:    400,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{
+		Code:    200,
+		Message: "Success",
+		Data:    prompt,
 	})
 }
 
@@ -174,6 +276,32 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func validatePromptPayload(payload promptPayload) string {
+	if strings.TrimSpace(payload.Title) == "" {
+		return "Title is required"
+	}
+	if strings.TrimSpace(payload.Description) == "" {
+		return "Description is required"
+	}
+	if strings.TrimSpace(payload.Cover) == "" {
+		return "Cover image is required"
+	}
+	if strings.TrimSpace(payload.Content) == "" {
+		return "Prompt content is required"
+	}
+	if strings.TrimSpace(payload.SystemPrompt) == "" {
+		return "System prompt is required"
+	}
+	if strings.TrimSpace(payload.Model) == "" {
+		return "Model is required"
+	}
+	if payload.CategoryID <= 0 {
+		return "Category is required"
+	}
+
+	return ""
 }
 
 type apiResponse[T any] struct {

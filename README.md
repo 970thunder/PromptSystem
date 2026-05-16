@@ -42,6 +42,8 @@ Available MVP APIs:
 - `GET /api/v1/categories`
 - `GET /api/v1/prompts`
 - `GET /api/v1/prompts/:id`
+- `POST /api/v1/prompts`
+- `POST /api/v1/uploads/images`
 - `POST /api/v1/user/login`
 - `POST /api/v1/user/register`
 - `GET /api/v1/user/info`
@@ -55,7 +57,7 @@ Initialize the local database with:
 mysql -u root -p < src/backend/sql/schema.sql
 ```
 
-The backend reads runtime configuration from environment variables such as `PORT`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
+The backend reads runtime configuration from environment variables such as `PORT`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `UPLOAD_*`, `R2_*`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
 
 ## Docker
 
@@ -66,6 +68,7 @@ docker compose up --build
 If your local machine already has MySQL or Redis on the default ports, copy `.env.docker.example` to `.env` and adjust the published host ports before starting Compose.
 
 For authentication, always set a real `PROMPTOS_JWT_SECRET` in `.env` before moving beyond local development.
+For image uploads, local development defaults to filesystem storage and serves files under `/uploads`. Production can switch to `PROMPTOS_UPLOAD_PROVIDER=r2` with Cloudflare R2 credentials and a public custom domain.
 
 Docker services:
 
@@ -84,6 +87,7 @@ All development should follow `TODO.md`. Update the checklist after each verifie
 - The home feed prefers live prompt APIs and falls back to mock content if the backend is unavailable.
 - Backend runtime config is environment-driven for local runs and Docker Compose.
 - Passwords are hashed with `bcrypt`, and protected API routes require a bearer JWT.
+- Prompt cover uploads validate image MIME type and file size before storing the file.
 
 ## Verification Commands
 
