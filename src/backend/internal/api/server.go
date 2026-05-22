@@ -37,7 +37,9 @@ func NewServer(cfg config.Config) http.Handler {
 
 	db, err := database.OpenMySQL(cfg)
 	if err == nil {
-		if seedErr := store.SeedMySQLData(db); seedErr == nil {
+		if migrateErr := database.RunMigrations(db, ""); migrateErr != nil {
+			log.Printf("failed to run MySQL migrations, falling back to memory store: %v", migrateErr)
+		} else if seedErr := store.SeedMySQLData(db); seedErr == nil {
 			userStore = store.NewMySQLUserStore(db)
 			promptStore = store.NewMySQLPromptStore(db)
 			storageMode = "mysql"

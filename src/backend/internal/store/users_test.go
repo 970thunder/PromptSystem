@@ -23,3 +23,19 @@ func TestUserStoreRegisterAndAuthenticate(t *testing.T) {
 		t.Fatalf("expected authenticated email tester@example.com, got %s", authUser.Email)
 	}
 }
+
+func TestUserStoreUpsertGitHubUserResolvesUsernameCollision(t *testing.T) {
+	userStore := NewUserStore()
+
+	user, err := userStore.UpsertGitHubUser(4242, "Astra Lab", "github-user@users.noreply.github.com", "")
+	if err != nil {
+		t.Fatalf("UpsertGitHubUser() error = %v", err)
+	}
+
+	if user.Username == "Astra Lab" {
+		t.Fatalf("expected username collision to be resolved, got %q", user.Username)
+	}
+	if user.GitHubID != 4242 {
+		t.Fatalf("expected github id 4242, got %d", user.GitHubID)
+	}
+}

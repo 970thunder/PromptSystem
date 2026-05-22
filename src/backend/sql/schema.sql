@@ -8,12 +8,12 @@ USE promptos;
 -- Users table
 CREATE TABLE users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(20) NOT NULL UNIQUE,
-    avatar VARCHAR(500) DEFAULT '',
+    username VARCHAR(39) NOT NULL UNIQUE,
+    avatar VARCHAR(500) NULL DEFAULT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     github_id BIGINT NULL COMMENT 'GitHub user id',
     password VARCHAR(100) NULL DEFAULT NULL,
-    bio VARCHAR(500) DEFAULT '',
+    bio VARCHAR(500) NULL DEFAULT NULL,
     level INT DEFAULT 1,
     experience INT DEFAULT 0,
     status INT DEFAULT 1 COMMENT '1:active, 0:disabled',

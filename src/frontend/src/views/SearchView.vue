@@ -40,6 +40,13 @@ const modelOptions = computed(() => {
   return Array.from(set).sort((a, b) => a.localeCompare(b))
 })
 
+const sortLabels: Record<string, string> = {
+  latest: '最新',
+  popular: '最热'
+}
+
+const formatSortLabel = (sort: string) => sortLabels[sort] ?? sort
+
 const activeFilterCount = computed(() => {
   let count = 0
   if (filters.keyword.trim()) count++
@@ -188,17 +195,17 @@ onMounted(async () => {
       <header class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[#7c7c7c]">
-            Search
+            搜索
           </div>
           <h1 class="mt-2 text-3xl font-semibold">
-            Find prompts by intent, model, or category
+            按意图、模型或分类查找提示词
           </h1>
         </div>
         <RouterLink
           to="/"
           class="rounded-full border border-black/10 bg-white px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black"
         >
-          Back home
+          返回首页
         </RouterLink>
       </header>
 
@@ -206,36 +213,36 @@ onMounted(async () => {
         <aside class="self-start rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
           <div class="flex items-center justify-between gap-3">
             <div class="text-lg font-semibold">
-              Filters
+              筛选
             </div>
             <button
               class="text-sm text-[#777777] transition hover:text-black"
               @click="clearFilters"
             >
-              Reset
+              重置
             </button>
           </div>
 
           <div class="mt-5 grid gap-4">
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Keyword</span>
+              <span class="text-sm font-medium text-[#333333]">关键词</span>
               <input
                 v-model="filters.keyword"
                 type="text"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
-                placeholder="Search title, tag, creator, or model"
+                placeholder="搜索标题、标签、创作者或模型"
                 @keyup.enter="submitSearch"
               >
             </label>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Category</span>
+              <span class="text-sm font-medium text-[#333333]">分类</span>
               <select
                 v-model.number="filters.categoryId"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
               >
                 <option :value="0">
-                  All categories
+                  全部分类
                 </option>
                 <option
                   v-for="category in promptStore.categories"
@@ -248,13 +255,13 @@ onMounted(async () => {
             </label>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Model</span>
+              <span class="text-sm font-medium text-[#333333]">模型</span>
               <select
                 v-model="filters.model"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
               >
                 <option value="">
-                  All models
+                  全部模型
                 </option>
                 <option
                   v-for="modelName in modelOptions"
@@ -267,16 +274,16 @@ onMounted(async () => {
             </label>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Sort</span>
+              <span class="text-sm font-medium text-[#333333]">排序</span>
               <select
                 v-model="filters.sort"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
               >
                 <option value="latest">
-                  Latest
+                  最新
                 </option>
                 <option value="popular">
-                  Popular
+                  最热
                 </option>
               </select>
             </label>
@@ -285,7 +292,7 @@ onMounted(async () => {
               class="mt-2 rounded-full bg-black px-4 py-3 text-sm font-medium text-white transition hover:bg-black/85"
               @click="submitSearch"
             >
-              Apply filters
+              应用筛选
             </button>
           </div>
         </aside>
@@ -295,14 +302,14 @@ onMounted(async () => {
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div class="text-sm text-[#777777]">
-                  Results
+                  结果
                 </div>
                 <div class="mt-1 text-2xl font-semibold">
-                  {{ total }} matches
+                  {{ total }} 条匹配
                 </div>
               </div>
               <div class="text-sm text-[#666666]">
-                {{ activeFilterCount }} active filters
+                {{ activeFilterCount }} 个筛选条件
               </div>
             </div>
 
@@ -311,22 +318,22 @@ onMounted(async () => {
                 v-if="filters.keyword"
                 class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]"
               >
-                Keyword: {{ filters.keyword }}
+                关键词：{{ filters.keyword }}
               </span>
               <span
                 v-if="filters.categoryId > 0"
                 class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]"
               >
-                Category: {{ promptStore.categories.find((item) => item.id === filters.categoryId)?.name }}
+                分类：{{ promptStore.categories.find((item) => item.id === filters.categoryId)?.name }}
               </span>
               <span
                 v-if="filters.model"
                 class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]"
               >
-                Model: {{ filters.model }}
+                模型：{{ filters.model }}
               </span>
               <span class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]">
-                Sort: {{ filters.sort }}
+                排序：{{ formatSortLabel(filters.sort) }}
               </span>
             </div>
           </section>
@@ -380,8 +387,8 @@ onMounted(async () => {
                 <div class="mt-5 flex items-center justify-between gap-3 text-sm text-[#777777]">
                   <span>{{ prompt.user.username }}</span>
                   <div class="flex items-center gap-3">
-                    <span>{{ formatCount(prompt.likes) }} likes</span>
-                    <span>{{ formatCount(prompt.views) }} views</span>
+                    <span>{{ formatCount(prompt.likes) }} 赞</span>
+                    <span>{{ formatCount(prompt.views) }} 浏览</span>
                   </div>
                 </div>
               </div>
@@ -393,10 +400,10 @@ onMounted(async () => {
             class="mt-6 rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
           >
             <div class="text-xl font-semibold text-black">
-              No prompts matched yet
+              暂无匹配的提示词
             </div>
             <p class="mt-3 text-sm text-[#777777]">
-              Try a broader keyword, switch category, or clear a couple of filters.
+              试试更宽泛的关键词、切换分类，或清除部分筛选条件。
             </p>
           </section>
         </div>

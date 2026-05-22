@@ -31,13 +31,13 @@ const handleGitHubLogin = () => {
       <section class="panel-card flex min-h-[680px] flex-col justify-between p-8">
         <div>
           <div class="inline-flex rounded-full border border-black/10 bg-[#faf8f4] px-3 py-1 text-xs text-[#444444]">
-            Secure Access
+            安全访问
           </div>
           <h1 class="mt-5 max-w-xl text-4xl font-semibold leading-tight text-black">
-            Sign in to publish, save, and manage your AI prompt library
+            登录后即可发布、收藏并管理你的 AI 提示词库
           </h1>
           <p class="mt-5 max-w-xl text-base leading-7 text-[#555555]">
-            This build already uses password hashing, JWT auth, and protected routes. The demo account is prefilled so you can test the flow quickly.
+            当前版本已支持密码哈希、JWT 鉴权与受保护路由。演示账号已预填，便于快速体验完整流程。
           </p>
         </div>
 
@@ -47,7 +47,7 @@ const handleGitHubLogin = () => {
               bcrypt
             </div>
             <div class="mt-2 text-sm text-[#666666]">
-              Password hashing
+              密码哈希
             </div>
           </div>
           <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
@@ -55,7 +55,7 @@ const handleGitHubLogin = () => {
               JWT
             </div>
             <div class="mt-2 text-sm text-[#666666]">
-              Session auth
+              会话鉴权
             </div>
           </div>
           <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
@@ -63,7 +63,7 @@ const handleGitHubLogin = () => {
               Guard
             </div>
             <div class="mt-2 text-sm text-[#666666]">
-              Protected routes
+              路由守卫
             </div>
           </div>
         </div>
@@ -73,15 +73,15 @@ const handleGitHubLogin = () => {
         <NCard class="panel-card w-full !rounded-[28px] !border-black/8 !bg-white !shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
           <div class="mb-6">
             <div class="text-sm text-[#777777]">
-              Welcome back
+              欢迎回来
             </div>
             <h2 class="mt-2 text-2xl font-semibold text-black">
-              Sign in
+              登录
             </h2>
           </div>
 
           <NForm @submit.prevent="handleSubmit">
-            <NFormItem label="Email">
+            <NFormItem label="邮箱">
               <NInput
                 v-model:value="formValue.email"
                 placeholder="you@example.com"
@@ -89,12 +89,12 @@ const handleGitHubLogin = () => {
               />
             </NFormItem>
 
-            <NFormItem label="Password">
+            <NFormItem label="密码">
               <NInput
                 v-model:value="formValue.password"
                 type="password"
                 show-password-on="click"
-                placeholder="Enter your password"
+                placeholder="请输入密码"
                 size="large"
               />
             </NFormItem>
@@ -106,7 +106,7 @@ const handleGitHubLogin = () => {
               block
               :loading="userStore.loading"
             >
-              Sign in
+              登录
             </NButton>
 
             <NButton
@@ -116,21 +116,21 @@ const handleGitHubLogin = () => {
               secondary
               @click="handleGitHubLogin"
             >
-              Continue with GitHub
+              使用 GitHub 继续
             </NButton>
           </NForm>
 
           <div class="mt-5 text-sm text-[#777777]">
-            Demo account: `astra@example.com` / `PromptOS123!`
+            演示账号：`astra@example.com` / `PromptOS123!`
           </div>
 
           <div class="mt-6 text-sm text-[#555555]">
-            Need an account?
+            还没有账号？
             <RouterLink
               to="/register"
               class="font-medium text-black underline-offset-2 transition hover:underline"
             >
-              Create one
+              立即注册
             </RouterLink>
           </div>
         </NCard>

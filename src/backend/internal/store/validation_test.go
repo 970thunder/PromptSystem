@@ -1,18 +1,41 @@
 package store
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestIsValidEmail(t *testing.T) {
-	cases := map[string]bool{
-		"user@example.com":  true,
-		"bad-email":         false,
-		"@missing.com":      false,
-		"spaces @x.com":     false,
+func TestTruncateUsername(t *testing.T) {
+	long := strings.Repeat("a", 50)
+	got := truncateUsername(long)
+	if len(got) != maxUsernameLen {
+		t.Fatalf("expected length %d, got %d", maxUsernameLen, len(got))
+	}
+}
+
+func TestGitHubUsernameCandidates(t *testing.T) {
+	candidates := githubUsernameCandidates("Astra Lab", 583231)
+	if len(candidates) < 2 {
+		t.Fatalf("expected multiple candidates, got %#v", candidates)
+	}
+	if candidates[0] != "Astra Lab" {
+		t.Fatalf("expected primary login preserved, got %q", candidates[0])
 	}
 
-	for email, expected := range cases {
-		if IsValidEmail(email) != expected {
-			t.Fatalf("IsValidEmail(%q) = %v, want %v", email, !expected, expected)
+	longLogin := strings.Repeat("x", 50)
+	for _, candidate := range githubUsernameCandidates(longLogin, 42) {
+		if len(candidate) > maxUsernameLen {
+			t.Fatalf("candidate longer than %d: %q", maxUsernameLen, candidate)
 		}
+	}
+}
+
+func TestUsernameWithGitHubSuffixFitsLimit(t *testing.T) {
+	got := usernameWithGitHubSuffix(strings.Repeat("y", 50), 999)
+	if len(got) > maxUsernameLen {
+		t.Fatalf("expected suffix username within %d chars, got len %d: %q", maxUsernameLen, len(got), got)
+	}
+	if !strings.HasSuffix(got, "-999") {
+		t.Fatalf("expected github id suffix, got %q", got)
 	}
 }

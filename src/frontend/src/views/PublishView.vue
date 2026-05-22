@@ -89,7 +89,7 @@ const handleCoverChange = async (event: Event) => {
   }
 
   if (!file.type.startsWith('image/')) {
-    message.error('Please choose an image file')
+    message.error('请选择图片文件')
     input.value = ''
     return
   }
@@ -99,7 +99,7 @@ const handleCoverChange = async (event: Event) => {
   try {
     const response = await promptApi.uploadCover(file)
     form.cover = response.data.url
-    message.success('Cover uploaded')
+    message.success('封面上传成功')
   } finally {
     uploading.value = false
     input.value = ''
@@ -110,7 +110,7 @@ const handleSubmit = async () => {
   syncTags()
 
   if (!canSubmit.value) {
-    message.error('Please fill in the required fields first')
+    message.error('请先填写必填项')
     return
   }
 
@@ -122,7 +122,7 @@ const handleSubmit = async () => {
 
     promptStore.upsertPrompt(response.data)
     await promptStore.loadHomeFeed()
-    message.success(isEditing.value ? 'Prompt updated' : 'Prompt published')
+    message.success(isEditing.value ? '提示词已更新' : '提示词已发布')
     await router.push(`/prompt/${response.data.id}`)
   } finally {
     submitting.value = false
@@ -136,10 +136,10 @@ const handleSubmit = async () => {
       <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[#7a7a7a]">
-            {{ isEditing ? 'Edit Prompt' : 'Publish Prompt' }}
+            {{ isEditing ? '编辑提示词' : '发布提示词' }}
           </div>
           <h1 class="mt-2 text-3xl font-semibold">
-            {{ isEditing ? 'Refine and republish your prompt' : 'Publish an image-first AI prompt' }}
+            {{ isEditing ? '优化并重新发布你的提示词' : '发布以图像为主的 AI 提示词' }}
           </h1>
         </div>
       </div>
@@ -148,7 +148,7 @@ const handleSubmit = async () => {
         v-if="loadingPrompt"
         class="rounded-[28px] border border-black/8 bg-white p-10 text-center text-sm text-[#666666] shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
       >
-        Loading prompt...
+        正在加载提示词...
       </div>
 
       <div
@@ -158,29 +158,29 @@ const handleSubmit = async () => {
         <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
           <div class="grid gap-5">
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Title</span>
+              <span class="text-sm font-medium text-[#333333]">标题</span>
               <input
                 v-model="form.title"
                 type="text"
                 maxlength="80"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
-                placeholder="Cinematic product poster generator"
+                placeholder="例如：电影感产品海报生成器"
               >
             </label>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Description</span>
+              <span class="text-sm font-medium text-[#333333]">描述</span>
               <textarea
                 v-model="form.description"
                 rows="3"
                 maxlength="180"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
-                placeholder="Explain the use case and what kind of output this prompt produces"
+                placeholder="说明使用场景与预期输出类型"
               />
             </label>
 
             <div class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Cover image</span>
+              <span class="text-sm font-medium text-[#333333]">封面图</span>
               <label class="flex cursor-pointer flex-col items-center justify-center rounded-[20px] border border-dashed border-black/15 bg-[#faf8f4] px-6 py-8 text-center transition hover:border-black/30">
                 <input
                   type="file"
@@ -189,7 +189,7 @@ const handleSubmit = async () => {
                   @change="handleCoverChange"
                 >
                 <span class="text-sm text-[#555555]">
-                  {{ uploading ? 'Uploading image...' : 'Upload a JPG, PNG, WEBP, or GIF cover' }}
+                  {{ uploading ? '正在上传图片...' : '上传 JPG、PNG、WEBP 或 GIF 封面' }}
                 </span>
                 <span
                   v-if="selectedFileName"
@@ -213,7 +213,7 @@ const handleSubmit = async () => {
 
             <div class="grid gap-5 sm:grid-cols-2">
               <label class="grid gap-2">
-                <span class="text-sm font-medium text-[#333333]">Category</span>
+                <span class="text-sm font-medium text-[#333333]">分类</span>
                 <select
                   v-model="form.categoryId"
                   class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
@@ -229,7 +229,7 @@ const handleSubmit = async () => {
               </label>
 
               <label class="grid gap-2">
-                <span class="text-sm font-medium text-[#333333]">Model</span>
+                <span class="text-sm font-medium text-[#333333]">模型</span>
                 <input
                   v-model="form.model"
                   type="text"
@@ -240,39 +240,39 @@ const handleSubmit = async () => {
             </div>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Tags</span>
+              <span class="text-sm font-medium text-[#333333]">标签</span>
               <input
                 v-model="tagInput"
                 type="text"
                 class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
-                placeholder="Comma separated, for example: cinematic, ecommerce, poster"
+                placeholder="逗号分隔，例如：电影感, 电商, 海报"
                 @blur="syncTags"
               >
             </label>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">Prompt</span>
+              <span class="text-sm font-medium text-[#333333]">提示词</span>
               <textarea
                 v-model="form.content"
                 rows="7"
                 class="rounded-[18px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm leading-6 outline-none transition focus:border-black/30"
-                placeholder="Enter the main prompt body"
+                placeholder="输入主提示词正文"
               />
             </label>
 
             <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">System prompt</span>
+              <span class="text-sm font-medium text-[#333333]">系统提示词</span>
               <textarea
                 v-model="form.systemPrompt"
                 rows="5"
                 class="rounded-[18px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm leading-6 outline-none transition focus:border-black/30"
-                placeholder="Enter the role framing or operating constraints"
+                placeholder="输入角色设定或运行约束"
               />
             </label>
 
             <div class="grid gap-4 sm:grid-cols-3">
               <label class="grid gap-2">
-                <span class="text-sm font-medium text-[#333333]">Temperature</span>
+                <span class="text-sm font-medium text-[#333333]">温度</span>
                 <input
                   v-model.number="form.params.temperature"
                   type="number"
@@ -296,7 +296,7 @@ const handleSubmit = async () => {
               </label>
 
               <label class="grid gap-2">
-                <span class="text-sm font-medium text-[#333333]">Max tokens</span>
+                <span class="text-sm font-medium text-[#333333]">最大 Token</span>
                 <input
                   v-model.number="form.params.maxTokens"
                   type="number"
@@ -312,24 +312,24 @@ const handleSubmit = async () => {
         <aside class="grid gap-6 self-start">
           <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
             <div class="text-sm text-[#777777]">
-              Publish checklist
+              发布清单
             </div>
             <div class="mt-4 space-y-3 text-sm text-[#444444]">
-              <div>1. Use a clean horizontal cover so the gallery layout holds up well.</div>
-              <div>2. Let the title describe the result and the description describe the scenario.</div>
-              <div>3. Keep tags tight. Three to six usually feels right.</div>
+              <div>1. 使用清晰的横版封面，画廊布局效果更好。</div>
+              <div>2. 标题描述结果，描述说明使用场景。</div>
+              <div>3. 标签保持精简，通常 3–6 个即可。</div>
             </div>
           </section>
 
           <section class="rounded-[28px] border border-black/8 bg-[#111111] p-6 text-white">
             <div class="text-sm text-white/60">
-              Storage
+              存储
             </div>
             <div class="mt-2 text-2xl font-semibold">
-              Local first, R2 ready
+              本地优先，可切换 R2
             </div>
             <p class="mt-3 text-sm leading-6 text-white/70">
-              Development defaults to filesystem storage exposed through `/uploads`. Production can switch to Cloudflare R2 while keeping the same upload API.
+              开发环境默认通过 `/uploads` 暴露本地文件存储；生产环境可切换至 Cloudflare R2，上传 API 保持一致。
             </p>
 
             <button
@@ -337,7 +337,7 @@ const handleSubmit = async () => {
               :disabled="submitting || uploading || !canSubmit"
               @click="handleSubmit"
             >
-              {{ submitting ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save changes' : 'Publish prompt') }}
+              {{ submitting ? (isEditing ? '保存中...' : '发布中...') : (isEditing ? '保存修改' : '发布提示词') }}
             </button>
           </section>
         </aside>

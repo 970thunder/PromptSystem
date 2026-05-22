@@ -5,44 +5,50 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('@/views/HomeView.vue')
+    component: () => import('@/views/HomeView.vue'),
+    meta: { title: '首页' }
   },
   {
     path: '/prompt/:id',
     name: 'PromptDetail',
-    component: () => import('@/views/PromptDetailView.vue')
+    component: () => import('@/views/PromptDetailView.vue'),
+    meta: { title: '提示词详情' }
   },
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/LoginView.vue')
+    component: () => import('@/views/LoginView.vue'),
+    meta: { title: '登录' }
   },
   {
     path: '/register',
     name: 'Register',
-    component: () => import('@/views/RegisterView.vue')
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { title: '注册' }
   },
   {
     path: '/auth/callback',
     name: 'AuthCallback',
-    component: () => import('@/views/AuthCallbackView.vue')
+    component: () => import('@/views/AuthCallbackView.vue'),
+    meta: { title: '登录中' }
   },
   {
     path: '/publish',
     name: 'Publish',
     component: () => import('@/views/PublishView.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, title: '发布' }
   },
   {
     path: '/profile/:userId?',
     name: 'Profile',
     component: () => import('@/views/ProfileView.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, title: '个人主页' }
   },
   {
     path: '/search',
     name: 'Search',
-    component: () => import('@/views/SearchView.vue')
+    component: () => import('@/views/SearchView.vue'),
+    meta: { title: '搜索' }
   }
 ]
 
@@ -78,6 +84,11 @@ router.beforeEach(async (to) => {
   }
 
   return true
+})
+
+router.afterEach((to) => {
+  const pageTitle = typeof to.meta.title === 'string' ? to.meta.title : ''
+  document.title = pageTitle ? `${pageTitle} · PromptOS` : 'PromptOS'
 })
 
 export default router

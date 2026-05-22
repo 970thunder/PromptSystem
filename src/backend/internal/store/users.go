@@ -165,7 +165,6 @@ func (s *UserStore) Authenticate(email, password string) (AuthUser, error) {
 
 func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
-	username = strings.TrimSpace(username)
 	avatar = strings.TrimSpace(avatar)
 
 	if githubID <= 0 {
@@ -174,7 +173,7 @@ func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar str
 	if !IsValidEmail(email) {
 		return AuthUser{}, ErrInvalidEmail
 	}
-	if username == "" {
+	if strings.TrimSpace(username) == "" {
 		username = strings.Split(email, "@")[0]
 	}
 
@@ -183,38 +182,47 @@ func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar str
 
 	if userID, exists := s.githubIDIndex[githubID]; exists {
 		user := s.users[userID]
+		resolvedUsername, err := s.resolveUsernameLocked(username, githubID, userID)
+		if err != nil {
+			return AuthUser{}, err
+		}
 		if avatar != "" {
 			user.Avatar = avatar
 		}
-		if username != "" {
-			user.Username = username
-		}
+		user.Username = resolvedUsername
 		user.GitHubID = githubID
 		s.users[userID] = user
 		return user, nil
 	}
 
 	if userID, exists := s.emailIndex[email]; exists {
+		resolvedUsername, err := s.resolveUsernameLocked(username, githubID, userID)
+		if err != nil {
+			return AuthUser{}, err
+		}
+
 		user := s.users[userID]
 		user.GitHubID = githubID
 		if avatar != "" {
 			user.Avatar = avatar
 		}
-		if username != "" {
-			user.Username = username
-		}
+		user.Username = resolvedUsername
 		s.users[userID] = user
 		s.githubIDIndex[githubID] = userID
 		return user, nil
 	}
 
+	resolvedUsername, err := s.resolveUsernameLocked(username, githubID, 0)
+	if err != nil {
+		return AuthUser{}, err
+	}
+
 	user := AuthUser{
 		ID:         s.nextID,
-		Username:   username,
+		Username:   resolvedUsername,
 		Avatar:     avatar,
 		Email:      email,
 		GitHubID:   githubID,
-		Bio:        "Signed in with GitHub",
 		Level:      1,
 		Experience: 0,
 		Status:     1,
@@ -227,6 +235,31 @@ func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar str
 	s.nextID++
 
 	return user, nil
+}
+
+func (s *UserStore) resolveUsernameLocked(desired string, githubID int64, excludeUserID int) (string, error) {
+	for _, candidate := range githubUsernameCandidates(desired, githubID) {
+		if s.isUsernameTakenLocked(candidate, excludeUserID) {
+			continue
+		}
+
+		return candidate, nil
+	}
+
+	return "", ErrUserExists
+}
+
+func (s *UserStore) isUsernameTakenLocked(username string, excludeUserID int) bool {
+	for id, user := range s.users {
+		if excludeUserID > 0 && id == excludeUserID {
+			continue
+		}
+		if user.Username == username {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *UserStore) FindByID(id int) (AuthUser, bool) {

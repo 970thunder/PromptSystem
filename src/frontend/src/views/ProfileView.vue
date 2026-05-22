@@ -44,10 +44,10 @@ const stats = computed(() => {
   const totalViews = prompts.value.reduce((sum, prompt) => sum + prompt.views, 0)
 
   return [
-    { label: 'Published', value: published },
-    { label: 'Likes', value: totalLikes },
-    { label: 'Saves', value: totalFavorites },
-    { label: 'Views', value: totalViews }
+    { label: '已发布', value: published },
+    { label: '获赞', value: totalLikes },
+    { label: '收藏', value: totalFavorites },
+    { label: '浏览', value: totalViews }
   ]
 })
 
@@ -91,7 +91,7 @@ const handleSaveProfile = async () => {
       bio: profileForm.bio.trim()
     })
     profileUser.value = updated
-    message.success('Profile updated')
+    message.success('资料已更新')
   } finally {
     savingProfile.value = false
   }
@@ -141,15 +141,15 @@ const handleEditPrompt = async (promptId: number) => {
 
 const handleDeletePrompt = (promptId: number) => {
   dialog.warning({
-    title: 'Delete prompt',
-    content: 'This will remove the prompt from your published list.',
-    positiveText: 'Delete',
-    negativeText: 'Cancel',
+    title: '删除提示词',
+    content: '该提示词将从你的已发布列表中移除。',
+    positiveText: '删除',
+    negativeText: '取消',
     onPositiveClick: async () => {
       await promptApi.deletePrompt(promptId)
       promptStore.removePrompt(promptId)
       prompts.value = prompts.value.filter((item) => item.id !== promptId)
-      message.success('Prompt deleted')
+      message.success('提示词已删除')
     }
   })
 }
@@ -164,10 +164,10 @@ watch(() => route.params.userId, loadProfile)
       <header class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[#7c7c7c]">
-            Profile
+            个人主页
           </div>
           <h1 class="mt-2 text-3xl font-semibold">
-            Creator dashboard
+            创作者工作台
           </h1>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -175,13 +175,13 @@ watch(() => route.params.userId, loadProfile)
             to="/"
             class="rounded-full border border-black/10 bg-white px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black"
           >
-            Back home
+            返回首页
           </RouterLink>
           <RouterLink
             to="/publish"
             class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85"
           >
-            Publish prompt
+            发布提示词
           </RouterLink>
         </div>
       </header>
@@ -195,13 +195,13 @@ watch(() => route.params.userId, loadProfile)
               </div>
               <div class="min-w-0">
                 <div class="text-2xl font-semibold text-black">
-                  {{ profileUser?.username || 'Creator' }}
+                  {{ profileUser?.username || '创作者' }}
                 </div>
                 <div class="mt-1 text-sm text-[#666666]">
-                  {{ profileUser?.email || 'No email available' }}
+                  {{ profileUser?.email || '暂无邮箱' }}
                 </div>
                 <p class="mt-3 text-sm leading-6 text-[#5f5f5f]">
-                  {{ profileUser?.bio || 'No bio yet. Publish a few prompts and shape this page into a real creator surface.' }}
+                  {{ profileUser?.bio || '还没有简介。发布几条提示词，让这个页面更像真正的创作者主页。' }}
                 </p>
               </div>
             </div>
@@ -227,11 +227,11 @@ watch(() => route.params.userId, loadProfile)
             class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
           >
             <div class="text-lg font-semibold text-black">
-              Edit profile
+              编辑资料
             </div>
             <div class="mt-4 grid gap-3">
               <label class="grid gap-1 text-sm text-[#555555]">
-                Display name
+                展示名称
                 <input
                   v-model="profileForm.username"
                   type="text"
@@ -240,7 +240,7 @@ watch(() => route.params.userId, loadProfile)
                 >
               </label>
               <label class="grid gap-1 text-sm text-[#555555]">
-                Bio
+                简介
                 <textarea
                   v-model="profileForm.bio"
                   rows="3"
@@ -253,20 +253,20 @@ watch(() => route.params.userId, loadProfile)
                 :disabled="savingProfile"
                 @click="handleSaveProfile"
               >
-                {{ savingProfile ? 'Saving...' : 'Save profile' }}
+                {{ savingProfile ? '保存中...' : '保存资料' }}
               </button>
             </div>
           </section>
 
           <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
             <div class="text-lg font-semibold text-black">
-              Publishing profile
+              发布概况
             </div>
             <div class="mt-4 space-y-3 text-sm text-[#4f4f4f]">
-              <div>Joined: {{ profileUser?.createdAt || '-' }}</div>
-              <div>Level: {{ profileUser?.level ?? '-' }}</div>
-              <div>Experience: {{ profileUser?.experience ?? '-' }}</div>
-              <div>Top models: {{ favoriteModels.map(([name]) => name).join(', ') || 'No model usage yet' }}</div>
+              <div>加入时间：{{ profileUser?.createdAt || '-' }}</div>
+              <div>等级：{{ profileUser?.level ?? '-' }}</div>
+              <div>经验值：{{ profileUser?.experience ?? '-' }}</div>
+              <div>常用模型：{{ favoriteModels.map(([name]) => name).join('、') || '暂无使用记录' }}</div>
             </div>
           </section>
         </aside>
@@ -275,14 +275,14 @@ watch(() => route.params.userId, loadProfile)
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
               <div class="text-sm text-[#777777]">
-                Published prompts
+                已发布提示词
               </div>
               <div class="mt-1 text-2xl font-semibold text-black">
-                {{ prompts.length }} items
+                {{ prompts.length }} 条
               </div>
             </div>
             <div class="text-sm text-[#666666]">
-              Sorted by latest
+              按最新排序
             </div>
           </div>
 
@@ -327,13 +327,13 @@ watch(() => route.params.userId, loadProfile)
                       class="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs text-[#555555] transition hover:border-black/20 hover:text-black"
                       @click="handleEditPrompt(prompt.id)"
                     >
-                      Edit
+                      编辑
                     </button>
                     <button
                       class="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs text-red-600 transition hover:border-red-300 hover:bg-red-50"
                       @click="handleDeletePrompt(prompt.id)"
                     >
-                      Delete
+                      删除
                     </button>
                   </div>
                 </div>
@@ -348,8 +348,8 @@ watch(() => route.params.userId, loadProfile)
                 <div class="mt-4 flex items-center justify-between gap-3 text-sm text-[#666666]">
                   <span>{{ prompt.createdAt }}</span>
                   <div class="flex items-center gap-3">
-                    <span>{{ formatCount(prompt.likes) }} likes</span>
-                    <span>{{ formatCount(prompt.views) }} views</span>
+                    <span>{{ formatCount(prompt.likes) }} 赞</span>
+                    <span>{{ formatCount(prompt.views) }} 浏览</span>
                   </div>
                 </div>
               </div>
@@ -361,16 +361,16 @@ watch(() => route.params.userId, loadProfile)
             class="mt-6 rounded-[24px] border border-dashed border-black/12 bg-[#faf8f4] px-6 py-16 text-center"
           >
             <div class="text-xl font-semibold text-black">
-              No published prompts yet
+              还没有已发布的提示词
             </div>
             <p class="mt-3 text-sm text-[#777777]">
-              The profile is ready. It just needs the first few prompts to give it some gravity.
+              个人主页已就绪，发布前几条内容就能让它更有分量。
             </p>
             <RouterLink
               to="/publish"
               class="mt-6 inline-flex rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-black/85"
             >
-              Publish the first one
+              发布第一条
             </RouterLink>
           </div>
         </section>

@@ -32,7 +32,7 @@ request.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
     if (res.code !== 200) {
-      messageApi.error(res.message || 'Request failed')
+      messageApi.error(res.message || '请求失败')
       if (res.code === 401) {
         const userStore = useUserStore()
         userStore.logout()
@@ -43,7 +43,7 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
-    const errorMessage = error.response?.data?.message || error.message || 'Network error'
+    const errorMessage = error.response?.data?.message || error.message || '网络错误'
     messageApi.error(errorMessage)
     return Promise.reject(error)
   }

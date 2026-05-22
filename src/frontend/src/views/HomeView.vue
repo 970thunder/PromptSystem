@@ -12,13 +12,13 @@ const router = useRouter()
 const activeCategoryId = ref<number | 'all'>('all')
 
 const navItems = [
-  { label: 'Discover', to: '/' },
-  { label: 'Images', to: '/' },
-  { label: 'Workflows', to: '/search?tab=workflow' },
-  { label: 'Agents', to: '/search?tab=agent' }
+  { label: '发现', to: '/' },
+  { label: '图像', to: '/' },
+  { label: '工作流', to: '/search?tab=workflow' },
+  { label: '智能体', to: '/search?tab=agent' }
 ]
 
-const highlightTags = ['Cinema', 'Ecommerce', '3D', 'Brand', 'UI', 'Storyboards']
+const highlightTags = ['电影', '电商', '3D', '品牌', 'UI', '分镜']
 
 const fallbackCoverMap: Record<number, string> = {
   101: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
@@ -71,9 +71,9 @@ const curatedPrompts = computed(() =>
 )
 
 const communityStats = computed(() => [
-  { label: 'Curated prompts', value: `${promptStore.prompts.length * 24}+` },
-  { label: 'Active creators', value: '320+' },
-  { label: 'Weekly saves', value: '1.8k' }
+  { label: '精选提示词', value: `${promptStore.prompts.length * 24}+` },
+  { label: '活跃创作者', value: '320+' },
+  { label: '本周收藏', value: '1.8k' }
 ])
 
 const formatCount = (value: number) => {
@@ -120,7 +120,7 @@ const handleLogout = async () => {
               PromptOS
             </RouterLink>
             <div class="hidden rounded-full border border-black/10 bg-black px-3 py-1 text-xs text-white sm:inline-flex">
-              Visual Prompt Library
+              视觉提示词库
             </div>
           </div>
 
@@ -140,34 +140,34 @@ const handleLogout = async () => {
               to="/search"
               class="rounded-full border border-black/10 bg-[#f7f5f0] px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black"
             >
-              Search
+              搜索
             </RouterLink>
             <RouterLink
               v-if="!userStore.isLoggedIn"
               to="/login"
               class="rounded-full px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white"
             >
-              Login
+              登录
             </RouterLink>
             <RouterLink
               v-else
               to="/profile"
               class="rounded-full px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white"
             >
-              {{ userStore.userInfo?.username ?? 'Profile' }}
+              {{ userStore.userInfo?.username ?? '个人主页' }}
             </RouterLink>
             <button
               class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85"
               @click="handlePublishClick"
             >
-              Publish
+              发布
             </button>
             <button
               v-if="userStore.isLoggedIn"
               class="rounded-full border border-black/10 px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white"
               @click="handleLogout"
             >
-              Logout
+              退出
             </button>
           </div>
         </div>
@@ -220,7 +220,7 @@ const handleLogout = async () => {
             <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/70">
               <span>{{ featuredPrompt.categoryName }}</span>
               <span>{{ featuredPrompt.model }}</span>
-              <span v-if="promptStore.usingMockData">Mock Feed</span>
+              <span v-if="promptStore.usingMockData">演示数据</span>
             </div>
             <h2 class="mt-2 max-w-2xl text-2xl font-semibold sm:text-[30px]">
               {{ featuredPrompt.title }}
@@ -230,8 +230,8 @@ const handleLogout = async () => {
             </p>
             <div class="mt-4 flex flex-wrap items-center gap-4 text-sm text-white/74">
               <span>{{ featuredPrompt.user.username }}</span>
-              <span>{{ formatCount(featuredPrompt.likes) }} likes</span>
-              <span>{{ formatCount(featuredPrompt.favorites) }} saves</span>
+              <span>{{ formatCount(featuredPrompt.likes) }} 赞</span>
+              <span>{{ formatCount(featuredPrompt.favorites) }} 收藏</span>
             </div>
           </div>
         </RouterLink>
@@ -240,10 +240,10 @@ const handleLogout = async () => {
           <div class="rounded-[24px] border border-black/8 bg-white p-4">
             <div class="flex items-center justify-between gap-3">
               <div class="text-sm text-[#777777]">
-                Categories
+                分类
               </div>
               <div class="text-xs uppercase tracking-[0.2em] text-[#999999]">
-                Explore
+                浏览
               </div>
             </div>
 
@@ -257,7 +257,7 @@ const handleLogout = async () => {
                 "
                 @click="activeCategoryId = 'all'"
               >
-                All
+                全部
               </button>
               <button
                 v-for="category in promptStore.categories"
@@ -277,13 +277,13 @@ const handleLogout = async () => {
 
           <div class="rounded-[24px] border border-black/8 bg-[#111111] p-5 text-white">
             <div class="text-sm text-white/60">
-              Featured creator
+              精选创作者
             </div>
             <div class="mt-2 text-xl font-semibold">
               {{ featuredPrompt.user.username }}
             </div>
             <p class="mt-3 text-sm leading-6 text-white/70">
-              {{ featuredPrompt.user.bio || 'Builds reusable prompt systems with a clear production bias.' }}
+              {{ featuredPrompt.user.bio || '专注可复用提示词体系，偏向生产落地。' }}
             </p>
 
             <div class="mt-5 grid grid-cols-3 gap-2 text-center">
@@ -292,7 +292,7 @@ const handleLogout = async () => {
                   {{ formatCount(featuredPrompt.views) }}
                 </div>
                 <div class="mt-1 text-xs text-white/55">
-                  Views
+                  浏览
                 </div>
               </div>
               <div class="rounded-[16px] bg-white/8 px-3 py-3">
@@ -300,7 +300,7 @@ const handleLogout = async () => {
                   {{ formatCount(featuredPrompt.likes) }}
                 </div>
                 <div class="mt-1 text-xs text-white/55">
-                  Likes
+                  点赞
                 </div>
               </div>
               <div class="rounded-[16px] bg-white/8 px-3 py-3">
@@ -308,7 +308,7 @@ const handleLogout = async () => {
                   {{ featuredPrompt.model }}
                 </div>
                 <div class="mt-1 text-xs text-white/55">
-                  Model
+                  模型
                 </div>
               </div>
             </div>
@@ -319,10 +319,10 @@ const handleLogout = async () => {
       <section class="pb-3">
         <div class="flex items-end justify-between gap-3">
           <div class="text-sm text-[#777777]">
-            Gallery
+            画廊
           </div>
           <div class="text-sm text-[#777777]">
-            {{ visiblePrompts.length }} results
+            {{ visiblePrompts.length }} 条结果
           </div>
         </div>
       </section>
@@ -371,8 +371,8 @@ const handleLogout = async () => {
             </p>
             <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/72">
               <span>{{ prompt.user.username }}</span>
-              <span>{{ formatCount(prompt.likes) }} likes</span>
-              <span>{{ formatCount(prompt.views) }} views</span>
+              <span>{{ formatCount(prompt.likes) }} 赞</span>
+              <span>{{ formatCount(prompt.views) }} 浏览</span>
             </div>
           </div>
         </RouterLink>
@@ -383,10 +383,10 @@ const handleLogout = async () => {
         class="rounded-[24px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
       >
         <div class="text-lg font-semibold text-black">
-          No prompts in this category yet
+          该分类下还没有提示词
         </div>
         <p class="mt-2 text-sm text-[#777777]">
-          Switch categories or publish the first one.
+          切换分类，或发布第一条内容。
         </p>
       </section>
     </div>

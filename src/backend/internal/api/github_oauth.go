@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -159,6 +160,7 @@ func (s *server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 
 	user, err := s.userStore.UpsertGitHubUser(profile.ID, profile.Login, email, profile.AvatarURL)
 	if err != nil {
+		log.Printf("github oauth upsert user failed: %v", err)
 		s.redirectOAuthError(w, r, "Failed to create user session")
 		return
 	}

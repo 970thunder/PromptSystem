@@ -19,14 +19,14 @@ onMounted(async () => {
 
   const token = typeof route.query.token === 'string' ? route.query.token : ''
   if (!token) {
-    message.error('Missing sign-in token')
+    message.error('缺少登录令牌')
     await router.replace('/login')
     return
   }
 
   userStore.setToken(token)
   await userStore.fetchUserInfo()
-  message.success('Signed in with GitHub')
+  message.success('已通过 GitHub 登录')
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   await router.replace(redirect)
 })
@@ -35,7 +35,7 @@ onMounted(async () => {
 <template>
   <div class="flex min-h-screen items-center justify-center bg-[#f5f3ee] text-[#111111]">
     <p class="text-sm text-[#666666]">
-      Completing sign-in...
+      正在完成登录...
     </p>
   </div>
 </template>

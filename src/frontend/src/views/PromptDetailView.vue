@@ -32,10 +32,10 @@ const promptMeta = computed(() => {
   }
 
   return [
-    { label: 'Model', value: prompt.value.model },
-    { label: 'Category', value: prompt.value.categoryName },
-    { label: 'Published', value: prompt.value.createdAt },
-    { label: 'Updated', value: prompt.value.updatedAt }
+    { label: '模型', value: prompt.value.model },
+    { label: '分类', value: prompt.value.categoryName },
+    { label: '发布时间', value: prompt.value.createdAt },
+    { label: '更新时间', value: prompt.value.updatedAt }
   ]
 })
 
@@ -51,15 +51,15 @@ const showCoverImage = computed(() => isDisplayableCover(prompt.value?.cover))
 
 const copyText = async (label: string, text: string) => {
   if (!text.trim()) {
-    message.warning(`No ${label} to copy`)
+    message.warning(`没有可复制的${label}`)
     return
   }
 
   try {
     await navigator.clipboard.writeText(text)
-    message.success(`${label} copied`)
+    message.success(`已复制${label}`)
   } catch {
-    message.error('Copy failed — check browser permissions')
+    message.error('复制失败，请检查浏览器权限')
   }
 }
 
@@ -69,9 +69,9 @@ const statCards = computed(() => {
   }
 
   return [
-    { label: 'Views', value: prompt.value.views.toLocaleString() },
-    { label: 'Likes', value: prompt.value.likes.toLocaleString() },
-    { label: 'Saves', value: prompt.value.favorites.toLocaleString() }
+    { label: '浏览', value: prompt.value.views.toLocaleString() },
+    { label: '点赞', value: prompt.value.likes.toLocaleString() },
+    { label: '收藏', value: prompt.value.favorites.toLocaleString() }
   ]
 })
 
@@ -97,7 +97,7 @@ const handleLike = async () => {
   try {
     const response = await promptApi.likePrompt(prompt.value.id)
     promptStore.mergePrompt(response.data.prompt)
-    message.success(response.data.applied ? 'Liked' : 'Already liked')
+    message.success(response.data.applied ? '已点赞' : '你已经点过赞了')
   } finally {
     liking.value = false
   }
@@ -116,7 +116,7 @@ const handleFavorite = async () => {
   try {
     const response = await promptApi.favoritePrompt(prompt.value.id)
     promptStore.mergePrompt(response.data.prompt)
-    message.success(response.data.applied ? 'Saved' : 'Already saved')
+    message.success(response.data.applied ? '已收藏' : '你已经收藏过了')
   } finally {
     favoriting.value = false
   }
@@ -145,16 +145,16 @@ watch(() => route.params.id, loadDetail)
           to="/"
           class="rounded-full border border-black/10 bg-white px-4 py-2 transition hover:border-black/20 hover:text-black"
         >
-          Back home
+          返回首页
         </RouterLink>
         <span>/</span>
         <span v-if="prompt">{{ prompt.categoryName }}</span>
-        <span v-else>Prompt detail</span>
+        <span v-else>提示词详情</span>
         <span
           v-if="promptStore.usingMockData"
           class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800"
         >
-          Mock Detail
+          演示详情
         </span>
       </header>
 
@@ -186,7 +186,7 @@ watch(() => route.params.id, loadDetail)
             <div class="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
               <div class="min-h-[340px] bg-[#faf8f4] p-8">
                 <div class="inline-flex rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444]">
-                  AI Result Preview
+                  AI 效果预览
                 </div>
                 <h1 class="mt-5 max-w-2xl text-3xl font-semibold leading-tight text-black sm:text-4xl">
                   {{ prompt.title }}
@@ -209,7 +209,7 @@ watch(() => route.params.id, loadDetail)
               <div class="flex flex-col justify-between gap-5 border-t border-black/8 bg-white p-8 lg:border-l lg:border-t-0">
                 <div>
                   <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-                    Creator
+                    创作者
                   </div>
                   <div class="mt-3 text-2xl font-semibold text-black">
                     {{ prompt.user.username }}
@@ -225,14 +225,14 @@ watch(() => route.params.id, loadDetail)
                     :disabled="liking"
                     @click="handleLike"
                   >
-                    {{ liking ? 'Liking...' : `Like · ${prompt.likes.toLocaleString()}` }}
+                    {{ liking ? '点赞中...' : `点赞 · ${prompt.likes.toLocaleString()}` }}
                   </button>
                   <button
                     class="rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70"
                     :disabled="favoriting"
                     @click="handleFavorite"
                   >
-                    {{ favoriting ? 'Saving...' : `Save · ${prompt.favorites.toLocaleString()}` }}
+                    {{ favoriting ? '收藏中...' : `收藏 · ${prompt.favorites.toLocaleString()}` }}
                   </button>
                 </div>
 
@@ -253,10 +253,10 @@ watch(() => route.params.id, loadDetail)
 
                 <div class="rounded-[18px] border border-black/8 bg-[#111111] p-4 text-white">
                   <div class="text-xs uppercase tracking-[0.2em] text-white/60">
-                    Expected output
+                    预期输出
                   </div>
                   <p class="mt-3 text-sm leading-6 text-white/75">
-                    Best used as a production-ready starting point. Swap in your domain details, brand inputs, and guardrails before shipping.
+                    适合作为可直接落地的起点。上线前请替换为你的业务场景、品牌信息与约束条件。
                   </p>
                 </div>
               </div>
@@ -267,13 +267,13 @@ watch(() => route.params.id, loadDetail)
             <article class="panel-card p-6">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-                  Prompt body
+                  提示词正文
                 </div>
                 <button
                   class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black"
-                  @click="copyText('Prompt', prompt.content)"
+                  @click="copyText('提示词', prompt.content)"
                 >
-                  Copy prompt
+                  复制提示词
                 </button>
               </div>
               <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444]">{{ prompt.content }}</pre>
@@ -282,13 +282,13 @@ watch(() => route.params.id, loadDetail)
             <article class="panel-card p-6">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-                  System prompt
+                  系统提示词
                 </div>
                 <button
                   class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black"
-                  @click="copyText('System prompt', prompt.systemPrompt)"
+                  @click="copyText('系统提示词', prompt.systemPrompt)"
                 >
-                  Copy system
+                  复制系统提示词
                 </button>
               </div>
               <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444]">{{ prompt.systemPrompt }}</pre>
@@ -302,10 +302,10 @@ watch(() => route.params.id, loadDetail)
             <div class="flex items-end justify-between gap-4">
               <div>
                 <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-                  Related
+                  相关推荐
                 </div>
                 <h2 class="mt-2 text-2xl font-semibold text-black">
-                  More from this category
+                  同分类更多内容
                 </h2>
               </div>
             </div>
@@ -334,7 +334,7 @@ watch(() => route.params.id, loadDetail)
         <aside class="space-y-6">
           <section class="panel-card p-6">
             <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-              Prompt info
+              提示词信息
             </div>
             <div class="mt-5 space-y-4">
               <div
@@ -354,7 +354,7 @@ watch(() => route.params.id, loadDetail)
 
           <section class="panel-card p-6">
             <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-              Parameters
+              参数
             </div>
             <div class="mt-5 grid grid-cols-3 gap-3">
               <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
@@ -362,7 +362,7 @@ watch(() => route.params.id, loadDetail)
                   {{ prompt.params.temperature ?? '-' }}
                 </div>
                 <div class="mt-1 text-xs text-[#777777]">
-                  Temp
+                  温度
                 </div>
               </div>
               <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
@@ -378,7 +378,7 @@ watch(() => route.params.id, loadDetail)
                   {{ prompt.params.maxTokens ?? '-' }}
                 </div>
                 <div class="mt-1 text-xs text-[#777777]">
-                  Tokens
+                  最大 Token
                 </div>
               </div>
             </div>
@@ -386,12 +386,12 @@ watch(() => route.params.id, loadDetail)
 
           <section class="panel-card p-6">
             <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-              Usage notes
+              使用说明
             </div>
             <ul class="mt-5 space-y-3 text-sm leading-6 text-[#555555]">
-              <li>Keep the overall structure, then swap in your own business context, target user, and constraints.</li>
-              <li>If the output gets too loose, lower temperature first and then add stronger examples.</li>
-              <li>Before shipping, run at least one real workflow regression check with your production inputs.</li>
+              <li>保留整体结构，再替换为你的业务场景、目标用户与约束条件。</li>
+              <li>若输出过于发散，可先降低温度，再补充更强示例。</li>
+              <li>上线前请用真实生产输入至少跑一遍工作流回归验证。</li>
             </ul>
           </section>
         </aside>
@@ -402,16 +402,16 @@ watch(() => route.params.id, loadDetail)
         class="rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
       >
         <h1 class="text-2xl font-semibold text-black">
-          Prompt not found
+          未找到该提示词
         </h1>
         <p class="mt-3 text-sm text-[#777777]">
-          It may have been removed, or the link is no longer valid.
+          内容可能已被删除，或链接已失效。
         </p>
         <RouterLink
           to="/"
           class="mt-6 inline-flex rounded-full border border-black/10 bg-[#f6f4ef] px-5 py-3 text-sm text-[#333333] transition hover:border-black/20 hover:text-black"
         >
-          Back to home
+          返回首页
         </RouterLink>
       </section>
     </div>

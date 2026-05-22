@@ -135,7 +135,6 @@ func (s *MySQLUserStore) UpdateProfile(id int, username, bio, avatar string) (Au
 
 func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
-	username = strings.TrimSpace(username)
 	avatar = strings.TrimSpace(avatar)
 
 	if githubID <= 0 {
@@ -144,24 +143,29 @@ func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avata
 	if !IsValidEmail(email) {
 		return AuthUser{}, ErrInvalidEmail
 	}
-	if username == "" {
+	if strings.TrimSpace(username) == "" {
 		username = strings.Split(email, "@")[0]
 	}
 
 	if user, found, err := s.findByGitHubID(githubID); err != nil {
 		return AuthUser{}, err
 	} else if found {
-		return s.updateGitHubProfile(user.ID, username, avatar)
+		return s.updateGitHubProfile(user.ID, username, avatar, githubID)
 	}
 
 	if user, found, err := s.findByEmail(email); err != nil {
 		return AuthUser{}, err
 	} else if found {
+		resolvedUsername, err := s.resolveUsername(username, githubID, user.ID)
+		if err != nil {
+			return AuthUser{}, err
+		}
+
 		if _, err := s.db.Exec(`
 			UPDATE users
 			SET github_id = ?, username = ?, avatar = CASE WHEN ? = '' THEN avatar ELSE ? END
 			WHERE id = ?
-		`, githubID, username, avatar, avatar, user.ID); err != nil {
+		`, githubID, resolvedUsername, avatar, avatar, user.ID); err != nil {
 			return AuthUser{}, err
 		}
 
@@ -173,10 +177,15 @@ func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avata
 		return updated, nil
 	}
 
+	resolvedUsername, err := s.resolveUsername(username, githubID, 0)
+	if err != nil {
+		return AuthUser{}, err
+	}
+
 	result, err := s.db.Exec(`
 		INSERT INTO users (username, avatar, email, github_id, password, bio, level, experience, status)
-		VALUES (?, ?, ?, ?, NULL, 'Signed in with GitHub', 1, 0, 1)
-	`, username, avatar, email, githubID)
+		VALUES (?, ?, ?, ?, NULL, NULL, 1, 0, 1)
+	`, resolvedUsername, nullIfEmpty(avatar), email, githubID)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
@@ -198,12 +207,17 @@ func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avata
 	return user, nil
 }
 
-func (s *MySQLUserStore) updateGitHubProfile(id int, username, avatar string) (AuthUser, error) {
+func (s *MySQLUserStore) updateGitHubProfile(id int, username, avatar string, githubID int64) (AuthUser, error) {
+	resolvedUsername, err := s.resolveUsername(username, githubID, id)
+	if err != nil {
+		return AuthUser{}, err
+	}
+
 	if _, err := s.db.Exec(`
 		UPDATE users
 		SET username = ?, avatar = CASE WHEN ? = '' THEN avatar ELSE ? END
 		WHERE id = ?
-	`, username, avatar, avatar, id); err != nil {
+	`, resolvedUsername, avatar, avatar, id); err != nil {
 		return AuthUser{}, err
 	}
 
@@ -213,6 +227,44 @@ func (s *MySQLUserStore) updateGitHubProfile(id int, username, avatar string) (A
 	}
 
 	return user, nil
+}
+
+func (s *MySQLUserStore) resolveUsername(desired string, githubID int64, excludeUserID int) (string, error) {
+	for _, candidate := range githubUsernameCandidates(desired, githubID) {
+		taken, err := s.isUsernameTaken(candidate, excludeUserID)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return candidate, nil
+		}
+	}
+
+	return "", ErrUserExists
+}
+
+func (s *MySQLUserStore) isUsernameTaken(username string, excludeUserID int) (bool, error) {
+	var ownerID int
+	err := s.db.QueryRow(`SELECT id FROM users WHERE username = ? LIMIT 1`, username).Scan(&ownerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if excludeUserID > 0 && ownerID == excludeUserID {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func nullIfEmpty(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	return value
 }
 
 func (s *MySQLUserStore) findByEmail(email string) (AuthUser, bool, error) {
@@ -228,19 +280,21 @@ func (s *MySQLUserStore) findByGitHubID(githubID int64) (AuthUser, bool, error) 
 func scanAuthUser(scan func(dest ...any) error) (AuthUser, bool, error) {
 	var (
 		user         AuthUser
+		avatar       sql.NullString
 		githubID     sql.NullInt64
 		passwordHash sql.NullString
+		bio          sql.NullString
 		createdAt    time.Time
 	)
 
 	err := scan(
 		&user.ID,
 		&user.Username,
-		&user.Avatar,
+		&avatar,
 		&user.Email,
 		&githubID,
 		&passwordHash,
-		&user.Bio,
+		&bio,
 		&user.Level,
 		&user.Experience,
 		&user.Status,
@@ -253,11 +307,17 @@ func scanAuthUser(scan func(dest ...any) error) (AuthUser, bool, error) {
 		return AuthUser{}, false, err
 	}
 
+	if avatar.Valid {
+		user.Avatar = avatar.String
+	}
 	if githubID.Valid {
 		user.GitHubID = githubID.Int64
 	}
 	if passwordHash.Valid {
 		user.PasswordHash = passwordHash.String
+	}
+	if bio.Valid {
+		user.Bio = bio.String
 	}
 
 	user.CreatedAt = createdAt.UTC().Format("2006-01-02")
