@@ -53,7 +53,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.userStore.Authenticate(payload.Email, payload.Password)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "邮箱或密码错误"})
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Invalid email or password"})
 		return
 	}
 
@@ -86,7 +86,12 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(payload.Username) == "" || strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "用户名、邮箱和密码不能为空"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Username, email, and password are required"})
+		return
+	}
+
+	if !store.IsValidEmail(payload.Email) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
 		return
 	}
 
@@ -94,9 +99,11 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserExists):
-			writeJSON(w, http.StatusConflict, apiResponse[any]{Code: 409, Message: "该邮箱已注册"})
+			writeJSON(w, http.StatusConflict, apiResponse[any]{Code: 409, Message: "Email already registered"})
+		case errors.Is(err, store.ErrInvalidEmail):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
 		case errors.Is(err, store.ErrWeakPassword):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "密码至少需要 8 位"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be at least 8 characters"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Register failed"})
 		}

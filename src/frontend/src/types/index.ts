@@ -106,6 +106,11 @@ export interface ApiResponse<T> {
   data: T
 }
 
+export interface PromptActionResponse {
+  prompt: Prompt
+  applied: boolean
+}
+
 export interface PageResponse<T> {
   list: T[]
   total: number

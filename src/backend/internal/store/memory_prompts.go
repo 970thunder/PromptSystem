@@ -1,0 +1,36 @@
+package store
+
+type MemoryPromptStore struct{}
+
+func NewMemoryPromptStore() *MemoryPromptStore {
+	return &MemoryPromptStore{}
+}
+
+func (s *MemoryPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
+	return QueryPrompts(filter), nil
+}
+
+func (s *MemoryPromptStore) FindByID(id int) (Prompt, bool, error) {
+	prompt, ok := FindPromptByID(id)
+	return prompt, ok, nil
+}
+
+func (s *MemoryPromptStore) Create(input CreatePromptInput) (Prompt, error) {
+	return CreatePrompt(input)
+}
+
+func (s *MemoryPromptStore) Update(id int, userID int, input CreatePromptInput) (Prompt, error) {
+	return UpdatePrompt(id, userID, input)
+}
+
+func (s *MemoryPromptStore) Delete(id int, userID int) error {
+	return DeletePrompt(id, userID)
+}
+
+func (s *MemoryPromptStore) Like(id int, userID int) (Prompt, bool, error) {
+	return LikePrompt(id, userID)
+}
+
+func (s *MemoryPromptStore) Favorite(id int, userID int) (Prompt, bool, error) {
+	return FavoritePrompt(id, userID)
+}

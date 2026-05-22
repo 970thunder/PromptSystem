@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { Prompt } from '@/types'
+import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 
 const promptStore = usePromptStore()
 const userStore = useUserStore()
@@ -11,13 +12,13 @@ const router = useRouter()
 const activeCategoryId = ref<number | 'all'>('all')
 
 const navItems = [
-  { label: '发现', to: '/' },
-  { label: '图片 Prompt', to: '/' },
-  { label: '工作流', to: '/search?tab=workflow' },
-  { label: 'Agent', to: '/search?tab=agent' }
+  { label: 'Discover', to: '/' },
+  { label: 'Images', to: '/' },
+  { label: 'Workflows', to: '/search?tab=workflow' },
+  { label: 'Agents', to: '/search?tab=agent' }
 ]
 
-const highlightTags = ['电影感', '电商海报', '3D 插画', '品牌视觉', '短视频镜头', '界面概念图']
+const highlightTags = ['Cinema', 'Ecommerce', '3D', 'Brand', 'UI', 'Storyboards']
 
 const fallbackCoverMap: Record<number, string> = {
   101: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
@@ -38,12 +39,12 @@ const cardSizePattern = [
 ]
 
 const imageHeightPattern = [
-  'h-[420px] md:h-full',
+  'h-[400px] md:h-full',
+  'h-[220px] md:h-full',
+  'h-[300px] md:h-full',
+  'h-[220px] md:h-full',
   'h-[240px] md:h-full',
-  'h-[320px] md:h-full',
-  'h-[240px] md:h-full',
-  'h-[260px] md:h-full',
-  'h-[240px] md:h-full'
+  'h-[220px] md:h-full'
 ]
 
 onMounted(() => {
@@ -70,9 +71,9 @@ const curatedPrompts = computed(() =>
 )
 
 const communityStats = computed(() => [
-  { label: '精选灵感', value: `${promptStore.prompts.length * 24}+` },
-  { label: '活跃创作者', value: '320+' },
-  { label: '本周收藏', value: '1.8k' }
+  { label: 'Curated prompts', value: `${promptStore.prompts.length * 24}+` },
+  { label: 'Active creators', value: '320+' },
+  { label: 'Weekly saves', value: '1.8k' }
 ])
 
 const formatCount = (value: number) => {
@@ -84,8 +85,8 @@ const formatCount = (value: number) => {
 }
 
 const resolveCover = (prompt: Prompt, index: number) => {
-  if (/^https?:\/\//.test(prompt.cover) || prompt.cover.startsWith('data:image')) {
-    return prompt.cover
+  if (isDisplayableCover(prompt.cover)) {
+    return resolveMediaUrl(prompt.cover)
   }
 
   return fallbackCoverMap[prompt.id] ?? fallbackCoverMap[101 + (index % Object.keys(fallbackCoverMap).length)]
@@ -108,8 +109,8 @@ const handleLogout = async () => {
 
 <template>
   <div class="min-h-screen bg-[#f5f3ee] text-[#111111]">
-    <div class="mx-auto max-w-7xl px-4 pb-16 pt-5 sm:px-6 lg:px-8">
-      <header class="sticky top-4 z-30 rounded-[24px] border border-black/10 bg-white/80 px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur md:px-5">
+    <div class="mx-auto max-w-[1160px] px-3 pb-12 pt-4 sm:px-4 lg:px-5">
+      <header class="sticky top-3 z-30 rounded-[20px] border border-black/10 bg-white/88 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.06)] backdrop-blur md:px-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex items-center justify-between gap-4">
             <RouterLink
@@ -119,7 +120,7 @@ const handleLogout = async () => {
               PromptOS
             </RouterLink>
             <div class="hidden rounded-full border border-black/10 bg-black px-3 py-1 text-xs text-white sm:inline-flex">
-              AI Visual Prompt Library
+              Visual Prompt Library
             </div>
           </div>
 
@@ -139,56 +140,46 @@ const handleLogout = async () => {
               to="/search"
               class="rounded-full border border-black/10 bg-[#f7f5f0] px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black"
             >
-              搜索 Prompt / 风格 / 模型
+              Search
             </RouterLink>
             <RouterLink
               v-if="!userStore.isLoggedIn"
               to="/login"
               class="rounded-full px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white"
             >
-              登录
+              Login
             </RouterLink>
             <RouterLink
               v-else
               to="/profile"
               class="rounded-full px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white"
             >
-              {{ userStore.userInfo?.username ?? '个人中心' }}
+              {{ userStore.userInfo?.username ?? 'Profile' }}
             </RouterLink>
             <button
               class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85"
               @click="handlePublishClick"
             >
-              发布
+              Publish
             </button>
             <button
               v-if="userStore.isLoggedIn"
               class="rounded-full border border-black/10 px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white"
               @click="handleLogout"
             >
-              退出
+              Logout
             </button>
           </div>
         </div>
       </header>
 
-      <section class="grid gap-8 pb-10 pt-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-        <div>
-          <p class="text-sm uppercase tracking-[0.24em] text-[#777777]">
-            Curated visual prompts
-          </p>
-          <h1 class="mt-3 max-w-3xl text-4xl font-semibold leading-tight sm:text-5xl">
-            先看图，再找到能直接开工的 AI Prompt。
-          </h1>
-          <p class="mt-4 max-w-2xl text-base leading-7 text-[#5f5f5f]">
-            首页优先展示高质量 AI 视觉案例，导航保持克制，灵感、分类和作者信息都退到第二层，浏览会更轻一点。
-          </p>
-
-          <div class="mt-6 flex flex-wrap gap-2">
+      <section class="grid gap-3 pb-5 pt-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+        <div class="rounded-[22px] border border-black/8 bg-white px-4 py-4">
+          <div class="flex flex-wrap items-center gap-2">
             <span
               v-for="tag in highlightTags"
               :key="tag"
-              class="rounded-full border border-black/10 bg-white px-3 py-2 text-sm text-[#444444]"
+              class="rounded-full border border-black/10 bg-[#faf8f4] px-3 py-1.5 text-sm text-[#444444]"
             >
               {{ tag }}
             </span>
@@ -199,12 +190,12 @@ const handleLogout = async () => {
           <article
             v-for="stat in communityStats"
             :key="stat.label"
-            class="rounded-[18px] border border-black/8 bg-white px-4 py-4"
+            class="rounded-[18px] border border-black/8 bg-white px-4 py-3.5"
           >
             <div class="text-sm text-[#777777]">
               {{ stat.label }}
             </div>
-            <div class="mt-2 text-2xl font-semibold text-black">
+            <div class="mt-1.5 text-2xl font-semibold text-black">
               {{ stat.value }}
             </div>
           </article>
@@ -213,31 +204,31 @@ const handleLogout = async () => {
 
       <section
         v-if="featuredPrompt"
-        class="grid gap-4 pb-8 lg:grid-cols-[1.15fr_0.85fr]"
+        class="grid gap-3 pb-6 lg:grid-cols-[1.25fr_0.75fr]"
       >
         <RouterLink
           :to="`/prompt/${featuredPrompt.id}`"
-          class="group relative block overflow-hidden rounded-[28px] bg-black"
+          class="group relative block overflow-hidden rounded-[24px] bg-black"
         >
           <img
             :src="resolveCover(featuredPrompt, 0)"
             :alt="featuredPrompt.title"
-            class="h-[520px] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+            class="h-[470px] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
           >
           <div class="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
-          <div class="absolute inset-x-0 bottom-0 p-6 text-white sm:p-8">
+          <div class="absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
             <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/70">
               <span>{{ featuredPrompt.categoryName }}</span>
               <span>{{ featuredPrompt.model }}</span>
               <span v-if="promptStore.usingMockData">Mock Feed</span>
             </div>
-            <h2 class="mt-3 max-w-2xl text-2xl font-semibold sm:text-3xl">
+            <h2 class="mt-2 max-w-2xl text-2xl font-semibold sm:text-[30px]">
               {{ featuredPrompt.title }}
             </h2>
-            <p class="mt-3 max-w-2xl text-sm leading-6 text-white/78 sm:text-base">
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-white/78">
               {{ featuredPrompt.description }}
             </p>
-            <div class="mt-5 flex flex-wrap items-center gap-4 text-sm text-white/74">
+            <div class="mt-4 flex flex-wrap items-center gap-4 text-sm text-white/74">
               <span>{{ featuredPrompt.user.username }}</span>
               <span>{{ formatCount(featuredPrompt.likes) }} likes</span>
               <span>{{ formatCount(featuredPrompt.favorites) }} saves</span>
@@ -245,25 +236,20 @@ const handleLogout = async () => {
           </div>
         </RouterLink>
 
-        <div class="grid gap-4">
-          <div class="rounded-[28px] border border-black/8 bg-white p-5">
+        <div class="grid gap-3">
+          <div class="rounded-[24px] border border-black/8 bg-white p-4">
             <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-sm text-[#777777]">
-                  热门分类
-                </div>
-                <div class="mt-1 text-xl font-semibold text-black">
-                  今天适合从这些方向开始
-                </div>
+              <div class="text-sm text-[#777777]">
+                Categories
               </div>
               <div class="text-xs uppercase tracking-[0.2em] text-[#999999]">
                 Explore
               </div>
             </div>
 
-            <div class="mt-5 flex flex-wrap gap-2">
+            <div class="mt-4 flex flex-wrap gap-2">
               <button
-                class="rounded-full px-4 py-2 text-sm transition"
+                class="rounded-full px-3.5 py-2 text-sm transition"
                 :class="
                   activeCategoryId === 'all'
                     ? 'bg-black text-white'
@@ -271,12 +257,12 @@ const handleLogout = async () => {
                 "
                 @click="activeCategoryId = 'all'"
               >
-                全部
+                All
               </button>
               <button
                 v-for="category in promptStore.categories"
                 :key="category.id"
-                class="rounded-full px-4 py-2 text-sm transition"
+                class="rounded-full px-3.5 py-2 text-sm transition"
                 :class="
                   activeCategoryId === category.id
                     ? 'bg-black text-white'
@@ -289,40 +275,40 @@ const handleLogout = async () => {
             </div>
           </div>
 
-          <div class="rounded-[28px] border border-black/8 bg-[#111111] p-6 text-white">
+          <div class="rounded-[24px] border border-black/8 bg-[#111111] p-5 text-white">
             <div class="text-sm text-white/60">
-              本周精选作者
+              Featured creator
             </div>
-            <div class="mt-2 text-2xl font-semibold">
+            <div class="mt-2 text-xl font-semibold">
               {{ featuredPrompt.user.username }}
             </div>
             <p class="mt-3 text-sm leading-6 text-white/70">
-              {{ featuredPrompt.user.bio || '专注把模型能力整理成可复用、可直接上线的创作流程。' }}
+              {{ featuredPrompt.user.bio || 'Builds reusable prompt systems with a clear production bias.' }}
             </p>
 
-            <div class="mt-6 grid grid-cols-3 gap-3 text-center">
-              <div class="rounded-[18px] bg-white/8 px-3 py-4">
+            <div class="mt-5 grid grid-cols-3 gap-2 text-center">
+              <div class="rounded-[16px] bg-white/8 px-3 py-3">
                 <div class="text-lg font-semibold">
                   {{ formatCount(featuredPrompt.views) }}
                 </div>
                 <div class="mt-1 text-xs text-white/55">
-                  浏览
+                  Views
                 </div>
               </div>
-              <div class="rounded-[18px] bg-white/8 px-3 py-4">
+              <div class="rounded-[16px] bg-white/8 px-3 py-3">
                 <div class="text-lg font-semibold">
                   {{ formatCount(featuredPrompt.likes) }}
                 </div>
                 <div class="mt-1 text-xs text-white/55">
-                  喜欢
+                  Likes
                 </div>
               </div>
-              <div class="rounded-[18px] bg-white/8 px-3 py-4">
+              <div class="rounded-[16px] bg-white/8 px-3 py-3">
                 <div class="text-lg font-semibold">
                   {{ featuredPrompt.model }}
                 </div>
                 <div class="mt-1 text-xs text-white/55">
-                  模型
+                  Model
                 </div>
               </div>
             </div>
@@ -330,43 +316,38 @@ const handleLogout = async () => {
         </div>
       </section>
 
-      <section class="pb-4">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div class="text-sm text-[#777777]">
-              灵感画廊
-            </div>
-            <h2 class="mt-1 text-2xl font-semibold text-black">
-              按图片浏览可直接使用的 Prompt
-            </h2>
+      <section class="pb-3">
+        <div class="flex items-end justify-between gap-3">
+          <div class="text-sm text-[#777777]">
+            Gallery
           </div>
           <div class="text-sm text-[#777777]">
-            {{ visiblePrompts.length }} 个结果
+            {{ visiblePrompts.length }} results
           </div>
         </div>
       </section>
 
       <section
         v-if="promptStore.loading"
-        class="grid auto-rows-[180px] grid-cols-1 gap-4 pb-8 md:grid-cols-3"
+        class="grid auto-rows-[168px] grid-cols-1 gap-3 pb-8 md:grid-cols-3"
       >
         <div
           v-for="index in 6"
           :key="index"
-          class="animate-pulse rounded-[24px] bg-black/6"
+          class="animate-pulse rounded-[20px] bg-black/6"
           :class="cardSizePattern[(index - 1) % cardSizePattern.length]"
         />
       </section>
 
       <section
         v-else-if="curatedPrompts.length > 0"
-        class="grid auto-rows-[180px] grid-cols-1 gap-4 pb-8 md:grid-cols-3"
+        class="grid auto-rows-[168px] grid-cols-1 gap-3 pb-8 md:grid-cols-3"
       >
         <RouterLink
           v-for="prompt in curatedPrompts"
           :key="prompt.id"
           :to="`/prompt/${prompt.id}`"
-          class="group relative overflow-hidden rounded-[24px] bg-black"
+          class="group relative overflow-hidden rounded-[20px] bg-black"
           :class="prompt.cardClass"
         >
           <img
@@ -377,18 +358,18 @@ const handleLogout = async () => {
           >
           <div class="absolute inset-0 bg-gradient-to-t from-black/88 via-black/18 to-transparent" />
 
-          <div class="absolute inset-x-0 bottom-0 p-5 text-white">
+          <div class="absolute inset-x-0 bottom-0 p-4 text-white">
             <div class="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-white/70">
               <span>{{ prompt.categoryName }}</span>
               <span>{{ prompt.model }}</span>
             </div>
-            <h3 class="mt-3 text-xl font-semibold leading-tight">
+            <h3 class="mt-2 text-lg font-semibold leading-tight">
               {{ prompt.title }}
             </h3>
-            <p class="mt-2 line-clamp-2 text-sm leading-6 text-white/75">
+            <p class="mt-2 line-clamp-2 text-sm leading-5 text-white/75">
               {{ prompt.description }}
             </p>
-            <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/72">
+            <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/72">
               <span>{{ prompt.user.username }}</span>
               <span>{{ formatCount(prompt.likes) }} likes</span>
               <span>{{ formatCount(prompt.views) }} views</span>
@@ -399,13 +380,13 @@ const handleLogout = async () => {
 
       <section
         v-else
-        class="rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
+        class="rounded-[24px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
       >
         <div class="text-lg font-semibold text-black">
-          这个分类还没有内容
+          No prompts in this category yet
         </div>
         <p class="mt-2 text-sm text-[#777777]">
-          可以先看看其它分类，或者直接发布第一个 Prompt。
+          Switch categories or publish the first one.
         </p>
       </section>
     </div>

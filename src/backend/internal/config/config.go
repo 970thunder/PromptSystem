@@ -27,7 +27,11 @@ type Config struct {
 	RedisHost      string
 	RedisPort      string
 	RedisPass      string
-	AllowedOrigin  string
+	AllowedOrigin      string
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubRedirectURI  string
+	FrontendURL        string
 }
 
 func Load() Config {
@@ -53,7 +57,11 @@ func Load() Config {
 		RedisHost:      getEnv("REDIS_HOST", "localhost"),
 		RedisPort:      getEnv("REDIS_PORT", "6379"),
 		RedisPass:      getEnv("REDIS_PASSWORD", ""),
-		AllowedOrigin:  getEnv("ALLOWED_ORIGIN", "*"),
+		AllowedOrigin:      getEnv("ALLOWED_ORIGIN", "*"),
+		GitHubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
+		GitHubRedirectURI:  getEnv("GITHUB_REDIRECT_URI", ""),
+		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
 	}
 }
 

@@ -15,9 +15,14 @@ export default {
         },
         // Glassmorphism accent
         glass: {
-          primary: '#7C3AED',
-          secondary: '#9333EA',
-          cyan: '#06B6D4',
+          primary: '#111111',
+          secondary: '#333333',
+          accent: '#f5f3ee',
+        },
+        warm: {
+          page: '#f5f3ee',
+          surface: '#faf8f4',
+          muted: '#f6f4ef',
         },
         // Neutral
         neutral: {
@@ -34,9 +39,9 @@ export default {
         'input': '16px',
       },
       boxShadow: {
-        'glass': '0 8px 32px 0 rgba(124, 58, 237, 0.15)',
-        'glass-hover': '0 8px 40px 0 rgba(124, 58, 237, 0.25)',
-        'glow': '0 0 20px rgba(124, 58, 237, 0.4)',
+        'glass': '0 16px 40px rgba(15, 23, 42, 0.06)',
+        'glass-hover': '0 20px 48px rgba(15, 23, 42, 0.1)',
+        'glow': '0 0 20px rgba(0, 0, 0, 0.08)',
       },
       backdropBlur: {
         'glass': '20px',
@@ -51,8 +56,8 @@ export default {
           '100%': { transform: 'translateY(-4px)' },
         },
         glowPulse: {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(124, 58, 237, 0.4)' },
-          '50%': { boxShadow: '0 0 30px rgba(124, 58, 237, 0.6)' },
+          '0%, 100%': { boxShadow: '0 0 20px rgba(0, 0, 0, 0.08)' },
+          '50%': { boxShadow: '0 0 30px rgba(0, 0, 0, 0.12)' },
         },
       },
     },

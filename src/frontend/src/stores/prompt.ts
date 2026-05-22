@@ -21,6 +21,22 @@ export const usePromptStore = defineStore('prompt', () => {
     currentPrompt.value = prompt
   }
 
+  const mergePrompt = (prompt: Prompt) => {
+    if (currentPrompt.value?.id === prompt.id) {
+      currentPrompt.value = prompt
+    }
+
+    const existingIndex = prompts.value.findIndex((item) => item.id === prompt.id)
+    if (existingIndex === -1) {
+      prompts.value = [prompt, ...prompts.value]
+      return
+    }
+
+    const next = [...prompts.value]
+    next.splice(existingIndex, 1, prompt)
+    prompts.value = next
+  }
+
   const setCategories = (list: Category[]) => {
     categories.value = list
   }
@@ -31,6 +47,25 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const prependPrompt = (prompt: Prompt) => {
     prompts.value = [prompt, ...prompts.value.filter((item) => item.id !== prompt.id)]
+  }
+
+  const upsertPrompt = (prompt: Prompt) => {
+    const existingIndex = prompts.value.findIndex((item) => item.id === prompt.id)
+    if (existingIndex === -1) {
+      prompts.value = [prompt, ...prompts.value]
+      return
+    }
+
+    const next = [...prompts.value]
+    next.splice(existingIndex, 1)
+    prompts.value = [prompt, ...next]
+  }
+
+  const removePrompt = (id: number) => {
+    prompts.value = prompts.value.filter((item) => item.id !== id)
+    if (currentPrompt.value?.id === id) {
+      currentPrompt.value = null
+    }
   }
 
   const featuredPrompts = computed(() => prompts.value.slice(0, 3))
@@ -125,9 +160,12 @@ export const usePromptStore = defineStore('prompt', () => {
     latestPrompts,
     setPrompts,
     setCurrentPrompt,
+    mergePrompt,
     setCategories,
     setLoading,
     prependPrompt,
+    upsertPrompt,
+    removePrompt,
     ensurePromptSeed,
     loadHomeFeed,
     loadPromptDetail,

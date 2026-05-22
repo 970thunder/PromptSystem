@@ -9,6 +9,8 @@ import (
 )
 
 var promptMu sync.RWMutex
+var promptLikes = make(map[int]map[int]struct{})
+var promptFavorites = make(map[int]map[int]struct{})
 
 type CreatePromptInput struct {
 	Title        string
@@ -23,18 +25,47 @@ type CreatePromptInput struct {
 	User         User
 }
 
+type PromptFilter struct {
+	CategoryID int
+	SortBy     string
+	UserID     int
+	Keyword    string
+	Model      string
+}
+
 func FilterPrompts(categoryID int, sortBy string) []Prompt {
+	return QueryPrompts(PromptFilter{
+		CategoryID: categoryID,
+		SortBy:     sortBy,
+	})
+}
+
+func QueryPrompts(filter PromptFilter) []Prompt {
 	promptMu.RLock()
 	defer promptMu.RUnlock()
 
 	list := make([]Prompt, 0, len(prompts))
+	keyword := strings.ToLower(strings.TrimSpace(filter.Keyword))
+	model := strings.ToLower(strings.TrimSpace(filter.Model))
+
 	for _, prompt := range prompts {
-		if categoryID == 0 || prompt.CategoryID == categoryID {
-			list = append(list, prompt)
+		if filter.CategoryID > 0 && prompt.CategoryID != filter.CategoryID {
+			continue
 		}
+		if filter.UserID > 0 && prompt.UserID != filter.UserID {
+			continue
+		}
+		if model != "" && !strings.Contains(strings.ToLower(prompt.Model), model) {
+			continue
+		}
+		if keyword != "" && !matchesKeyword(prompt, keyword) {
+			continue
+		}
+
+		list = append(list, prompt)
 	}
 
-	switch sortBy {
+	switch filter.SortBy {
 	case "popular":
 		sort.SliceStable(list, func(i, j int) bool {
 			return list[i].Likes > list[j].Likes
@@ -46,6 +77,66 @@ func FilterPrompts(categoryID int, sortBy string) []Prompt {
 	}
 
 	return list
+}
+
+func sanitizeTags(tags []string) []string {
+	seen := make(map[string]struct{}, len(tags))
+	cleaned := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		if _, exists := seen[tag]; exists {
+			continue
+		}
+		seen[tag] = struct{}{}
+		cleaned = append(cleaned, tag)
+	}
+
+	return cleaned
+}
+
+func categoryByID(id int) (Category, bool) {
+	for _, category := range categories {
+		if category.ID == id {
+			return category, true
+		}
+	}
+
+	return Category{}, false
+}
+
+func matchesKeyword(prompt Prompt, keyword string) bool {
+	if strings.Contains(strings.ToLower(prompt.Title), keyword) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(prompt.Description), keyword) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(prompt.Content), keyword) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(prompt.SystemPrompt), keyword) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(prompt.CategoryName), keyword) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(prompt.Model), keyword) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(prompt.User.Username), keyword) {
+		return true
+	}
+
+	for _, tag := range prompt.Tags {
+		if strings.Contains(strings.ToLower(tag), keyword) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func FindPromptByID(id int) (Prompt, bool) {
@@ -99,6 +190,115 @@ func CreatePrompt(input CreatePromptInput) (Prompt, error) {
 	return prompt, nil
 }
 
+func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	category, ok := findCategoryByID(input.CategoryID)
+	if !ok {
+		return Prompt{}, fmt.Errorf("invalid category")
+	}
+
+	for index := range prompts {
+		if prompts[index].ID != id {
+			continue
+		}
+		if prompts[index].UserID != userID {
+			return Prompt{}, fmt.Errorf("forbidden")
+		}
+
+		previousCategoryID := prompts[index].CategoryID
+		prompts[index].Title = strings.TrimSpace(input.Title)
+		prompts[index].Description = strings.TrimSpace(input.Description)
+		prompts[index].Cover = strings.TrimSpace(input.Cover)
+		prompts[index].Content = strings.TrimSpace(input.Content)
+		prompts[index].SystemPrompt = strings.TrimSpace(input.SystemPrompt)
+		prompts[index].Model = strings.TrimSpace(input.Model)
+		prompts[index].Params = input.Params
+		prompts[index].CategoryID = input.CategoryID
+		prompts[index].CategoryName = category.Name
+		prompts[index].Tags = normalizeTags(input.Tags)
+		prompts[index].UpdatedAt = time.Now().UTC().Format(time.DateOnly)
+
+		if previousCategoryID != input.CategoryID {
+			decrementCategoryCountLocked(previousCategoryID)
+			incrementCategoryCountLocked(input.CategoryID)
+		}
+
+		return prompts[index], nil
+	}
+
+	return Prompt{}, fmt.Errorf("prompt not found")
+}
+
+func DeletePrompt(id int, userID int) error {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	for index := range prompts {
+		if prompts[index].ID != id {
+			continue
+		}
+		if prompts[index].UserID != userID {
+			return fmt.Errorf("forbidden")
+		}
+
+		decrementCategoryCountLocked(prompts[index].CategoryID)
+		prompts = append(prompts[:index], prompts[index+1:]...)
+		return nil
+	}
+
+	return fmt.Errorf("prompt not found")
+}
+
+func LikePrompt(id int, userID int) (Prompt, bool, error) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	for index := range prompts {
+		if prompts[index].ID != id {
+			continue
+		}
+
+		if _, ok := promptLikes[id]; !ok {
+			promptLikes[id] = make(map[int]struct{})
+		}
+		if _, exists := promptLikes[id][userID]; exists {
+			return prompts[index], false, nil
+		}
+
+		promptLikes[id][userID] = struct{}{}
+		prompts[index].Likes++
+		return prompts[index], true, nil
+	}
+
+	return Prompt{}, false, fmt.Errorf("prompt not found")
+}
+
+func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	for index := range prompts {
+		if prompts[index].ID != id {
+			continue
+		}
+
+		if _, ok := promptFavorites[id]; !ok {
+			promptFavorites[id] = make(map[int]struct{})
+		}
+		if _, exists := promptFavorites[id][userID]; exists {
+			return prompts[index], false, nil
+		}
+
+		promptFavorites[id][userID] = struct{}{}
+		prompts[index].Favorites++
+		return prompts[index], true, nil
+	}
+
+	return Prompt{}, false, fmt.Errorf("prompt not found")
+}
+
 func normalizeTags(tags []string) []string {
 	result := make([]string, 0, len(tags))
 	for _, tag := range tags {
@@ -126,6 +326,15 @@ func incrementCategoryCountLocked(categoryID int) {
 	for index := range categories {
 		if categories[index].ID == categoryID {
 			categories[index].Count++
+			return
+		}
+	}
+}
+
+func decrementCategoryCountLocked(categoryID int) {
+	for index := range categories {
+		if categories[index].ID == categoryID && categories[index].Count > 0 {
+			categories[index].Count--
 			return
 		}
 	}

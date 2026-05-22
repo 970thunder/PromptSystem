@@ -487,6 +487,8 @@ MinIO
 RabbitMQ
 ```
 
+> **当前仓库实现（Phase 1）**：`src/backend/` 使用 Go + `net/http` + `internal/api`（路由/handler）+ `internal/store`（MySQL/内存）+ JWT + 本地/R2 图片存储。Redis/ES/MinIO/RabbitMQ 在 Compose 或 PRD 中预留，业务尚未接入。
+
 # 容器化
 
 ```text

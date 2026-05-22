@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
 import type { PublishPromptRequest } from '@/types'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
+const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const promptStore = usePromptStore()
 
 const submitting = ref(false)
 const uploading = ref(false)
+const loadingPrompt = ref(false)
 const selectedFileName = ref('')
 const tagInput = ref('')
+const editingPromptId = computed(() => Number(route.query.edit) || 0)
+const isEditing = computed(() => editingPromptId.value > 0)
 
 const form = reactive<PublishPromptRequest>({
   title: '',
@@ -46,6 +51,26 @@ const canSubmit = computed(() =>
 onMounted(async () => {
   if (promptStore.categories.length === 0) {
     await promptStore.loadHomeFeed()
+  }
+
+  if (isEditing.value) {
+    loadingPrompt.value = true
+    try {
+      const response = await promptApi.getPromptDetail(editingPromptId.value)
+      const prompt = response.data
+      form.title = prompt.title
+      form.description = prompt.description
+      form.cover = prompt.cover
+      form.content = prompt.content
+      form.systemPrompt = prompt.systemPrompt
+      form.model = prompt.model
+      form.params = { ...prompt.params }
+      form.categoryId = prompt.categoryId
+      form.tags = [...prompt.tags]
+      tagInput.value = prompt.tags.join(', ')
+    } finally {
+      loadingPrompt.value = false
+    }
   }
 })
 
@@ -91,10 +116,13 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    const response = await promptApi.publishPrompt(form)
-    promptStore.prependPrompt(response.data)
+    const response = isEditing.value
+      ? await promptApi.updatePrompt(editingPromptId.value, form)
+      : await promptApi.publishPrompt(form)
+
+    promptStore.upsertPrompt(response.data)
     await promptStore.loadHomeFeed()
-    message.success('Prompt published')
+    message.success(isEditing.value ? 'Prompt updated' : 'Prompt published')
     await router.push(`/prompt/${response.data.id}`)
   } finally {
     submitting.value = false
@@ -108,18 +136,25 @@ const handleSubmit = async () => {
       <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div class="text-sm uppercase tracking-[0.2em] text-[#7a7a7a]">
-            Publish Prompt
+            {{ isEditing ? 'Edit Prompt' : 'Publish Prompt' }}
           </div>
           <h1 class="mt-2 text-3xl font-semibold">
-            Publish an image-first AI prompt
+            {{ isEditing ? 'Refine and republish your prompt' : 'Publish an image-first AI prompt' }}
           </h1>
-          <p class="mt-3 max-w-2xl text-sm leading-6 text-[#5f5f5f]">
-            This flow now supports real cover uploads. Local development stores files on disk, and production can switch to Cloudflare R2 without changing the frontend contract.
-          </p>
         </div>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <div
+        v-if="loadingPrompt"
+        class="rounded-[28px] border border-black/8 bg-white p-10 text-center text-sm text-[#666666] shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
+      >
+        Loading prompt...
+      </div>
+
+      <div
+        v-else
+        class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"
+      >
         <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
           <div class="grid gap-5">
             <label class="grid gap-2">
@@ -169,7 +204,7 @@ const handleSubmit = async () => {
                 class="overflow-hidden rounded-[20px] border border-black/8 bg-black"
               >
                 <img
-                  :src="form.cover"
+                  :src="resolveMediaUrl(form.cover)"
                   alt="cover preview"
                   class="h-[280px] w-full object-cover"
                 >
@@ -302,7 +337,7 @@ const handleSubmit = async () => {
               :disabled="submitting || uploading || !canSubmit"
               @click="handleSubmit"
             >
-              {{ submitting ? 'Publishing...' : 'Publish prompt' }}
+              {{ submitting ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save changes' : 'Publish prompt') }}
             </button>
           </section>
         </aside>

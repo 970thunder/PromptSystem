@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { ApiResponse, PageResponse, Prompt, PublishPromptRequest, Category, UploadImageResponse } from '@/types'
+import type { ApiResponse, PageResponse, Prompt, PublishPromptRequest, Category, UploadImageResponse, PromptActionResponse } from '@/types'
 
 export const promptApi = {
   // Get prompt list with pagination
@@ -8,6 +8,9 @@ export const promptApi = {
     pageSize: number
     categoryId?: number
     sort?: string
+    userId?: number
+    keyword?: string
+    model?: string
   }): Promise<ApiResponse<PageResponse<Prompt>>> {
     return request.get('/prompts', { params })
   },
@@ -44,12 +47,12 @@ export const promptApi = {
   },
 
   // Like a prompt
-  likePrompt(id: number): Promise<ApiResponse<null>> {
+  likePrompt(id: number): Promise<ApiResponse<PromptActionResponse>> {
     return request.post(`/prompts/${id}/like`)
   },
 
   // Favorite a prompt
-  favoritePrompt(id: number): Promise<ApiResponse<null>> {
+  favoritePrompt(id: number): Promise<ApiResponse<PromptActionResponse>> {
     return request.post(`/prompts/${id}/favorite`)
   },
 
@@ -60,9 +63,12 @@ export const promptApi = {
 
   // Search prompts
   searchPrompts(params: {
-    keyword: string
+    keyword?: string
     page: number
     pageSize: number
+    categoryId?: number
+    model?: string
+    sort?: string
   }): Promise<ApiResponse<PageResponse<Prompt>>> {
     return request.get('/prompts/search', { params })
   }

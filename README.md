@@ -57,6 +57,12 @@ Initialize the local database with:
 mysql -u root -p < src/backend/sql/schema.sql
 ```
 
+If you already have an existing database created from an older schema, apply incremental SQL files from `src/backend/sql/migrations/` in filename order. For example:
+
+```bash
+mysql -u root -p promptos < src/backend/sql/migrations/0001_prompts_cover_and_params.sql
+```
+
 The backend reads runtime configuration from environment variables such as `PORT`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `UPLOAD_*`, `R2_*`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
 
 ## Docker
@@ -80,6 +86,8 @@ Docker services:
 ## Development Order
 
 All development should follow `TODO.md`. Update the checklist after each verified task, then commit the verified changes.
+
+Contributor and AI coding conventions (stack, directories, API style) are defined in `CLAUDE.md`. The backend is **Go** (`src/backend/`), not Spring/Java.
 
 ## Environment Naming
 

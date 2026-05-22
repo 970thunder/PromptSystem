@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useMessage } from 'naive-ui'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
+import { useUserStore } from '@/stores/user'
+import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 
 const route = useRoute()
+const router = useRouter()
+const message = useMessage()
 const promptStore = usePromptStore()
+const userStore = useUserStore()
+const liking = ref(false)
+const favoriting = ref(false)
 
 const promptId = computed(() => Number(route.params.id))
 const prompt = computed(() => promptStore.currentPrompt)
@@ -23,12 +32,36 @@ const promptMeta = computed(() => {
   }
 
   return [
-    { label: '模型', value: prompt.value.model },
-    { label: '分类', value: prompt.value.categoryName },
-    { label: '发布时间', value: prompt.value.createdAt },
-    { label: '最近更新', value: prompt.value.updatedAt }
+    { label: 'Model', value: prompt.value.model },
+    { label: 'Category', value: prompt.value.categoryName },
+    { label: 'Published', value: prompt.value.createdAt },
+    { label: 'Updated', value: prompt.value.updatedAt }
   ]
 })
+
+const coverImage = computed(() => {
+  if (!prompt.value) {
+    return ''
+  }
+
+  return resolveMediaUrl(prompt.value.cover)
+})
+
+const showCoverImage = computed(() => isDisplayableCover(prompt.value?.cover))
+
+const copyText = async (label: string, text: string) => {
+  if (!text.trim()) {
+    message.warning(`No ${label} to copy`)
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success(`${label} copied`)
+  } catch {
+    message.error('Copy failed — check browser permissions')
+  }
+}
 
 const statCards = computed(() => {
   if (!prompt.value) {
@@ -36,11 +69,58 @@ const statCards = computed(() => {
   }
 
   return [
-    { label: '浏览', value: prompt.value.views.toLocaleString() },
-    { label: '点赞', value: prompt.value.likes.toLocaleString() },
-    { label: '收藏', value: prompt.value.favorites.toLocaleString() }
+    { label: 'Views', value: prompt.value.views.toLocaleString() },
+    { label: 'Likes', value: prompt.value.likes.toLocaleString() },
+    { label: 'Saves', value: prompt.value.favorites.toLocaleString() }
   ]
 })
+
+const ensureAuthenticated = async () => {
+  if (userStore.isLoggedIn) {
+    return true
+  }
+
+  await router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
+  return false
+}
+
+const handleLike = async () => {
+  if (!prompt.value || liking.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  liking.value = true
+  try {
+    const response = await promptApi.likePrompt(prompt.value.id)
+    promptStore.mergePrompt(response.data.prompt)
+    message.success(response.data.applied ? 'Liked' : 'Already liked')
+  } finally {
+    liking.value = false
+  }
+}
+
+const handleFavorite = async () => {
+  if (!prompt.value || favoriting.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  favoriting.value = true
+  try {
+    const response = await promptApi.favoritePrompt(prompt.value.id)
+    promptStore.mergePrompt(response.data.prompt)
+    message.success(response.data.applied ? 'Saved' : 'Already saved')
+  } finally {
+    favoriting.value = false
+  }
+}
 
 const loadDetail = async () => {
   await promptStore.ensurePromptSeed()
@@ -58,21 +138,21 @@ watch(() => route.params.id, loadDetail)
 </script>
 
 <template>
-  <div class="min-h-screen bg-[radial-gradient(circle_at_top,#312E81_0%,#0B0F19_38%,#090B11_100%)] text-white">
-    <div class="mx-auto max-w-7xl px-5 pb-16 pt-6 sm:px-8 lg:px-10">
-      <header class="mb-8 flex flex-wrap items-center gap-3 text-sm text-neutral-400">
+  <div class="min-h-screen bg-[#f5f3ee] text-[#111111]">
+    <div class="mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <header class="mb-8 flex flex-wrap items-center gap-3 text-sm text-[#777777]">
         <RouterLink
           to="/"
-          class="rounded-full border border-white/10 bg-white/5 px-4 py-2 transition hover:bg-white/10 hover:text-white"
+          class="rounded-full border border-black/10 bg-white px-4 py-2 transition hover:border-black/20 hover:text-black"
         >
-          返回首页
+          Back home
         </RouterLink>
         <span>/</span>
         <span v-if="prompt">{{ prompt.categoryName }}</span>
-        <span v-else>Prompt 详情</span>
+        <span v-else>Prompt detail</span>
         <span
           v-if="promptStore.usingMockData"
-          class="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs text-amber-200"
+          class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800"
         >
           Mock Detail
         </span>
@@ -82,8 +162,8 @@ watch(() => route.params.id, loadDetail)
         v-if="promptStore.detailLoading"
         class="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]"
       >
-        <div class="h-[520px] animate-pulse rounded-card border border-white/10 bg-white/5" />
-        <div class="h-[520px] animate-pulse rounded-card border border-white/10 bg-white/5" />
+        <div class="h-[520px] animate-pulse rounded-[28px] bg-black/6" />
+        <div class="h-[520px] animate-pulse rounded-[28px] bg-black/6" />
       </section>
 
       <section
@@ -91,16 +171,27 @@ watch(() => route.params.id, loadDetail)
         class="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]"
       >
         <div class="space-y-6">
-          <section class="overflow-hidden rounded-card border border-white/10 bg-white/6 shadow-glass">
+          <section class="panel-card overflow-hidden">
+            <div
+              v-if="showCoverImage"
+              class="border-b border-black/8"
+            >
+              <img
+                :src="coverImage"
+                :alt="prompt.title"
+                class="max-h-[420px] w-full object-cover"
+              >
+            </div>
+
             <div class="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
-              <div class="min-h-[340px] bg-[linear-gradient(145deg,rgba(34,211,238,0.18),rgba(124,58,237,0.24),rgba(15,23,42,0.92))] p-8">
-                <div class="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+              <div class="min-h-[340px] bg-[#faf8f4] p-8">
+                <div class="inline-flex rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444]">
                   AI Result Preview
                 </div>
-                <h1 class="mt-5 max-w-2xl text-3xl font-semibold leading-tight text-white sm:text-4xl">
+                <h1 class="mt-5 max-w-2xl text-3xl font-semibold leading-tight text-black sm:text-4xl">
                   {{ prompt.title }}
                 </h1>
-                <p class="mt-4 max-w-xl text-base leading-7 text-neutral-200">
+                <p class="mt-4 max-w-xl text-base leading-7 text-[#555555]">
                   {{ prompt.description }}
                 </p>
 
@@ -108,47 +199,64 @@ watch(() => route.params.id, loadDetail)
                   <span
                     v-for="tag in prompt.tags"
                     :key="tag"
-                    class="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs text-neutral-200"
+                    class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444]"
                   >
                     {{ tag }}
                   </span>
                 </div>
               </div>
 
-              <div class="flex flex-col justify-between gap-5 p-8">
+              <div class="flex flex-col justify-between gap-5 border-t border-black/8 bg-white p-8 lg:border-l lg:border-t-0">
                 <div>
-                  <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-                    创作者
+                  <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+                    Creator
                   </div>
-                  <div class="mt-3 text-2xl font-semibold text-white">
+                  <div class="mt-3 text-2xl font-semibold text-black">
                     {{ prompt.user.username }}
                   </div>
-                  <p class="mt-3 text-sm leading-6 text-neutral-300">
+                  <p class="mt-3 text-sm leading-6 text-[#555555]">
                     {{ prompt.user.bio }}
                   </p>
+                </div>
+
+                <div class="flex flex-wrap gap-3">
+                  <button
+                    class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-70"
+                    :disabled="liking"
+                    @click="handleLike"
+                  >
+                    {{ liking ? 'Liking...' : `Like · ${prompt.likes.toLocaleString()}` }}
+                  </button>
+                  <button
+                    class="rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70"
+                    :disabled="favoriting"
+                    @click="handleFavorite"
+                  >
+                    {{ favoriting ? 'Saving...' : `Save · ${prompt.favorites.toLocaleString()}` }}
+                  </button>
                 </div>
 
                 <div class="grid grid-cols-3 gap-3">
                   <div
                     v-for="stat in statCards"
                     :key="stat.label"
-                    class="rounded-2xl border border-white/10 bg-white/5 p-4 text-center"
+                    class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center"
                   >
-                    <div class="text-lg font-semibold text-white">
+                    <div class="text-lg font-semibold text-black">
                       {{ stat.value }}
                     </div>
-                    <div class="mt-1 text-xs text-neutral-400">
+                    <div class="mt-1 text-xs text-[#777777]">
                       {{ stat.label }}
                     </div>
                   </div>
                 </div>
 
-                <div class="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
-                  <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-                    输出预期
+                <div class="rounded-[18px] border border-black/8 bg-[#111111] p-4 text-white">
+                  <div class="text-xs uppercase tracking-[0.2em] text-white/60">
+                    Expected output
                   </div>
-                  <p class="mt-3 text-sm leading-6 text-neutral-200">
-                    适合直接复制到模型中使用，再按你的业务背景补充变量、品牌信息和边界约束。
+                  <p class="mt-3 text-sm leading-6 text-white/75">
+                    Best used as a production-ready starting point. Swap in your domain details, brand inputs, and guardrails before shipping.
                   </p>
                 </div>
               </div>
@@ -156,32 +264,48 @@ watch(() => route.params.id, loadDetail)
           </section>
 
           <section class="grid gap-6 xl:grid-cols-[1fr_1fr]">
-            <article class="rounded-card border border-white/10 bg-white/6 p-6 shadow-glass">
-              <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-                Prompt 正文
+            <article class="panel-card p-6">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+                  Prompt body
+                </div>
+                <button
+                  class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black"
+                  @click="copyText('Prompt', prompt.content)"
+                >
+                  Copy prompt
+                </button>
               </div>
-              <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-neutral-200">{{ prompt.content }}</pre>
+              <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444]">{{ prompt.content }}</pre>
             </article>
 
-            <article class="rounded-card border border-white/10 bg-white/6 p-6 shadow-glass">
-              <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-                System Prompt
+            <article class="panel-card p-6">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+                  System prompt
+                </div>
+                <button
+                  class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black"
+                  @click="copyText('System prompt', prompt.systemPrompt)"
+                >
+                  Copy system
+                </button>
               </div>
-              <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-neutral-200">{{ prompt.systemPrompt }}</pre>
+              <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444]">{{ prompt.systemPrompt }}</pre>
             </article>
           </section>
 
           <section
             v-if="relatedPrompts.length > 0"
-            class="rounded-card border border-white/10 bg-white/6 p-6 shadow-glass"
+            class="panel-card p-6"
           >
             <div class="flex items-end justify-between gap-4">
               <div>
-                <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
+                <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
                   Related
                 </div>
-                <h2 class="mt-2 text-2xl font-semibold text-white">
-                  同分类相关推荐
+                <h2 class="mt-2 text-2xl font-semibold text-black">
+                  More from this category
                 </h2>
               </div>
             </div>
@@ -191,15 +315,15 @@ watch(() => route.params.id, loadDetail)
                 v-for="item in relatedPrompts"
                 :key="item.id"
                 :to="`/prompt/${item.id}`"
-                class="rounded-3xl border border-white/10 bg-white/5 p-5 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/8"
+                class="rounded-[20px] border border-black/8 bg-[#faf8f4] p-5 transition hover:-translate-y-1 hover:border-black/20 hover:bg-white"
               >
-                <div class="text-xs uppercase tracking-[0.18em] text-neutral-400">
+                <div class="text-xs uppercase tracking-[0.18em] text-[#7c7c7c]">
                   {{ item.model }}
                 </div>
-                <div class="mt-3 text-lg font-semibold text-white">
+                <div class="mt-3 text-lg font-semibold text-black">
                   {{ item.title }}
                 </div>
-                <p class="mt-3 text-sm leading-6 text-neutral-300">
+                <p class="mt-3 text-sm leading-6 text-[#555555]">
                   {{ item.description }}
                 </p>
               </RouterLink>
@@ -208,66 +332,66 @@ watch(() => route.params.id, loadDetail)
         </div>
 
         <aside class="space-y-6">
-          <section class="rounded-card border border-white/10 bg-white/6 p-6 shadow-glass">
-            <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-              Prompt 信息
+          <section class="panel-card p-6">
+            <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+              Prompt info
             </div>
             <div class="mt-5 space-y-4">
               <div
                 v-for="item in promptMeta"
                 :key="item.label"
-                class="flex items-start justify-between gap-4 border-b border-white/8 pb-4 last:border-b-0 last:pb-0"
+                class="flex items-start justify-between gap-4 border-b border-black/8 pb-4 last:border-b-0 last:pb-0"
               >
-                <div class="text-sm text-neutral-400">
+                <div class="text-sm text-[#777777]">
                   {{ item.label }}
                 </div>
-                <div class="text-right text-sm text-white">
+                <div class="text-right text-sm text-black">
                   {{ item.value }}
                 </div>
               </div>
             </div>
           </section>
 
-          <section class="rounded-card border border-white/10 bg-white/6 p-6 shadow-glass">
-            <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-              参数展示
+          <section class="panel-card p-6">
+            <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+              Parameters
             </div>
             <div class="mt-5 grid grid-cols-3 gap-3">
-              <div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                <div class="text-lg font-semibold text-white">
+              <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
+                <div class="text-lg font-semibold text-black">
                   {{ prompt.params.temperature ?? '-' }}
                 </div>
-                <div class="mt-1 text-xs text-neutral-400">
+                <div class="mt-1 text-xs text-[#777777]">
                   Temp
                 </div>
               </div>
-              <div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                <div class="text-lg font-semibold text-white">
+              <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
+                <div class="text-lg font-semibold text-black">
                   {{ prompt.params.topP ?? '-' }}
                 </div>
-                <div class="mt-1 text-xs text-neutral-400">
+                <div class="mt-1 text-xs text-[#777777]">
                   Top P
                 </div>
               </div>
-              <div class="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-                <div class="text-lg font-semibold text-white">
+              <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
+                <div class="text-lg font-semibold text-black">
                   {{ prompt.params.maxTokens ?? '-' }}
                 </div>
-                <div class="mt-1 text-xs text-neutral-400">
+                <div class="mt-1 text-xs text-[#777777]">
                   Tokens
                 </div>
               </div>
             </div>
           </section>
 
-          <section class="rounded-card border border-white/10 bg-white/6 p-6 shadow-glass">
-            <div class="text-xs uppercase tracking-[0.24em] text-neutral-400">
-              使用建议
+          <section class="panel-card p-6">
+            <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+              Usage notes
             </div>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-neutral-300">
-              <li>先保留原始结构，只替换你的业务背景、目标用户和约束条件。</li>
-              <li>如果输出太发散，优先降低 Temperature，再增加示例输入。</li>
-              <li>上线前至少做一次真实业务语境回归，确认风格和风险边界。</li>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-[#555555]">
+              <li>Keep the overall structure, then swap in your own business context, target user, and constraints.</li>
+              <li>If the output gets too loose, lower temperature first and then add stronger examples.</li>
+              <li>Before shipping, run at least one real workflow regression check with your production inputs.</li>
             </ul>
           </section>
         </aside>
@@ -275,19 +399,19 @@ watch(() => route.params.id, loadDetail)
 
       <section
         v-else
-        class="rounded-card border border-dashed border-white/15 bg-white/5 px-6 py-16 text-center"
+        class="rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
       >
-        <h1 class="text-2xl font-semibold text-white">
-          没找到这个 Prompt
+        <h1 class="text-2xl font-semibold text-black">
+          Prompt not found
         </h1>
-        <p class="mt-3 text-sm text-neutral-400">
-          可能已经下线，或者链接地址不对。
+        <p class="mt-3 text-sm text-[#777777]">
+          It may have been removed, or the link is no longer valid.
         </p>
         <RouterLink
           to="/"
-          class="mt-6 inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-white transition hover:bg-white/10"
+          class="mt-6 inline-flex rounded-full border border-black/10 bg-[#f6f4ef] px-5 py-3 text-sm text-[#333333] transition hover:border-black/20 hover:text-black"
         >
-          返回首页继续逛
+          Back to home
         </RouterLink>
       </section>
     </div>

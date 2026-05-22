@@ -2,11 +2,16 @@
 
 ## 2026-05-17 Additions
 
-- [~] Add cover image upload flow for Prompt publish
-- [~] Support local object storage and Cloudflare R2-compatible storage
-- [ ] Persist prompts beyond in-memory mock data
+- [x] Add cover image upload flow for Prompt publish
+- [x] Support local object storage and Cloudflare R2-compatible storage
+- [x] Persist prompts beyond in-memory mock data
+- [x] Persist login/register users to MySQL
+- [x] Implement real search page with backend filtering
+- [x] Implement usable profile page with published prompts list
 
 > 后续开发严格按本文件推进。每完成一个任务，必须同步勾选；新增需求先写入 TODO，再开发。
+
+**技术栈（与仓库一致）**：前端 Vue 3 + Vite + Pinia + Naive UI；后端 **Go**（`net/http`、`internal/api` + `internal/store`、MySQL）。不以 `CLAUDE.md` 旧版 Spring/MyBatis 路径为准。
 
 ## 状态约定
 
@@ -78,7 +83,7 @@
 - [ ] 配置 Git Hooks
 - [x] 配置前端项目目录结构
 - [x] 创建后端项目（Go）
-- [ ] 配置 Go Router / middleware 约定
+- [x] 配置 Go 路由与中间件约定（`ServeMux` + `withCORS` + `withAuth`）
 - [x] 配置 MySQL 环境变量
 - [x] 配置 Redis 环境变量
 - [x] 配置 JWT 基础能力
@@ -120,17 +125,16 @@
 
 ## 3. Prompt 数据与接口
 
-### 3.1 后端 Prompt 基础接口
+### 3.1 后端 Prompt 基础接口（Go store + api）
 
-- [x] Prompt struct 字段与前端类型对齐
-- [ ] Prompt repository
-- [ ] Prompt service
-- [ ] Prompt handler
+- [x] Prompt struct 字段与前端类型对齐（`internal/store`）
+- [x] Prompt store 接口与 MySQL/内存实现（`interfaces.go`、`mysql_prompts.go`、`memory_prompts.go`）
+- [x] HTTP handlers（`internal/api/server.go`）
 - [x] 获取 Prompt 列表接口
 - [x] 获取 Prompt 详情接口
-- [ ] 创建 Prompt 接口
-- [ ] 更新 Prompt 接口
-- [ ] 删除/下架 Prompt 接口
+- [x] 创建 Prompt 接口（`POST /api/v1/prompts`）
+- [x] 更新 Prompt 接口（`PUT /api/v1/prompts/:id`）
+- [x] 删除/下架 Prompt 接口（`DELETE /api/v1/prompts/:id`）
 - [x] 分类列表接口
 
 ### 3.2 前端 Prompt 数据层
@@ -195,9 +199,9 @@
 
 ### 5.2 交互功能
 
-- [ ] 一键复制
-- [ ] 点赞
-- [ ] 收藏
+- [x] 一键复制
+- [x] 点赞
+- [x] 收藏
 - [ ] 分享
 - [ ] 评论列表
 - [ ] 评论发布
@@ -214,9 +218,9 @@
 - [x] JWT 鉴权
 - [ ] 邮箱验证码开发环境方案
 - [ ] 找回密码
-- [ ] 修改资料
+- [x] 修改资料
 - [ ] 上传头像
-- [ ] 用户主页
+- [x] 用户主页
 
 ### 6.2 用户数据
 
@@ -232,15 +236,15 @@
 
 ### 7.1 发布功能
 
-- [ ] 上传封面图
-- [ ] 输入 Prompt
-- [ ] 输入 System Prompt
-- [ ] 输入模型参数
-- [ ] 添加标签
-- [ ] 分类选择
+- [x] 上传封面图
+- [x] 输入 Prompt
+- [x] 输入 System Prompt
+- [x] 输入模型参数
+- [x] 添加标签
+- [x] 分类选择
 - [ ] 发布草稿
-- [ ] 编辑 Prompt
-- [ ] 删除 Prompt
+- [x] 编辑 Prompt
+- [x] 删除 Prompt
 
 ### 7.2 内容审核
 
@@ -254,12 +258,12 @@
 
 ### 8.1 MVP 搜索
 
-- [ ] Prompt 标题搜索
-- [ ] Prompt 描述搜索
-- [ ] 标签搜索
-- [ ] 分类筛选
-- [ ] 模型筛选
-- [ ] 搜索结果页
+- [x] Prompt 标题搜索
+- [x] Prompt 描述搜索
+- [x] 标签搜索
+- [x] 分类筛选
+- [x] 模型筛选
+- [x] 搜索结果页
 
 ### 8.2 搜索优化
 
@@ -282,8 +286,8 @@
 
 ### 9.2 社区互动
 
-- [ ] Prompt 点赞
-- [ ] Prompt 收藏
+- [x] Prompt 点赞
+- [x] Prompt 收藏
 - [ ] 关注创作者
 - [ ] 消息通知
 - [ ] 系统通知
@@ -451,9 +455,9 @@
 - [ ] XSS 防护
 - [ ] CSRF 防护
 - [ ] 接口限流
-- [ ] JWT 安全
-- [ ] 文件上传安全
-- [ ] 密码 BCrypt 加密
+- [x] JWT 安全（Bearer + 过期配置）
+- [x] 文件上传安全（MIME/大小校验）
+- [x] 密码 BCrypt 加密
 
 ## 运维部署
 

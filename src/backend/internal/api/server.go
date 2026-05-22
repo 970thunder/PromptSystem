@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"promptos-backend/internal/auth"
 	"promptos-backend/internal/config"
+	"promptos-backend/internal/database"
 	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
 )
@@ -17,8 +19,10 @@ import (
 type server struct {
 	config       config.Config
 	tokenManager *auth.TokenManager
-	userStore    *store.UserStore
+	userStore    store.UserManager
+	promptStore  store.PromptManager
 	imageStorage storage.ImageStorage
+	storageMode  string
 }
 
 func NewServer(cfg config.Config) http.Handler {
@@ -27,18 +31,41 @@ func NewServer(cfg config.Config) http.Handler {
 		panic(fmt.Sprintf("failed to initialize image storage: %v", err))
 	}
 
+	userStore := store.UserManager(store.NewUserStore())
+	promptStore := store.PromptManager(store.NewMemoryPromptStore())
+	storageMode := "memory"
+
+	db, err := database.OpenMySQL(cfg)
+	if err == nil {
+		if seedErr := store.SeedMySQLData(db); seedErr == nil {
+			userStore = store.NewMySQLUserStore(db)
+			promptStore = store.NewMySQLPromptStore(db)
+			storageMode = "mysql"
+			log.Printf("using MySQL-backed user and prompt stores at %s:%s/%s", cfg.MySQLHost, cfg.MySQLPort, cfg.MySQLDB)
+		} else {
+			log.Printf("failed to seed MySQL data, falling back to memory store: %v", seedErr)
+		}
+	} else {
+		log.Printf("failed to connect to MySQL, falling back to memory store: %v", err)
+	}
+
 	s := &server{
 		config:       cfg,
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
-		userStore:    store.NewUserStore(),
+		userStore:    userStore,
+		promptStore:  promptStore,
 		imageStorage: imageStorage,
+		storageMode:  storageMode,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/categories", s.handleCategories)
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
+	mux.HandleFunc("/api/v1/prompts/search", s.handlePromptSearch)
 	mux.HandleFunc("/api/v1/prompts/", s.handlePromptDetail)
 	mux.HandleFunc("/api/v1/uploads/images", s.withAuth(s.handleImageUpload))
+	mux.HandleFunc("/api/v1/auth/github", s.handleGitHubAuthStart)
+	mux.HandleFunc("/api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
 	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
@@ -62,6 +89,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			"service":     "promptos-backend",
 			"runtime":     "golang",
 			"environment": s.config.AppEnv,
+			"storageMode": s.storageMode,
 		},
 	})
 }
@@ -95,9 +123,71 @@ func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 	page := parseInt(query.Get("page"), 1)
 	pageSize := parseInt(query.Get("pageSize"), 12)
 	categoryID := parseInt(query.Get("categoryId"), 0)
+	userID := parseInt(query.Get("userId"), 0)
 	sortBy := query.Get("sort")
+	keyword := query.Get("keyword")
+	model := query.Get("model")
 
-	list := store.FilterPrompts(categoryID, sortBy)
+	list, err := s.promptStore.Query(store.PromptFilter{
+		CategoryID: categoryID,
+		SortBy:     sortBy,
+		UserID:     userID,
+		Keyword:    keyword,
+		Model:      model,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load prompts"})
+		return
+	}
+	start := (page - 1) * pageSize
+	if start > len(list) {
+		start = len(list)
+	}
+
+	end := start + pageSize
+	if end > len(list) {
+		end = len(list)
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[pageResponse[store.Prompt]]{
+		Code:    200,
+		Message: "Success",
+		Data: pageResponse[store.Prompt]{
+			List:     list[start:end],
+			Total:    len(list),
+			Page:     page,
+			PageSize: pageSize,
+		},
+	})
+}
+
+func (s *server) handlePromptSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	query := r.URL.Query()
+	page := parseInt(query.Get("page"), 1)
+	pageSize := parseInt(query.Get("pageSize"), 12)
+	categoryID := parseInt(query.Get("categoryId"), 0)
+	userID := parseInt(query.Get("userId"), 0)
+	sortBy := query.Get("sort")
+	keyword := query.Get("keyword")
+	model := query.Get("model")
+
+	list, err := s.promptStore.Query(store.PromptFilter{
+		CategoryID: categoryID,
+		SortBy:     sortBy,
+		UserID:     userID,
+		Keyword:    keyword,
+		Model:      model,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to search prompts"})
+		return
+	}
+
 	start := (page - 1) * pageSize
 	if start > len(list) {
 		start = len(list)
@@ -168,7 +258,7 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prompt, err := store.CreatePrompt(store.CreatePromptInput{
+	prompt, err := s.promptStore.Create(store.CreatePromptInput{
 		Title:        payload.Title,
 		Description:  payload.Description,
 		Cover:        payload.Cover,
@@ -206,12 +296,18 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/prompts/")
+	path = strings.Trim(path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:    400,
+			Message: "Invalid prompt id",
+		})
 		return
 	}
 
-	idText := strings.TrimPrefix(r.URL.Path, "/api/v1/prompts/")
+	idText := parts[0]
 	id, err := strconv.Atoi(idText)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
@@ -221,20 +317,207 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prompt, ok := store.FindPromptByID(id)
-	if !ok {
-		writeJSON(w, http.StatusNotFound, apiResponse[any]{
-			Code:    404,
-			Message: "Prompt not found",
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "like":
+			if r.Method != http.MethodPost {
+				writeMethodNotAllowed(w)
+				return
+			}
+			s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+				s.handlePromptLike(w, r, id)
+			}).ServeHTTP(w, r)
+			return
+		case "favorite":
+			if r.Method != http.MethodPost {
+				writeMethodNotAllowed(w)
+				return
+			}
+			s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+				s.handlePromptFavorite(w, r, id)
+			}).ServeHTTP(w, r)
+			return
+		default:
+			writeJSON(w, http.StatusNotFound, apiResponse[any]{
+				Code:    404,
+				Message: "Not found",
+			})
+			return
+		}
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		prompt, ok, err := s.promptStore.FindByID(id)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
+				Code:    500,
+				Message: "Failed to load prompt",
+			})
+			return
+		}
+		if !ok {
+			writeJSON(w, http.StatusNotFound, apiResponse[any]{
+				Code:    404,
+				Message: "Prompt not found",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{
+			Code:    200,
+			Message: "Success",
+			Data:    prompt,
 		})
+	case http.MethodPut:
+		s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+			s.handlePromptUpdate(w, r, id)
+		}).ServeHTTP(w, r)
+	case http.MethodDelete:
+		s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+			s.handlePromptDelete(w, r, id)
+		}).ServeHTTP(w, r)
+	default:
+		writeMethodNotAllowed(w)
+	}
+}
+
+func (s *server) handlePromptLike(w http.ResponseWriter, r *http.Request, id int) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{
+	prompt, applied, err := s.promptStore.Like(id, userID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "prompt not found" {
+			status = http.StatusNotFound
+		}
+
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
 		Code:    200,
 		Message: "Success",
-		Data:    prompt,
+		Data: promptActionResponse{
+			Prompt:  prompt,
+			Applied: applied,
+		},
 	})
+}
+
+func (s *server) handlePromptFavorite(w http.ResponseWriter, r *http.Request, id int) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	prompt, applied, err := s.promptStore.Favorite(id, userID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "prompt not found" {
+			status = http.StatusNotFound
+		}
+
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: promptActionResponse{
+			Prompt:  prompt,
+			Applied: applied,
+		},
+	})
+}
+
+func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id int) {
+	var payload promptPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+		return
+	}
+	if message := validatePromptPayload(payload); message != "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: message})
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	userRecord, found := s.userStore.FindByID(userID)
+	if !found {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	prompt, err := s.promptStore.Update(id, userID, store.CreatePromptInput{
+		Title:        payload.Title,
+		Description:  payload.Description,
+		Cover:        payload.Cover,
+		Content:      payload.Content,
+		SystemPrompt: payload.SystemPrompt,
+		Model:        payload.Model,
+		Params:       payload.Params,
+		CategoryID:   payload.CategoryID,
+		Tags:         payload.Tags,
+		User: store.User{
+			ID:         userRecord.ID,
+			Username:   userRecord.Username,
+			Avatar:     userRecord.Avatar,
+			Email:      userRecord.Email,
+			Bio:        userRecord.Bio,
+			Level:      userRecord.Level,
+			Experience: userRecord.Experience,
+			Status:     userRecord.Status,
+			CreatedAt:  userRecord.CreatedAt,
+		},
+	})
+	if err != nil {
+		status := http.StatusBadRequest
+		switch err.Error() {
+		case "forbidden":
+			status = http.StatusForbidden
+		case "prompt not found":
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{Code: 200, Message: "Success", Data: prompt})
+}
+
+func (s *server) handlePromptDelete(w http.ResponseWriter, r *http.Request, id int) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	if err := s.promptStore.Delete(id, userID); err != nil {
+		status := http.StatusBadRequest
+		switch err.Error() {
+		case "forbidden":
+			status = http.StatusForbidden
+		case "prompt not found":
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success", Data: nil})
 }
 
 func (s *server) withCORS(next http.Handler) http.Handler {
@@ -308,6 +591,11 @@ type apiResponse[T any] struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    T      `json:"data,omitempty"`
+}
+
+type promptActionResponse struct {
+	Prompt  store.Prompt `json:"prompt"`
+	Applied bool         `json:"applied"`
 }
 
 type pageResponse[T any] struct {

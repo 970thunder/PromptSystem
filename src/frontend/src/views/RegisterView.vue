@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
+import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
+import { githubAuthUrl } from '@/utils/authUrl'
 
 const router = useRouter()
+const message = useMessage()
 const userStore = useUserStore()
+
+const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 
 const formValue = reactive({
   username: '',
@@ -24,6 +28,16 @@ const handleSubmit = async () => {
     return
   }
 
+  if (!emailPattern.test(formValue.email.trim())) {
+    message.error('Please enter a valid email address')
+    return
+  }
+
+  if (formValue.password.length < 8) {
+    message.error('Password must be at least 8 characters')
+    return
+  }
+
   await userStore.register({
     username: formValue.username,
     email: formValue.email,
@@ -33,56 +47,60 @@ const handleSubmit = async () => {
 
   await router.push('/')
 }
+
+const handleGitHubLogin = () => {
+  window.location.href = githubAuthUrl()
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-[radial-gradient(circle_at_top,#312E81_0%,#0B0F19_38%,#090B11_100%)] px-5 py-10 text-white">
+  <div class="min-h-screen bg-[#f5f3ee] px-4 py-10 text-[#111111] sm:px-6">
     <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_1fr]">
-      <section class="rounded-card border border-white/10 bg-white/6 p-8 shadow-glass">
-        <div class="text-sm uppercase tracking-[0.24em] text-cyan-200/80">
+      <section class="panel-card p-8">
+        <div class="text-sm uppercase tracking-[0.2em] text-[#7c7c7c]">
           Creator Onboarding
         </div>
-        <h1 class="mt-4 text-4xl font-semibold leading-tight text-white">
-          创建一个新的 PromptOS 账号
+        <h1 class="mt-4 text-4xl font-semibold leading-tight text-black">
+          Create a new PromptOS account
         </h1>
-        <p class="mt-5 max-w-xl text-base leading-7 text-neutral-300">
-          注册完成后会立即签发 JWT，并进入已登录状态。当前开发环境的验证码字段先作为占位，后面可以接邮箱验证码。
+        <p class="mt-5 max-w-xl text-base leading-7 text-[#555555]">
+          Registration signs you in right away with a JWT-backed session. The verification code field is still a dev placeholder and can be replaced by real email verification later.
         </p>
 
-        <div class="mt-8 space-y-4 text-sm text-neutral-300">
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-            密码至少 8 位，后端使用 bcrypt 哈希保存。
+        <div class="mt-8 space-y-4 text-sm text-[#555555]">
+          <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
+            Passwords must be at least 8 characters and are stored with bcrypt hashing.
           </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-            服务端会校验邮箱唯一性，避免重复注册。
+          <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
+            The backend enforces unique email addresses to prevent duplicate accounts.
           </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-            受保护页面会在未登录时自动跳转到登录页。
+          <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
+            Protected pages automatically redirect to sign-in when you are not authenticated.
           </div>
         </div>
       </section>
 
       <section class="flex items-center">
-        <NCard class="w-full !rounded-[20px] !border !border-white/10 !bg-white/5 !shadow-none">
+        <NCard class="panel-card w-full !rounded-[28px] !border-black/8 !bg-white !shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
           <div class="mb-6">
-            <div class="text-sm text-neutral-400">
-              新账号注册
+            <div class="text-sm text-[#777777]">
+              New account
             </div>
-            <h2 class="mt-2 text-2xl font-semibold text-white">
-              立即开始
+            <h2 class="mt-2 text-2xl font-semibold text-black">
+              Get started
             </h2>
           </div>
 
           <NForm @submit.prevent="handleSubmit">
-            <NFormItem label="用户名">
+            <NFormItem label="Username">
               <NInput
                 v-model:value="formValue.username"
-                placeholder="输入你的昵称"
+                placeholder="Enter your display name"
                 size="large"
               />
             </NFormItem>
 
-            <NFormItem label="邮箱">
+            <NFormItem label="Email">
               <NInput
                 v-model:value="formValue.email"
                 placeholder="you@example.com"
@@ -90,26 +108,26 @@ const handleSubmit = async () => {
               />
             </NFormItem>
 
-            <NFormItem label="密码">
+            <NFormItem label="Password">
               <NInput
                 v-model:value="formValue.password"
                 type="password"
                 show-password-on="click"
-                placeholder="至少 8 位"
+                placeholder="At least 8 characters"
                 size="large"
               />
             </NFormItem>
 
             <NFormItem
-              label="确认密码"
+              label="Confirm password"
               :validation-status="passwordMismatch ? 'error' : undefined"
-              :feedback="passwordMismatch ? '两次输入的密码不一致' : ''"
+              :feedback="passwordMismatch ? 'Passwords do not match.' : ''"
             >
               <NInput
                 v-model:value="formValue.confirmPassword"
                 type="password"
                 show-password-on="click"
-                placeholder="再次输入密码"
+                placeholder="Enter the password again"
                 size="large"
               />
             </NFormItem>
@@ -122,17 +140,27 @@ const handleSubmit = async () => {
               :loading="userStore.loading"
               :disabled="passwordMismatch"
             >
-              创建账号
+              Create account
+            </NButton>
+
+            <NButton
+              class="!mt-3"
+              size="large"
+              block
+              secondary
+              @click="handleGitHubLogin"
+            >
+              Continue with GitHub
             </NButton>
           </NForm>
 
-          <div class="mt-6 text-sm text-neutral-300">
-            已有账号？
+          <div class="mt-6 text-sm text-[#555555]">
+            Already have an account?
             <RouterLink
               to="/login"
-              class="text-cyan-300 transition hover:text-cyan-200"
+              class="font-medium text-black underline-offset-2 transition hover:underline"
             >
-              去登录
+              Sign in
             </RouterLink>
           </div>
         </NCard>

@@ -89,7 +89,8 @@ func (s *LocalStorage) Save(_ context.Context, objectKey, contentType string, bo
 		return "", fmt.Errorf("write upload file: %w", err)
 	}
 
-	return fmt.Sprintf("%s/uploads/%s", s.publicURL, strings.TrimLeft(filepath.ToSlash(objectKey), "/")), nil
+	_ = s.publicURL
+	return "/uploads/" + strings.TrimLeft(filepath.ToSlash(objectKey), "/"), nil
 }
 
 func (s *R2Storage) Save(ctx context.Context, objectKey, contentType string, body []byte) (string, error) {

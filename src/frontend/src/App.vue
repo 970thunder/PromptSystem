@@ -4,21 +4,21 @@ import { computed } from 'vue'
 
 const themeOverrides = computed(() => ({
   common: {
-    primaryColor: '#7C3AED',
-    primaryColorHover: '#9333EA',
-    primaryColorPressed: '#6D28D9',
-    bodyColor: '#0B0F19',
-    cardColor: '#111827',
-    modalColor: '#111827',
-    popoverColor: '#1F2937',
-    inputColor: '#1F2937',
-    actionColor: '#27272A',
-    borderColor: '#3F3F46',
-    dividerColor: '#3F3F46',
-    textColorBase: '#FFFFFF',
-    textColor1: '#FFFFFF',
-    textColor2: '#A1A1AA',
-    textColor3: '#71717A',
+    primaryColor: '#111111',
+    primaryColorHover: '#333333',
+    primaryColorPressed: '#000000',
+    bodyColor: '#f5f3ee',
+    cardColor: '#ffffff',
+    modalColor: '#ffffff',
+    popoverColor: '#ffffff',
+    inputColor: '#faf8f4',
+    actionColor: '#f6f4ef',
+    borderColor: 'rgba(0,0,0,0.1)',
+    dividerColor: 'rgba(0,0,0,0.08)',
+    textColorBase: '#111111',
+    textColor1: '#111111',
+    textColor2: '#555555',
+    textColor3: '#777777',
   }
 }))
 </script>

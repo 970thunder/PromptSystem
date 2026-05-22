@@ -11,7 +11,8 @@ CREATE TABLE users (
     username VARCHAR(20) NOT NULL UNIQUE,
     avatar VARCHAR(500) DEFAULT '',
     email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(100) NOT NULL,
+    github_id BIGINT NULL COMMENT 'GitHub user id',
+    password VARCHAR(100) NULL DEFAULT NULL,
     bio VARCHAR(500) DEFAULT '',
     level INT DEFAULT 1,
     experience INT DEFAULT 0,
@@ -19,7 +20,8 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
-    INDEX idx_username (username)
+    INDEX idx_username (username),
+    UNIQUE INDEX idx_github_id (github_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Categories table
@@ -37,11 +39,11 @@ CREATE TABLE prompts (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(200) NOT NULL,
     description VARCHAR(1000) DEFAULT '',
-    cover VARCHAR(500) DEFAULT '',
+    cover VARCHAR(1024) DEFAULT '',
     content TEXT NOT NULL,
     system_prompt VARCHAR(2000) DEFAULT '',
     model VARCHAR(50) DEFAULT '',
-    params VARCHAR(500) DEFAULT '' COMMENT 'JSON format',
+    params JSON NULL COMMENT 'JSON format',
     category_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     views INT DEFAULT 0,
@@ -65,7 +67,7 @@ CREATE TABLE skills (
     description VARCHAR(1000) DEFAULT '',
     cover VARCHAR(500) DEFAULT '',
     workflow JSON NOT NULL COMMENT 'Workflow steps as JSON',
-    schema JSON NOT NULL COMMENT 'Input/output schema as JSON',
+    io_schema JSON NOT NULL COMMENT 'Input/output schema as JSON',
     user_id BIGINT NOT NULL,
     views INT DEFAULT 0,
     likes INT DEFAULT 0,
@@ -78,7 +80,7 @@ CREATE TABLE skills (
     FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Prompt Tags table
+-- Prompt tags table
 CREATE TABLE prompt_tags (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     prompt_id BIGINT NOT NULL,
@@ -129,7 +131,7 @@ CREATE TABLE likes (
     INDEX idx_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Follows table (user following)
+-- Follows table
 CREATE TABLE follows (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     follower_id BIGINT NOT NULL,
@@ -142,17 +144,17 @@ CREATE TABLE follows (
     INDEX idx_following (following_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert default categories
+-- Default categories
 INSERT INTO categories (name, icon, sort, type) VALUES
-('图片生成', 'image', 1, 1),
-('文案写作', 'edit', 2, 1),
-('编程开发', 'code', 3, 1),
-('视频生成', 'video', 4, 1),
+('Image Generation', 'image', 1, 1),
+('Copywriting', 'edit', 2, 1),
+('Coding', 'code', 3, 1),
+('Video Generation', 'video', 4, 1),
 ('Agent Prompt', 'robot', 5, 1),
-('工作流', 'workflow', 6, 1),
-('内容创作', 'content', 1, 2),
-('电商运营', 'shopping', 2, 2),
-('数据分析', 'chart', 3, 2),
-('AI客服', 'service', 4, 2),
-('编程自动化', 'auto', 5, 2),
-('多Agent协作', 'multi-agent', 6, 2);
+('Workflow', 'workflow', 6, 1),
+('Content Creation', 'content', 1, 2),
+('Ecommerce Ops', 'shopping', 2, 2),
+('Data Analysis', 'chart', 3, 2),
+('AI Support', 'service', 4, 2),
+('Coding Automation', 'auto', 5, 2),
+('Multi-Agent Collaboration', 'multi-agent', 6, 2);

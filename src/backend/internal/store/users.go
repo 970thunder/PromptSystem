@@ -14,13 +14,16 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrWeakPassword       = errors.New("password must be at least 8 characters")
+	ErrInvalidEmail       = errors.New("invalid email address")
+	ErrInvalidGitHubUser  = errors.New("invalid github user")
 )
 
 type UserStore struct {
-	mu         sync.RWMutex
-	nextID     int
-	users      map[int]AuthUser
-	emailIndex map[string]int
+	mu            sync.RWMutex
+	nextID        int
+	users         map[int]AuthUser
+	emailIndex    map[string]int
+	githubIDIndex map[int64]int
 }
 
 type AuthUser struct {
@@ -28,6 +31,7 @@ type AuthUser struct {
 	Username     string
 	Avatar       string
 	Email        string
+	GitHubID     int64
 	PasswordHash string
 	Bio          string
 	Level        int
@@ -50,9 +54,10 @@ type PublicUser struct {
 
 func NewUserStore() *UserStore {
 	store := &UserStore{
-		nextID:     7,
-		users:      map[int]AuthUser{},
-		emailIndex: map[string]int{},
+		nextID:        7,
+		users:         map[int]AuthUser{},
+		emailIndex:    map[string]int{},
+		githubIDIndex: map[int64]int{},
 	}
 
 	seedUsers := []AuthUser{
@@ -93,6 +98,10 @@ func NewUserStore() *UserStore {
 func (s *UserStore) Register(username, email, password string) (AuthUser, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	username = strings.TrimSpace(username)
+
+	if !IsValidEmail(email) {
+		return AuthUser{}, ErrInvalidEmail
+	}
 
 	if len(password) < 8 {
 		return AuthUser{}, ErrWeakPassword
@@ -143,9 +152,79 @@ func (s *UserStore) Authenticate(email, password string) (AuthUser, error) {
 	user := s.users[userID]
 	s.mu.RUnlock()
 
+	if user.PasswordHash == "" {
+		return AuthUser{}, ErrInvalidCredentials
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return AuthUser{}, ErrInvalidCredentials
 	}
+
+	return user, nil
+}
+
+func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	username = strings.TrimSpace(username)
+	avatar = strings.TrimSpace(avatar)
+
+	if githubID <= 0 {
+		return AuthUser{}, ErrInvalidGitHubUser
+	}
+	if !IsValidEmail(email) {
+		return AuthUser{}, ErrInvalidEmail
+	}
+	if username == "" {
+		username = strings.Split(email, "@")[0]
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if userID, exists := s.githubIDIndex[githubID]; exists {
+		user := s.users[userID]
+		if avatar != "" {
+			user.Avatar = avatar
+		}
+		if username != "" {
+			user.Username = username
+		}
+		user.GitHubID = githubID
+		s.users[userID] = user
+		return user, nil
+	}
+
+	if userID, exists := s.emailIndex[email]; exists {
+		user := s.users[userID]
+		user.GitHubID = githubID
+		if avatar != "" {
+			user.Avatar = avatar
+		}
+		if username != "" {
+			user.Username = username
+		}
+		s.users[userID] = user
+		s.githubIDIndex[githubID] = userID
+		return user, nil
+	}
+
+	user := AuthUser{
+		ID:         s.nextID,
+		Username:   username,
+		Avatar:     avatar,
+		Email:      email,
+		GitHubID:   githubID,
+		Bio:        "Signed in with GitHub",
+		Level:      1,
+		Experience: 0,
+		Status:     1,
+		CreatedAt:  time.Now().UTC().Format("2006-01-02"),
+	}
+
+	s.users[user.ID] = user
+	s.emailIndex[email] = user.ID
+	s.githubIDIndex[githubID] = user.ID
+	s.nextID++
 
 	return user, nil
 }

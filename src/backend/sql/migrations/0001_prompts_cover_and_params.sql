@@ -1,0 +1,3 @@
+ALTER TABLE prompts
+    MODIFY cover VARCHAR(1024) DEFAULT '',
+    MODIFY params JSON NULL;

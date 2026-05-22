@@ -58,6 +58,17 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  const updateProfile = async (payload: { username?: string; bio?: string; avatar?: string }) => {
+    loading.value = true
+    try {
+      const response = await userApi.updateUserInfo(payload)
+      setUserInfo(response.data)
+      return response.data
+    } finally {
+      loading.value = false
+    }
+  }
+
   const fetchUserInfo = async () => {
     if (!token.value) {
       return null
@@ -83,6 +94,7 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     login,
     register,
+    updateProfile,
     fetchUserInfo
   }
 })
