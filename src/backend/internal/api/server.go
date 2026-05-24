@@ -576,17 +576,30 @@ func validatePromptPayload(payload promptPayload) string {
 	if strings.TrimSpace(payload.Content) == "" {
 		return "Prompt content is required"
 	}
-	if strings.TrimSpace(payload.SystemPrompt) == "" {
-		return "System prompt is required"
-	}
 	if strings.TrimSpace(payload.Model) == "" {
 		return "Model is required"
 	}
 	if payload.CategoryID <= 0 {
 		return "Category is required"
 	}
+	if uniqueTagCount(payload.Tags) > store.MaxPromptTags {
+		return fmt.Sprintf("At most %d tags are allowed", store.MaxPromptTags)
+	}
 
 	return ""
+}
+
+func uniqueTagCount(tags []string) int {
+	seen := make(map[string]struct{}, len(tags))
+	for _, raw := range tags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		seen[tag] = struct{}{}
+	}
+
+	return len(seen)
 }
 
 type apiResponse[T any] struct {

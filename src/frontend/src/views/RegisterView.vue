@@ -23,6 +23,12 @@ const passwordMismatch = computed(
   () => formValue.confirmPassword.length > 0 && formValue.password !== formValue.confirmPassword
 )
 
+const infoItems = [
+  '密码至少 8 位，并使用 bcrypt 哈希存储。',
+  '后端会校验邮箱唯一性，避免重复注册。',
+  '未登录访问受保护页面时，将自动跳转到登录页。'
+]
+
 const handleSubmit = async () => {
   if (passwordMismatch.value) {
     return
@@ -54,39 +60,37 @@ const handleGitHubLogin = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#f5f3ee] px-4 py-10 text-[#111111] sm:px-6">
-    <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_1fr]">
-      <section class="panel-card p-8">
-        <div class="text-sm uppercase tracking-[0.2em] text-[#7c7c7c]">
+  <div class="auth-page">
+    <div class="auth-layout auth-layout--equal">
+      <section class="auth-hero panel-card">
+        <div class="section-eyebrow">
           创作者入驻
         </div>
-        <h1 class="mt-4 text-4xl font-semibold leading-tight text-black">
+        <h1 class="auth-hero__title auth-hero__title--compact">
           创建 PromptOS 账号
         </h1>
-        <p class="mt-5 max-w-xl text-base leading-7 text-[#555555]">
+        <p class="auth-hero__desc">
           注册成功后将自动登录并建立 JWT 会话。验证码字段目前为开发占位，后续可替换为真实邮箱验证。
         </p>
 
-        <div class="mt-8 space-y-4 text-sm text-[#555555]">
-          <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
-            密码至少 8 位，并使用 bcrypt 哈希存储。
-          </div>
-          <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
-            后端会校验邮箱唯一性，避免重复注册。
-          </div>
-          <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4">
-            未登录访问受保护页面时，将自动跳转到登录页。
+        <div class="auth-info-list">
+          <div
+            v-for="item in infoItems"
+            :key="item"
+            class="auth-info-item"
+          >
+            {{ item }}
           </div>
         </div>
       </section>
 
-      <section class="flex items-center">
-        <NCard class="panel-card w-full !rounded-[28px] !border-black/8 !bg-white !shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-          <div class="mb-6">
-            <div class="text-sm text-[#777777]">
+      <section class="auth-form-wrap">
+        <NCard class="auth-card panel-card">
+          <div class="auth-card__header">
+            <div class="text-muted-sm">
               新账号
             </div>
-            <h2 class="mt-2 text-2xl font-semibold text-black">
+            <h2 class="auth-card__title">
               开始使用
             </h2>
           </div>
@@ -144,7 +148,7 @@ const handleGitHubLogin = () => {
             </NButton>
 
             <NButton
-              class="!mt-3"
+              class="auth-card__github"
               size="large"
               block
               secondary
@@ -154,11 +158,11 @@ const handleGitHubLogin = () => {
             </NButton>
           </NForm>
 
-          <div class="mt-6 text-sm text-[#555555]">
+          <div class="auth-card__footer">
             已有账号？
             <RouterLink
               to="/login"
-              class="font-medium text-black underline-offset-2 transition hover:underline"
+              class="auth-card__link"
             >
               去登录
             </RouterLink>
@@ -168,3 +172,69 @@ const handleGitHubLogin = () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.auth-page {
+  @apply min-h-screen bg-[#f5f3ee] px-4 py-10 text-[#111111] sm:px-6;
+}
+
+.auth-layout {
+  @apply mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr];
+}
+
+.auth-layout--equal {
+  @apply lg:grid-cols-[1fr_1fr];
+}
+
+.auth-hero {
+  @apply p-8;
+}
+
+.auth-hero__title {
+  @apply mt-5 max-w-xl text-4xl font-semibold leading-tight text-black;
+}
+
+.auth-hero__title--compact {
+  @apply mt-4;
+}
+
+.auth-hero__desc {
+  @apply mt-5 max-w-xl text-base leading-7 text-[#555555];
+}
+
+.auth-info-list {
+  @apply mt-8 space-y-4 text-sm text-[#555555];
+}
+
+.auth-info-item {
+  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+}
+
+.auth-form-wrap {
+  @apply flex items-center;
+}
+
+.auth-card {
+  @apply w-full !rounded-[28px] !border-black/10 !bg-white !shadow-[0_16px_40px_rgba(15,23,42,0.06)];
+}
+
+.auth-card__header {
+  @apply mb-6;
+}
+
+.auth-card__title {
+  @apply mt-2 text-2xl font-semibold text-black;
+}
+
+.auth-card__github {
+  @apply !mt-3;
+}
+
+.auth-card__footer {
+  @apply mt-6 text-sm text-[#555555];
+}
+
+.auth-card__link {
+  @apply font-medium text-black underline-offset-2 transition hover:underline;
+}
+</style>

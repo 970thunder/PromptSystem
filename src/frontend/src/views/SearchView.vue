@@ -190,56 +190,56 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#f5f3ee] text-[#111111]">
-    <div class="mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-      <header class="flex flex-wrap items-center justify-between gap-3">
+  <div class="search-page">
+    <div class="search-container">
+      <header class="search-header">
         <div>
-          <div class="text-sm uppercase tracking-[0.2em] text-[#7c7c7c]">
+          <div class="section-eyebrow">
             搜索
           </div>
-          <h1 class="mt-2 text-3xl font-semibold">
+          <h1 class="search-header__title">
             按意图、模型或分类查找提示词
           </h1>
         </div>
         <RouterLink
           to="/"
-          class="rounded-full border border-black/10 bg-white px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black"
+          class="btn-pill-secondary bg-white"
         >
           返回首页
         </RouterLink>
       </header>
 
-      <section class="mt-8 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside class="self-start rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-          <div class="flex items-center justify-between gap-3">
-            <div class="text-lg font-semibold">
+      <section class="search-layout">
+        <aside class="search-sidebar panel-card">
+          <div class="search-sidebar__head">
+            <div class="search-sidebar__title">
               筛选
             </div>
             <button
-              class="text-sm text-[#777777] transition hover:text-black"
+              class="search-sidebar__reset"
               @click="clearFilters"
             >
               重置
             </button>
           </div>
 
-          <div class="mt-5 grid gap-4">
-            <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">关键词</span>
+          <div class="search-sidebar__form">
+            <label class="search-field">
+              <span class="search-field__label">关键词</span>
               <input
                 v-model="filters.keyword"
                 type="text"
-                class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
+                class="field-input"
                 placeholder="搜索标题、标签、创作者或模型"
                 @keyup.enter="submitSearch"
               >
             </label>
 
-            <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">分类</span>
+            <label class="search-field">
+              <span class="search-field__label">分类</span>
               <select
                 v-model.number="filters.categoryId"
-                class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
+                class="field-input"
               >
                 <option :value="0">
                   全部分类
@@ -254,11 +254,11 @@ onMounted(async () => {
               </select>
             </label>
 
-            <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">模型</span>
+            <label class="search-field">
+              <span class="search-field__label">模型</span>
               <select
                 v-model="filters.model"
-                class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
+                class="field-input"
               >
                 <option value="">
                   全部模型
@@ -273,11 +273,11 @@ onMounted(async () => {
               </select>
             </label>
 
-            <label class="grid gap-2">
-              <span class="text-sm font-medium text-[#333333]">排序</span>
+            <label class="search-field">
+              <span class="search-field__label">排序</span>
               <select
                 v-model="filters.sort"
-                class="rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30"
+                class="field-input"
               >
                 <option value="latest">
                   最新
@@ -289,7 +289,7 @@ onMounted(async () => {
             </label>
 
             <button
-              class="mt-2 rounded-full bg-black px-4 py-3 text-sm font-medium text-white transition hover:bg-black/85"
+              class="btn-pill-primary search-submit"
               @click="submitSearch"
             >
               应用筛选
@@ -297,42 +297,42 @@ onMounted(async () => {
           </div>
         </aside>
 
-        <div class="min-w-0">
-          <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-            <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="search-main">
+          <section class="search-summary panel-card">
+            <div class="search-summary__head">
               <div>
-                <div class="text-sm text-[#777777]">
+                <div class="text-muted-sm">
                   结果
                 </div>
-                <div class="mt-1 text-2xl font-semibold">
+                <div class="search-summary__count">
                   {{ total }} 条匹配
                 </div>
               </div>
-              <div class="text-sm text-[#666666]">
+              <div class="search-summary__filters">
                 {{ activeFilterCount }} 个筛选条件
               </div>
             </div>
 
-            <div class="mt-4 flex flex-wrap gap-2">
+            <div class="search-summary__chips">
               <span
                 v-if="filters.keyword"
-                class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]"
+                class="tag-chip"
               >
                 关键词：{{ filters.keyword }}
               </span>
               <span
                 v-if="filters.categoryId > 0"
-                class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]"
+                class="tag-chip"
               >
                 分类：{{ promptStore.categories.find((item) => item.id === filters.categoryId)?.name }}
               </span>
               <span
                 v-if="filters.model"
-                class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]"
+                class="tag-chip"
               >
                 模型：{{ filters.model }}
               </span>
-              <span class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444]">
+              <span class="tag-chip">
                 排序：{{ formatSortLabel(filters.sort) }}
               </span>
             </div>
@@ -340,53 +340,55 @@ onMounted(async () => {
 
           <section
             v-if="loading"
-            class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+            class="search-results"
           >
             <div
               v-for="index in 6"
               :key="index"
-              class="h-[320px] animate-pulse rounded-[24px] bg-black/6"
+              class="search-skeleton"
             />
           </section>
 
           <section
             v-else-if="results.length > 0"
-            class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+            class="search-results"
           >
             <RouterLink
               v-for="(prompt, index) in results"
               :key="prompt.id"
               :to="`/prompt/${prompt.id}`"
-              class="overflow-hidden rounded-[24px] border border-black/8 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] transition hover:-translate-y-1"
+              class="result-card"
             >
-              <img
-                :src="resolveCover(prompt, index)"
-                :alt="prompt.title"
-                class="h-[220px] w-full object-cover"
-              >
-              <div class="p-5">
-                <div class="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.14em] text-[#7c7c7c]">
+              <div class="result-card__cover">
+                <img
+                  :src="resolveCover(prompt, index)"
+                  :alt="prompt.title"
+                  class="result-card__image"
+                >
+              </div>
+              <div class="result-card__body">
+                <div class="result-card__meta">
                   <span>{{ prompt.categoryName }}</span>
                   <span>{{ prompt.model }}</span>
                 </div>
-                <h2 class="mt-3 line-clamp-2 text-xl font-semibold text-black">
+                <h2 class="result-card__title">
                   {{ prompt.title }}
                 </h2>
-                <p class="mt-2 line-clamp-3 text-sm leading-6 text-[#5f5f5f]">
+                <p class="result-card__desc">
                   {{ prompt.description }}
                 </p>
-                <div class="mt-4 flex flex-wrap gap-2">
+                <div class="result-card__tags">
                   <span
                     v-for="tag in prompt.tags.slice(0, 3)"
                     :key="tag"
-                    class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-xs text-[#555555]"
+                    class="result-card__tag"
                   >
                     {{ tag }}
                   </span>
                 </div>
-                <div class="mt-5 flex items-center justify-between gap-3 text-sm text-[#777777]">
+                <div class="result-card__footer">
                   <span>{{ prompt.user.username }}</span>
-                  <div class="flex items-center gap-3">
+                  <div class="result-card__stats">
                     <span>{{ formatCount(prompt.likes) }} 赞</span>
                     <span>{{ formatCount(prompt.views) }} 浏览</span>
                   </div>
@@ -397,12 +399,12 @@ onMounted(async () => {
 
           <section
             v-else
-            class="mt-6 rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
+            class="empty-state search-empty"
           >
-            <div class="text-xl font-semibold text-black">
+            <div class="empty-state__title search-empty__title">
               暂无匹配的提示词
             </div>
-            <p class="mt-3 text-sm text-[#777777]">
+            <p class="empty-state__desc search-empty__desc">
               试试更宽泛的关键词、切换分类，或清除部分筛选条件。
             </p>
           </section>
@@ -411,3 +413,145 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.search-page {
+  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+}
+
+.search-container {
+  @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+}
+
+.search-header {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.search-header__title {
+  @apply mt-2 text-3xl font-semibold;
+}
+
+.search-layout {
+  @apply mt-8 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)];
+}
+
+.search-sidebar {
+  @apply self-start p-6;
+}
+
+.search-sidebar__head {
+  @apply flex items-center justify-between gap-3;
+}
+
+.search-sidebar__title {
+  @apply text-lg font-semibold;
+}
+
+.search-sidebar__reset {
+  @apply text-sm text-[#777777] transition hover:text-black;
+}
+
+.search-sidebar__form {
+  @apply mt-5 grid gap-4;
+}
+
+.search-field {
+  @apply grid gap-2;
+}
+
+.search-field__label {
+  @apply text-sm font-medium text-[#333333];
+}
+
+.search-submit {
+  @apply mt-2 w-full py-3;
+}
+
+.search-main {
+  @apply min-w-0;
+}
+
+.search-summary {
+  @apply p-6;
+}
+
+.search-summary__head {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.search-summary__count {
+  @apply mt-1 text-2xl font-semibold;
+}
+
+.search-summary__filters {
+  @apply text-sm text-[#666666];
+}
+
+.search-summary__chips {
+  @apply mt-4 flex flex-wrap gap-2;
+}
+
+.search-results {
+  @apply mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+}
+
+.search-skeleton {
+  @apply h-[320px] animate-pulse rounded-[24px] bg-black/5;
+}
+
+.result-card {
+  @apply overflow-hidden rounded-[24px] border border-black/10 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] transition hover:-translate-y-1;
+}
+
+.result-card__cover {
+  @apply h-[220px] overflow-hidden bg-[#f6f4ef];
+}
+
+.result-card__image {
+  @apply h-full w-full max-h-full max-w-full object-cover;
+}
+
+.result-card__body {
+  @apply p-5;
+}
+
+.result-card__meta {
+  @apply flex items-center justify-between gap-3 text-xs uppercase tracking-[0.14em] text-[#7c7c7c];
+}
+
+.result-card__title {
+  @apply mt-3 line-clamp-2 text-xl font-semibold text-black;
+}
+
+.result-card__desc {
+  @apply mt-2 line-clamp-3 text-sm leading-6 text-[#5f5f5f];
+}
+
+.result-card__tags {
+  @apply mt-4 flex flex-wrap gap-2;
+}
+
+.result-card__tag {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-xs text-[#555555];
+}
+
+.result-card__footer {
+  @apply mt-5 flex items-center justify-between gap-3 text-sm text-[#777777];
+}
+
+.result-card__stats {
+  @apply flex items-center gap-3;
+}
+
+.search-empty {
+  @apply mt-6;
+}
+
+.search-empty__title {
+  @apply text-xl;
+}
+
+.search-empty__desc {
+  @apply mt-3;
+}
+</style>

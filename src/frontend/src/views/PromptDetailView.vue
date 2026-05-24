@@ -138,12 +138,12 @@ watch(() => route.params.id, loadDetail)
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#f5f3ee] text-[#111111]">
-    <div class="mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-      <header class="mb-8 flex flex-wrap items-center gap-3 text-sm text-[#777777]">
+  <div class="detail-page">
+    <div class="detail-container">
+      <header class="detail-breadcrumb">
         <RouterLink
           to="/"
-          class="rounded-full border border-black/10 bg-white px-4 py-2 transition hover:border-black/20 hover:text-black"
+          class="btn-pill-secondary bg-white"
         >
           返回首页
         </RouterLink>
@@ -152,7 +152,7 @@ watch(() => route.params.id, loadDetail)
         <span v-else>提示词详情</span>
         <span
           v-if="promptStore.usingMockData"
-          class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800"
+          class="detail-badge"
         >
           演示详情
         </span>
@@ -160,75 +160,77 @@ watch(() => route.params.id, loadDetail)
 
       <section
         v-if="promptStore.detailLoading"
-        class="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]"
+        class="detail-loading"
       >
-        <div class="h-[520px] animate-pulse rounded-[28px] bg-black/6" />
-        <div class="h-[520px] animate-pulse rounded-[28px] bg-black/6" />
+        <div class="detail-loading__block" />
+        <div class="detail-loading__block" />
       </section>
 
       <section
         v-else-if="prompt"
-        class="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]"
+        class="detail-layout"
       >
-        <div class="space-y-6">
-          <section class="panel-card overflow-hidden">
+        <div class="detail-main">
+          <section class="panel-card detail-hero">
             <div
               v-if="showCoverImage"
-              class="border-b border-black/8"
+              class="detail-cover-wrap"
             >
-              <img
-                :src="coverImage"
-                :alt="prompt.title"
-                class="max-h-[420px] w-full object-cover"
-              >
+              <div class="detail-cover-inner">
+                <img
+                  :src="coverImage"
+                  :alt="prompt.title"
+                  class="detail-cover-image"
+                >
+              </div>
             </div>
 
-            <div class="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
-              <div class="min-h-[340px] bg-[#faf8f4] p-8">
-                <div class="inline-flex rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444]">
+            <div class="detail-hero__grid">
+              <div class="detail-preview">
+                <div class="detail-preview__badge">
                   AI 效果预览
                 </div>
-                <h1 class="mt-5 max-w-2xl text-3xl font-semibold leading-tight text-black sm:text-4xl">
+                <h1 class="detail-preview__title">
                   {{ prompt.title }}
                 </h1>
-                <p class="mt-4 max-w-xl text-base leading-7 text-[#555555]">
+                <p class="detail-preview__desc">
                   {{ prompt.description }}
                 </p>
 
-                <div class="mt-6 flex flex-wrap gap-2">
+                <div class="detail-preview__tags">
                   <span
                     v-for="tag in prompt.tags"
                     :key="tag"
-                    class="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444]"
+                    class="detail-tag"
                   >
                     {{ tag }}
                   </span>
                 </div>
               </div>
 
-              <div class="flex flex-col justify-between gap-5 border-t border-black/8 bg-white p-8 lg:border-l lg:border-t-0">
+              <div class="detail-sidebar-panel">
                 <div>
-                  <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+                  <div class="detail-eyebrow">
                     创作者
                   </div>
-                  <div class="mt-3 text-2xl font-semibold text-black">
+                  <div class="detail-creator-name">
                     {{ prompt.user.username }}
                   </div>
-                  <p class="mt-3 text-sm leading-6 text-[#555555]">
+                  <p class="detail-creator-bio">
                     {{ prompt.user.bio }}
                   </p>
                 </div>
 
-                <div class="flex flex-wrap gap-3">
+                <div class="detail-actions">
                   <button
-                    class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-70"
+                    class="detail-btn-like"
                     :disabled="liking"
                     @click="handleLike"
                   >
                     {{ liking ? '点赞中...' : `点赞 · ${prompt.likes.toLocaleString()}` }}
                   </button>
                   <button
-                    class="rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70"
+                    class="detail-btn-favorite"
                     :disabled="favoriting"
                     @click="handleFavorite"
                   >
@@ -236,26 +238,26 @@ watch(() => route.params.id, loadDetail)
                   </button>
                 </div>
 
-                <div class="grid grid-cols-3 gap-3">
+                <div class="detail-stat-grid">
                   <div
                     v-for="stat in statCards"
                     :key="stat.label"
-                    class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center"
+                    class="detail-stat"
                   >
-                    <div class="text-lg font-semibold text-black">
+                    <div class="detail-stat__value">
                       {{ stat.value }}
                     </div>
-                    <div class="mt-1 text-xs text-[#777777]">
+                    <div class="detail-stat__label">
                       {{ stat.label }}
                     </div>
                   </div>
                 </div>
 
-                <div class="rounded-[18px] border border-black/8 bg-[#111111] p-4 text-white">
-                  <div class="text-xs uppercase tracking-[0.2em] text-white/60">
+                <div class="detail-output">
+                  <div class="detail-output__label">
                     预期输出
                   </div>
-                  <p class="mt-3 text-sm leading-6 text-white/75">
+                  <p class="detail-output__text">
                     适合作为可直接落地的起点。上线前请替换为你的业务场景、品牌信息与约束条件。
                   </p>
                 </div>
@@ -263,67 +265,65 @@ watch(() => route.params.id, loadDetail)
             </div>
           </section>
 
-          <section class="grid gap-6 xl:grid-cols-[1fr_1fr]">
-            <article class="panel-card p-6">
-              <div class="flex items-center justify-between gap-3">
-                <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+          <section class="detail-content-grid">
+            <article class="detail-content-card">
+              <div class="detail-content-head">
+                <div class="detail-eyebrow">
                   提示词正文
                 </div>
                 <button
-                  class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black"
+                  class="detail-copy-btn"
                   @click="copyText('提示词', prompt.content)"
                 >
                   复制提示词
                 </button>
               </div>
-              <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444]">{{ prompt.content }}</pre>
+              <pre class="detail-pre">{{ prompt.content }}</pre>
             </article>
 
-            <article class="panel-card p-6">
-              <div class="flex items-center justify-between gap-3">
-                <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+            <article class="detail-content-card">
+              <div class="detail-content-head">
+                <div class="detail-eyebrow">
                   系统提示词
                 </div>
                 <button
-                  class="rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black"
+                  class="detail-copy-btn"
                   @click="copyText('系统提示词', prompt.systemPrompt)"
                 >
                   复制系统提示词
                 </button>
               </div>
-              <pre class="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444]">{{ prompt.systemPrompt }}</pre>
+              <pre class="detail-pre">{{ prompt.systemPrompt }}</pre>
             </article>
           </section>
 
           <section
             v-if="relatedPrompts.length > 0"
-            class="panel-card p-6"
+            class="detail-content-card"
           >
-            <div class="flex items-end justify-between gap-4">
-              <div>
-                <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
-                  相关推荐
-                </div>
-                <h2 class="mt-2 text-2xl font-semibold text-black">
-                  同分类更多内容
-                </h2>
+            <div>
+              <div class="detail-eyebrow">
+                相关推荐
               </div>
+              <h2 class="detail-section-title">
+                同分类更多内容
+              </h2>
             </div>
 
-            <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div class="detail-related-grid">
               <RouterLink
                 v-for="item in relatedPrompts"
                 :key="item.id"
                 :to="`/prompt/${item.id}`"
-                class="rounded-[20px] border border-black/8 bg-[#faf8f4] p-5 transition hover:-translate-y-1 hover:border-black/20 hover:bg-white"
+                class="detail-related-card"
               >
-                <div class="text-xs uppercase tracking-[0.18em] text-[#7c7c7c]">
+                <div class="detail-related-model">
                   {{ item.model }}
                 </div>
-                <div class="mt-3 text-lg font-semibold text-black">
+                <div class="detail-related-title">
                   {{ item.title }}
                 </div>
-                <p class="mt-3 text-sm leading-6 text-[#555555]">
+                <p class="detail-related-desc">
                   {{ item.description }}
                 </p>
               </RouterLink>
@@ -331,64 +331,64 @@ watch(() => route.params.id, loadDetail)
           </section>
         </div>
 
-        <aside class="space-y-6">
-          <section class="panel-card p-6">
-            <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+        <aside class="detail-aside">
+          <section class="detail-content-card">
+            <div class="detail-eyebrow">
               提示词信息
             </div>
-            <div class="mt-5 space-y-4">
+            <div class="detail-meta-list">
               <div
                 v-for="item in promptMeta"
                 :key="item.label"
-                class="flex items-start justify-between gap-4 border-b border-black/8 pb-4 last:border-b-0 last:pb-0"
+                class="detail-meta-row"
               >
-                <div class="text-sm text-[#777777]">
+                <div class="detail-meta-label">
                   {{ item.label }}
                 </div>
-                <div class="text-right text-sm text-black">
+                <div class="detail-meta-value">
                   {{ item.value }}
                 </div>
               </div>
             </div>
           </section>
 
-          <section class="panel-card p-6">
-            <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+          <section class="detail-content-card">
+            <div class="detail-eyebrow">
               参数
             </div>
-            <div class="mt-5 grid grid-cols-3 gap-3">
-              <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
-                <div class="text-lg font-semibold text-black">
+            <div class="detail-params-grid">
+              <div class="detail-stat">
+                <div class="detail-stat__value">
                   {{ prompt.params.temperature ?? '-' }}
                 </div>
-                <div class="mt-1 text-xs text-[#777777]">
+                <div class="detail-stat__label">
                   温度
                 </div>
               </div>
-              <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
-                <div class="text-lg font-semibold text-black">
+              <div class="detail-stat">
+                <div class="detail-stat__value">
                   {{ prompt.params.topP ?? '-' }}
                 </div>
-                <div class="mt-1 text-xs text-[#777777]">
+                <div class="detail-stat__label">
                   Top P
                 </div>
               </div>
-              <div class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4 text-center">
-                <div class="text-lg font-semibold text-black">
+              <div class="detail-stat">
+                <div class="detail-stat__value">
                   {{ prompt.params.maxTokens ?? '-' }}
                 </div>
-                <div class="mt-1 text-xs text-[#777777]">
+                <div class="detail-stat__label">
                   最大 Token
                 </div>
               </div>
             </div>
           </section>
 
-          <section class="panel-card p-6">
-            <div class="text-xs uppercase tracking-[0.2em] text-[#777777]">
+          <section class="detail-content-card">
+            <div class="detail-eyebrow">
               使用说明
             </div>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-[#555555]">
+            <ul class="detail-usage-list">
               <li>保留整体结构，再替换为你的业务场景、目标用户与约束条件。</li>
               <li>若输出过于发散，可先降低温度，再补充更强示例。</li>
               <li>上线前请用真实生产输入至少跑一遍工作流回归验证。</li>
@@ -399,17 +399,17 @@ watch(() => route.params.id, loadDetail)
 
       <section
         v-else
-        class="rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-16 text-center"
+        class="empty-state"
       >
-        <h1 class="text-2xl font-semibold text-black">
+        <h1 class="empty-state__title text-2xl">
           未找到该提示词
         </h1>
-        <p class="mt-3 text-sm text-[#777777]">
+        <p class="empty-state__desc">
           内容可能已被删除，或链接已失效。
         </p>
         <RouterLink
           to="/"
-          class="mt-6 inline-flex rounded-full border border-black/10 bg-[#f6f4ef] px-5 py-3 text-sm text-[#333333] transition hover:border-black/20 hover:text-black"
+          class="btn-pill-secondary detail-back"
         >
           返回首页
         </RouterLink>
@@ -417,3 +417,213 @@ watch(() => route.params.id, loadDetail)
     </div>
   </div>
 </template>
+
+<style scoped>
+.detail-page {
+  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+}
+
+.detail-container {
+  @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+}
+
+.detail-breadcrumb {
+  @apply mb-8 flex flex-wrap items-center gap-3 text-sm text-[#777777];
+}
+
+.detail-badge {
+  @apply rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800;
+}
+
+.detail-loading {
+  @apply grid gap-6 lg:grid-cols-[1.35fr_0.65fr];
+}
+
+.detail-loading__block {
+  @apply h-[520px] animate-pulse rounded-[28px] bg-black/5;
+}
+
+.detail-layout {
+  @apply grid gap-6 lg:grid-cols-[1.35fr_0.65fr];
+}
+
+.detail-back {
+  @apply mt-6 inline-flex px-5 py-3;
+}
+
+.detail-main {
+  @apply space-y-6;
+}
+
+.detail-hero {
+  @apply overflow-hidden;
+}
+
+.detail-cover-wrap {
+  @apply max-h-[420px] overflow-hidden border-b border-black/10 bg-[#f6f4ef];
+}
+
+.detail-cover-inner {
+  @apply flex max-h-[420px] items-center justify-center overflow-hidden;
+}
+
+.detail-cover-image {
+  @apply max-h-[420px] max-w-full h-auto w-auto object-contain;
+}
+
+.detail-hero__grid {
+  @apply grid gap-0 lg:grid-cols-[1.1fr_0.9fr];
+}
+
+.detail-preview {
+  @apply min-h-[340px] bg-[#faf8f4] p-8;
+}
+
+.detail-preview__badge {
+  @apply inline-flex rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444];
+}
+
+.detail-preview__title {
+  @apply mt-5 max-w-2xl text-3xl font-semibold leading-tight text-black sm:text-4xl;
+}
+
+.detail-preview__desc {
+  @apply mt-4 max-w-xl text-base leading-7 text-[#555555];
+}
+
+.detail-preview__tags {
+  @apply mt-6 flex flex-wrap gap-2;
+}
+
+.detail-tag {
+  @apply rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444];
+}
+
+.detail-sidebar-panel {
+  @apply flex flex-col justify-between gap-5 border-t border-black/10 bg-white p-8 lg:border-l lg:border-t-0;
+}
+
+.detail-eyebrow {
+  @apply text-xs uppercase tracking-[0.2em] text-[#777777];
+}
+
+.detail-creator-name {
+  @apply mt-3 text-2xl font-semibold text-black;
+}
+
+.detail-creator-bio {
+  @apply mt-3 text-sm leading-6 text-[#555555];
+}
+
+.detail-actions {
+  @apply flex flex-wrap gap-3;
+}
+
+.detail-btn-like {
+  @apply rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-70;
+}
+
+.detail-btn-favorite {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70;
+}
+
+.detail-stat-grid {
+  @apply grid grid-cols-3 gap-3;
+}
+
+.detail-stat {
+  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4 text-center;
+}
+
+.detail-stat__value {
+  @apply text-lg font-semibold text-black;
+}
+
+.detail-stat__label {
+  @apply mt-1 text-xs text-[#777777];
+}
+
+.detail-output {
+  @apply rounded-[18px] border border-black/10 bg-[#111111] p-4 text-white;
+}
+
+.detail-output__label {
+  @apply text-xs uppercase tracking-[0.2em] text-white/60;
+}
+
+.detail-output__text {
+  @apply mt-3 text-sm leading-6 text-white/70;
+}
+
+.detail-content-grid {
+  @apply grid gap-6 xl:grid-cols-[1fr_1fr];
+}
+
+.detail-content-card {
+  @apply panel-card p-6;
+}
+
+.detail-content-head {
+  @apply flex items-center justify-between gap-3;
+}
+
+.detail-copy-btn {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black;
+}
+
+.detail-pre {
+  @apply mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444];
+}
+
+.detail-related-grid {
+  @apply mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+}
+
+.detail-related-card {
+  @apply rounded-[20px] border border-black/10 bg-[#faf8f4] p-5 transition hover:-translate-y-1 hover:border-black/20 hover:bg-white;
+}
+
+.detail-related-model {
+  @apply text-xs uppercase tracking-[0.18em] text-[#7c7c7c];
+}
+
+.detail-related-title {
+  @apply mt-3 text-lg font-semibold text-black;
+}
+
+.detail-related-desc {
+  @apply mt-3 text-sm leading-6 text-[#555555];
+}
+
+.detail-aside {
+  @apply space-y-6;
+}
+
+.detail-meta-list {
+  @apply mt-5 space-y-4;
+}
+
+.detail-meta-row {
+  @apply flex items-start justify-between gap-4 border-b border-black/10 pb-4 last:border-b-0 last:pb-0;
+}
+
+.detail-meta-label {
+  @apply text-sm text-[#777777];
+}
+
+.detail-meta-value {
+  @apply text-right text-sm text-black;
+}
+
+.detail-params-grid {
+  @apply mt-5 grid grid-cols-3 gap-3;
+}
+
+.detail-usage-list {
+  @apply mt-5 space-y-3 text-sm leading-6 text-[#555555];
+}
+
+.detail-section-title {
+  @apply mt-2 text-2xl font-semibold text-black;
+}
+</style>

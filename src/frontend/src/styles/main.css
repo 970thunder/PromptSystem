@@ -16,6 +16,62 @@ body {
   .panel-card {
     @apply rounded-[28px] border border-black/10 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)];
   }
+
+  .view-page {
+    @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+  }
+
+  .view-container {
+    @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+  }
+
+  .view-container--home {
+    @apply mx-auto max-w-[1160px] px-3 pb-12 pt-4 sm:px-4 lg:px-5;
+  }
+
+  .btn-pill {
+    @apply rounded-full px-4 py-2 text-sm transition;
+  }
+
+  .btn-pill-primary {
+    @apply btn-pill bg-black font-medium text-white hover:bg-black/80;
+  }
+
+  .btn-pill-secondary {
+    @apply btn-pill border border-black/10 bg-[#f6f4ef] text-[#555555] hover:border-black/20 hover:text-black;
+  }
+
+  .btn-pill-outline {
+    @apply btn-pill border border-black/10 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)];
+  }
+
+  .tag-chip {
+    @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444];
+  }
+
+  .field-input {
+    @apply rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30;
+  }
+
+  .empty-state {
+    @apply rounded-[28px] border border-dashed border-black/10 bg-white px-6 py-16 text-center;
+  }
+
+  .text-muted {
+    @apply text-[#777777];
+  }
+
+  .text-muted-sm {
+    @apply text-sm text-[#777777];
+  }
+
+  .section-eyebrow {
+    @apply text-sm uppercase tracking-[0.2em] text-[#7c7c7c];
+  }
+
+  .stat-card {
+    @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+  }
 }
 
 /* Glassmorphism utility classes */

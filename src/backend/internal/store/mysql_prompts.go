@@ -378,7 +378,12 @@ func (s *MySQLPromptStore) applyEngagement(table string, counterColumn string, i
 func scanPrompt(scan func(dest ...any) error) (Prompt, error) {
 	var (
 		prompt          Prompt
-		paramsRaw       string
+		description     sql.NullString
+		cover           sql.NullString
+		systemPrompt    sql.NullString
+		paramsRaw       sql.NullString
+		userAvatar      sql.NullString
+		userBio         sql.NullString
 		tagList         string
 		userCreatedAt   time.Time
 		promptCreatedAt time.Time
@@ -388,19 +393,19 @@ func scanPrompt(scan func(dest ...any) error) (Prompt, error) {
 	err := scan(
 		&prompt.ID,
 		&prompt.Title,
-		&prompt.Description,
-		&prompt.Cover,
+		&description,
+		&cover,
 		&prompt.Content,
-		&prompt.SystemPrompt,
+		&systemPrompt,
 		&prompt.Model,
 		&paramsRaw,
 		&prompt.CategoryID,
 		&prompt.CategoryName,
 		&prompt.UserID,
 		&prompt.User.Username,
-		&prompt.User.Avatar,
+		&userAvatar,
 		&prompt.User.Email,
-		&prompt.User.Bio,
+		&userBio,
 		&prompt.User.Level,
 		&prompt.User.Experience,
 		&prompt.User.Status,
@@ -417,8 +422,24 @@ func scanPrompt(scan func(dest ...any) error) (Prompt, error) {
 		return Prompt{}, err
 	}
 
-	if strings.TrimSpace(paramsRaw) != "" {
-		if err := json.Unmarshal([]byte(paramsRaw), &prompt.Params); err != nil {
+	if description.Valid {
+		prompt.Description = description.String
+	}
+	if cover.Valid {
+		prompt.Cover = cover.String
+	}
+	if systemPrompt.Valid {
+		prompt.SystemPrompt = systemPrompt.String
+	}
+	if userAvatar.Valid {
+		prompt.User.Avatar = userAvatar.String
+	}
+	if userBio.Valid {
+		prompt.User.Bio = userBio.String
+	}
+
+	if paramsRaw.Valid && strings.TrimSpace(paramsRaw.String) != "" {
+		if err := json.Unmarshal([]byte(paramsRaw.String), &prompt.Params); err != nil {
 			return Prompt{}, err
 		}
 	}

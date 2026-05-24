@@ -159,63 +159,63 @@ watch(() => route.params.userId, loadProfile)
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#f5f3ee] text-[#111111]">
-    <div class="mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-      <header class="flex flex-wrap items-center justify-between gap-3">
+  <div class="profile-page">
+    <div class="profile-container">
+      <header class="profile-header">
         <div>
-          <div class="text-sm uppercase tracking-[0.2em] text-[#7c7c7c]">
+          <div class="section-eyebrow">
             个人主页
           </div>
-          <h1 class="mt-2 text-3xl font-semibold">
+          <h1 class="profile-header__title">
             创作者工作台
           </h1>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="profile-header__actions">
           <RouterLink
             to="/"
-            class="rounded-full border border-black/10 bg-white px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black"
+            class="btn-pill-secondary bg-white"
           >
             返回首页
           </RouterLink>
           <RouterLink
             to="/publish"
-            class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85"
+            class="btn-pill-primary"
           >
             发布提示词
           </RouterLink>
         </div>
       </header>
 
-      <section class="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <aside class="grid gap-6 self-start">
-          <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-            <div class="flex items-start gap-4">
-              <div class="flex h-16 w-16 items-center justify-center rounded-full bg-black text-xl font-semibold text-white">
+      <section class="profile-layout">
+        <aside class="profile-sidebar">
+          <section class="profile-card">
+            <div class="profile-card__user">
+              <div class="profile-avatar">
                 {{ profileUser?.username?.slice(0, 1) || '?' }}
               </div>
-              <div class="min-w-0">
-                <div class="text-2xl font-semibold text-black">
+              <div class="profile-card__info">
+                <div class="profile-card__name">
                   {{ profileUser?.username || '创作者' }}
                 </div>
-                <div class="mt-1 text-sm text-[#666666]">
+                <div class="profile-card__email">
                   {{ profileUser?.email || '暂无邮箱' }}
                 </div>
-                <p class="mt-3 text-sm leading-6 text-[#5f5f5f]">
+                <p class="profile-card__bio">
                   {{ profileUser?.bio || '还没有简介。发布几条提示词，让这个页面更像真正的创作者主页。' }}
                 </p>
               </div>
             </div>
 
-            <div class="mt-6 grid grid-cols-2 gap-3">
+            <div class="profile-stats">
               <div
                 v-for="stat in stats"
                 :key="stat.label"
-                class="rounded-[18px] border border-black/8 bg-[#faf8f4] p-4"
+                class="profile-stat"
               >
-                <div class="text-sm text-[#777777]">
+                <div class="profile-stat__label">
                   {{ stat.label }}
                 </div>
-                <div class="mt-2 text-2xl font-semibold text-black">
+                <div class="profile-stat__value">
                   {{ formatCount(stat.value) }}
                 </div>
               </div>
@@ -224,32 +224,32 @@ watch(() => route.params.userId, loadProfile)
 
           <section
             v-if="isOwnerView"
-            class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
+            class="profile-card"
           >
-            <div class="text-lg font-semibold text-black">
+            <div class="profile-card__title">
               编辑资料
             </div>
-            <div class="mt-4 grid gap-3">
-              <label class="grid gap-1 text-sm text-[#555555]">
+            <div class="profile-form">
+              <label class="profile-field">
                 展示名称
                 <input
                   v-model="profileForm.username"
                   type="text"
                   maxlength="20"
-                  class="rounded-[14px] border border-black/10 bg-[#faf8f4] px-3 py-2 text-sm text-black outline-none focus:border-black/30"
+                  class="profile-input"
                 >
               </label>
-              <label class="grid gap-1 text-sm text-[#555555]">
+              <label class="profile-field">
                 简介
                 <textarea
                   v-model="profileForm.bio"
                   rows="3"
                   maxlength="500"
-                  class="rounded-[14px] border border-black/10 bg-[#faf8f4] px-3 py-2 text-sm text-black outline-none focus:border-black/30"
+                  class="profile-input"
                 />
               </label>
               <button
-                class="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85 disabled:opacity-60"
+                class="btn-pill-primary profile-save"
                 :disabled="savingProfile"
                 @click="handleSaveProfile"
               >
@@ -258,11 +258,11 @@ watch(() => route.params.userId, loadProfile)
             </div>
           </section>
 
-          <section class="rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-            <div class="text-lg font-semibold text-black">
+          <section class="profile-card">
+            <div class="profile-card__title">
               发布概况
             </div>
-            <div class="mt-4 space-y-3 text-sm text-[#4f4f4f]">
+            <div class="profile-summary">
               <div>加入时间：{{ profileUser?.createdAt || '-' }}</div>
               <div>等级：{{ profileUser?.level ?? '-' }}</div>
               <div>经验值：{{ profileUser?.experience ?? '-' }}</div>
@@ -271,66 +271,69 @@ watch(() => route.params.userId, loadProfile)
           </section>
         </aside>
 
-        <section class="min-w-0 rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-          <div class="flex flex-wrap items-end justify-between gap-3">
+        <section class="profile-card profile-prompts">
+          <div class="profile-prompts__head">
             <div>
-              <div class="text-sm text-[#777777]">
+              <div class="text-muted-sm">
                 已发布提示词
               </div>
-              <div class="mt-1 text-2xl font-semibold text-black">
+              <div class="profile-prompts__count">
                 {{ prompts.length }} 条
               </div>
             </div>
-            <div class="text-sm text-[#666666]">
+            <div class="profile-prompts__sort">
               按最新排序
             </div>
           </div>
 
           <div
             v-if="loading"
-            class="mt-6 grid gap-4 md:grid-cols-2"
+            class="profile-prompts__grid"
           >
             <div
               v-for="index in 4"
               :key="index"
-              class="h-[280px] animate-pulse rounded-[24px] bg-black/6"
+              class="profile-skeleton"
             />
           </div>
 
           <div
             v-else-if="prompts.length > 0"
-            class="mt-6 grid gap-4 md:grid-cols-2"
+            class="profile-prompts__grid"
           >
             <article
               v-for="(prompt, index) in prompts"
               :key="prompt.id"
-              class="overflow-hidden rounded-[24px] border border-black/8 bg-[#faf8f4] transition hover:-translate-y-1"
+              class="profile-prompt-card"
             >
-              <RouterLink :to="`/prompt/${prompt.id}`">
+              <RouterLink
+                :to="`/prompt/${prompt.id}`"
+                class="profile-prompt-card__cover"
+              >
                 <img
                   :src="resolveCover(prompt, index)"
                   :alt="prompt.title"
-                  class="h-[180px] w-full object-cover"
+                  class="profile-prompt-card__image"
                 >
               </RouterLink>
-              <div class="p-5">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-[#7c7c7c]">
+              <div class="profile-prompt-card__body">
+                <div class="profile-prompt-card__head">
+                  <div class="profile-prompt-card__meta">
                     <span>{{ prompt.categoryName }}</span>
                     <span>{{ prompt.model }}</span>
                   </div>
                   <div
                     v-if="isOwnerView"
-                    class="flex items-center gap-2"
+                    class="profile-prompt-card__actions"
                   >
                     <button
-                      class="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs text-[#555555] transition hover:border-black/20 hover:text-black"
+                      class="profile-action-btn"
                       @click="handleEditPrompt(prompt.id)"
                     >
                       编辑
                     </button>
                     <button
-                      class="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs text-red-600 transition hover:border-red-300 hover:bg-red-50"
+                      class="profile-action-btn profile-action-btn--danger"
                       @click="handleDeletePrompt(prompt.id)"
                     >
                       删除
@@ -338,16 +341,16 @@ watch(() => route.params.userId, loadProfile)
                   </div>
                 </div>
                 <RouterLink :to="`/prompt/${prompt.id}`">
-                  <h2 class="mt-3 line-clamp-2 text-xl font-semibold text-black">
+                  <h2 class="profile-prompt-card__title">
                     {{ prompt.title }}
                   </h2>
                 </RouterLink>
-                <p class="mt-2 line-clamp-2 text-sm leading-6 text-[#5f5f5f]">
+                <p class="profile-prompt-card__desc">
                   {{ prompt.description }}
                 </p>
-                <div class="mt-4 flex items-center justify-between gap-3 text-sm text-[#666666]">
+                <div class="profile-prompt-card__footer">
                   <span>{{ prompt.createdAt }}</span>
-                  <div class="flex items-center gap-3">
+                  <div class="profile-prompt-card__stats">
                     <span>{{ formatCount(prompt.likes) }} 赞</span>
                     <span>{{ formatCount(prompt.views) }} 浏览</span>
                   </div>
@@ -358,17 +361,17 @@ watch(() => route.params.userId, loadProfile)
 
           <div
             v-else
-            class="mt-6 rounded-[24px] border border-dashed border-black/12 bg-[#faf8f4] px-6 py-16 text-center"
+            class="profile-empty"
           >
-            <div class="text-xl font-semibold text-black">
+            <div class="profile-empty__title">
               还没有已发布的提示词
             </div>
-            <p class="mt-3 text-sm text-[#777777]">
+            <p class="profile-empty__desc">
               个人主页已就绪，发布前几条内容就能让它更有分量。
             </p>
             <RouterLink
               to="/publish"
-              class="mt-6 inline-flex rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-black/85"
+              class="btn-pill-primary profile-empty__cta"
             >
               发布第一条
             </RouterLink>
@@ -378,3 +381,193 @@ watch(() => route.params.userId, loadProfile)
     </div>
   </div>
 </template>
+
+<style scoped>
+.profile-page {
+  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+}
+
+.profile-container {
+  @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+}
+
+.profile-header {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.profile-header__title {
+  @apply mt-2 text-3xl font-semibold;
+}
+
+.profile-header__actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.profile-layout {
+  @apply mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr];
+}
+
+.profile-sidebar {
+  @apply grid gap-6 self-start;
+}
+
+.profile-card {
+  @apply rounded-[28px] border border-black/10 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)];
+}
+
+.profile-card__user {
+  @apply flex items-start gap-4;
+}
+
+.profile-avatar {
+  @apply flex h-16 w-16 items-center justify-center rounded-full bg-black text-xl font-semibold text-white;
+}
+
+.profile-card__info {
+  @apply min-w-0;
+}
+
+.profile-card__name {
+  @apply text-2xl font-semibold text-black;
+}
+
+.profile-card__email {
+  @apply mt-1 text-sm text-[#666666];
+}
+
+.profile-card__bio {
+  @apply mt-3 text-sm leading-6 text-[#5f5f5f];
+}
+
+.profile-stats {
+  @apply mt-6 grid grid-cols-2 gap-3;
+}
+
+.profile-stat {
+  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+}
+
+.profile-stat__label {
+  @apply text-sm text-[#777777];
+}
+
+.profile-stat__value {
+  @apply mt-2 text-2xl font-semibold text-black;
+}
+
+.profile-card__title {
+  @apply text-lg font-semibold text-black;
+}
+
+.profile-form {
+  @apply mt-4 grid gap-3;
+}
+
+.profile-field {
+  @apply grid gap-1 text-sm text-[#555555];
+}
+
+.profile-input {
+  @apply rounded-[14px] border border-black/10 bg-[#faf8f4] px-3 py-2 text-sm text-black outline-none focus:border-black/30;
+}
+
+.profile-save {
+  @apply disabled:opacity-60;
+}
+
+.profile-summary {
+  @apply mt-4 space-y-3 text-sm text-[#4f4f4f];
+}
+
+.profile-prompts {
+  @apply min-w-0;
+}
+
+.profile-prompts__head {
+  @apply flex flex-wrap items-end justify-between gap-3;
+}
+
+.profile-prompts__count {
+  @apply mt-1 text-2xl font-semibold text-black;
+}
+
+.profile-prompts__sort {
+  @apply text-sm text-[#666666];
+}
+
+.profile-prompts__grid {
+  @apply mt-6 grid gap-4 md:grid-cols-2;
+}
+
+.profile-skeleton {
+  @apply h-[280px] animate-pulse rounded-[24px] bg-black/5;
+}
+
+.profile-prompt-card {
+  @apply overflow-hidden rounded-[24px] border border-black/10 bg-[#faf8f4] transition hover:-translate-y-1;
+}
+
+.profile-prompt-card__cover {
+  @apply block h-[180px] overflow-hidden bg-[#ebe8e1];
+}
+
+.profile-prompt-card__image {
+  @apply h-full w-full max-h-full max-w-full object-cover;
+}
+
+.profile-prompt-card__body {
+  @apply p-5;
+}
+
+.profile-prompt-card__head {
+  @apply flex items-start justify-between gap-3;
+}
+
+.profile-prompt-card__meta {
+  @apply flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-[#7c7c7c];
+}
+
+.profile-prompt-card__actions {
+  @apply flex items-center gap-2;
+}
+
+.profile-action-btn {
+  @apply rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs text-[#555555] transition hover:border-black/20 hover:text-black;
+}
+
+.profile-action-btn--danger {
+  @apply border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50;
+}
+
+.profile-prompt-card__title {
+  @apply mt-3 line-clamp-2 text-xl font-semibold text-black;
+}
+
+.profile-prompt-card__desc {
+  @apply mt-2 line-clamp-2 text-sm leading-6 text-[#5f5f5f];
+}
+
+.profile-prompt-card__footer {
+  @apply mt-4 flex items-center justify-between gap-3 text-sm text-[#666666];
+}
+
+.profile-prompt-card__stats {
+  @apply flex items-center gap-3;
+}
+
+.profile-empty {
+  @apply mt-6 rounded-[24px] border border-dashed border-black/10 bg-[#faf8f4] px-6 py-16 text-center;
+}
+
+.profile-empty__title {
+  @apply text-xl font-semibold text-black;
+}
+
+.profile-empty__desc {
+  @apply mt-3 text-sm text-[#777777];
+}
+
+.profile-empty__cta {
+  @apply mt-6 inline-flex px-5 py-3;
+}
+</style>

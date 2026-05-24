@@ -33,9 +33,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-[#f5f3ee] text-[#111111]">
-    <p class="text-sm text-[#666666]">
+  <div class="callback-page">
+    <p class="callback-page__text">
       正在完成登录...
     </p>
   </div>
 </template>
+
+<style scoped>
+.callback-page {
+  @apply flex min-h-screen items-center justify-center bg-[#f5f3ee] text-[#111111];
+}
+
+.callback-page__text {
+  @apply text-sm text-[#666666];
+}
+</style>

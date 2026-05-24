@@ -24,18 +24,15 @@ func SeedMySQLData(db *sql.DB) error {
 }
 
 func seedCategories(db *sql.DB) error {
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM categories`).Scan(&count); err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-
 	for index, category := range categories {
 		if _, err := db.Exec(`
 			INSERT INTO categories (id, name, icon, sort, type)
 			VALUES (?, ?, ?, ?, 1)
+			ON DUPLICATE KEY UPDATE
+				name = VALUES(name),
+				icon = VALUES(icon),
+				sort = VALUES(sort),
+				type = VALUES(type)
 		`,
 			category.ID,
 			category.Name,

@@ -51,15 +51,6 @@ func Categories() []Category {
 	return append([]Category(nil), categories...)
 }
 
-var categories = []Category{
-	{ID: 1, Name: "Image Generation", Icon: "image", Count: 128},
-	{ID: 2, Name: "Copywriting", Icon: "edit", Count: 94},
-	{ID: 3, Name: "Coding", Icon: "code", Count: 76},
-	{ID: 4, Name: "Video Generation", Icon: "video", Count: 51},
-	{ID: 5, Name: "Agent Prompt", Icon: "robot", Count: 33},
-	{ID: 6, Name: "Workflow", Icon: "workflow", Count: 27},
-}
-
 var prompts = []Prompt{
 	{
 		ID:           101,
@@ -71,8 +62,8 @@ var prompts = []Prompt{
 		Model:        "Midjourney v6",
 		Params:       PromptParams{Temperature: 0.7, TopP: 0.9, MaxTokens: 1200},
 		CategoryID:   1,
-		CategoryName: "Image Generation",
-		Tags:         []string{"Brand", "Poster", "Ecommerce"},
+		CategoryName: "摄影",
+		Tags:         []string{"品牌", "海报", "电商"},
 		UserID:       1,
 		User: User{
 			ID:         1,
@@ -101,9 +92,9 @@ var prompts = []Prompt{
 		SystemPrompt: "You are a conversion-focused SaaS copywriter.",
 		Model:        "GPT-4.1",
 		Params:       PromptParams{Temperature: 0.5, TopP: 0.85, MaxTokens: 1600},
-		CategoryID:   2,
-		CategoryName: "Copywriting",
-		Tags:         []string{"SaaS", "Conversion", "Marketing"},
+		CategoryID:   9,
+		CategoryName: "海报",
+		Tags:         []string{"SaaS", "转化", "营销"},
 		UserID:       2,
 		User: User{
 			ID:         2,
@@ -132,9 +123,9 @@ var prompts = []Prompt{
 		SystemPrompt: "You are a meticulous senior engineer who reviews for correctness first.",
 		Model:        "GPT-4.1",
 		Params:       PromptParams{Temperature: 0.3, TopP: 0.8, MaxTokens: 1400},
-		CategoryID:   3,
-		CategoryName: "Coding",
-		Tags:         []string{"Code Review", "Engineering", "PR"},
+		CategoryID:   30,
+		CategoryName: "其他",
+		Tags:         []string{"代码审查", "工程", "PR"},
 		UserID:       3,
 		User: User{
 			ID:         3,
@@ -163,9 +154,9 @@ var prompts = []Prompt{
 		SystemPrompt: "You are a short-form video creative strategist.",
 		Model:        "Claude 3.7 Sonnet",
 		Params:       PromptParams{Temperature: 0.8, TopP: 0.9, MaxTokens: 1800},
-		CategoryID:   4,
-		CategoryName: "Video Generation",
-		Tags:         []string{"Short Video", "Script", "Growth"},
+		CategoryID:   28,
+		CategoryName: "社交媒体",
+		Tags:         []string{"短视频", "脚本", "增长"},
 		UserID:       4,
 		User: User{
 			ID:         4,
@@ -194,9 +185,9 @@ var prompts = []Prompt{
 		SystemPrompt: "You are an operations-minded AI orchestration designer.",
 		Model:        "o3",
 		Params:       PromptParams{Temperature: 0.4, TopP: 0.9, MaxTokens: 1700},
-		CategoryID:   5,
-		CategoryName: "Agent Prompt",
-		Tags:         []string{"Agent", "Research", "Collaboration"},
+		CategoryID:   30,
+		CategoryName: "其他",
+		Tags:         []string{"智能体", "研究", "协作"},
 		UserID:       5,
 		User: User{
 			ID:         5,
@@ -225,9 +216,9 @@ var prompts = []Prompt{
 		SystemPrompt: "You are a CX operations architect.",
 		Model:        "GPT-4o",
 		Params:       PromptParams{Temperature: 0.45, TopP: 0.88, MaxTokens: 1500},
-		CategoryID:   6,
-		CategoryName: "Workflow",
-		Tags:         []string{"Support", "SOP", "Process"},
+		CategoryID:   30,
+		CategoryName: "其他",
+		Tags:         []string{"客服", "SOP", "流程"},
 		UserID:       6,
 		User: User{
 			ID:         6,

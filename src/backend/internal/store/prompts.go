@@ -92,6 +92,9 @@ func sanitizeTags(tags []string) []string {
 		}
 		seen[tag] = struct{}{}
 		cleaned = append(cleaned, tag)
+		if len(cleaned) >= MaxPromptTags {
+			break
+		}
 	}
 
 	return cleaned
@@ -301,12 +304,20 @@ func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
 
 func normalizeTags(tags []string) []string {
 	result := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
 	for _, tag := range tags {
 		trimmed := strings.TrimSpace(tag)
 		if trimmed == "" {
 			continue
 		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
 		result = append(result, trimmed)
+		if len(result) >= MaxPromptTags {
+			break
+		}
 	}
 
 	return result
