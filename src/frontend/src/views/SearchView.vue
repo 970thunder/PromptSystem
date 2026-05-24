@@ -416,11 +416,11 @@ onMounted(async () => {
 
 <style scoped>
 .search-page {
-  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+  @apply view-page;
 }
 
 .search-container {
-  @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+  @apply view-container;
 }
 
 .search-header {
@@ -500,7 +500,8 @@ onMounted(async () => {
 }
 
 .result-card {
-  @apply overflow-hidden rounded-[24px] border border-black/10 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] transition hover:-translate-y-1;
+  @apply overflow-hidden rounded-[24px] border border-black/10 bg-white transition hover:-translate-y-1;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
 }
 
 .result-card__cover {

@@ -42,7 +42,7 @@ onMounted(async () => {
 
 <style scoped>
 .callback-page {
-  @apply flex min-h-screen items-center justify-center bg-[#f5f3ee] text-[#111111];
+  @apply view-page flex items-center justify-center;
 }
 
 .callback-page__text {

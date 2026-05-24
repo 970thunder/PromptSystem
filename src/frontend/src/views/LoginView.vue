@@ -129,11 +129,11 @@ const handleGitHubLogin = () => {
 
 <style scoped>
 .auth-page {
-  @apply min-h-screen bg-[#f5f3ee] px-4 py-10 text-[#111111] sm:px-6;
+  @apply view-page px-4 py-10 sm:px-6;
 }
 
 .auth-layout {
-  @apply mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr];
+  @apply view-container--auth grid gap-6 lg:grid-cols-[1.05fr_0.95fr];
 }
 
 .auth-hero {
@@ -173,7 +173,8 @@ const handleGitHubLogin = () => {
 }
 
 .auth-card {
-  @apply w-full !rounded-[28px] !border-black/10 !bg-white !shadow-[0_16px_40px_rgba(15,23,42,0.06)];
+  @apply w-full !rounded-[28px] !border-black/10 !bg-white;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06) !important;
 }
 
 .auth-card__header {

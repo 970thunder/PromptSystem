@@ -846,7 +846,8 @@ const handleSubmit = async () => {
 }
 
 .publish-preview {
-  @apply relative flex min-h-0 flex-1 overflow-hidden rounded-[28px] border border-black/10 bg-black shadow-[0_24px_60px_rgba(15,23,42,0.12)];
+  @apply relative flex min-h-0 flex-1 overflow-hidden rounded-[28px] border border-black/10 bg-black;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
 .publish-preview__frame {
@@ -878,7 +879,8 @@ const handleSubmit = async () => {
 }
 
 .publish-wizard__card {
-  @apply flex h-full flex-col overflow-hidden rounded-[24px] border border-black/10 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)];
+  @apply flex h-full flex-col overflow-hidden rounded-[24px] border border-black/10 bg-white p-5;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
 }
 
 .publish-step {

@@ -384,11 +384,11 @@ watch(() => route.params.userId, loadProfile)
 
 <style scoped>
 .profile-page {
-  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+  @apply view-page;
 }
 
 .profile-container {
-  @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+  @apply view-container;
 }
 
 .profile-header {
@@ -412,7 +412,8 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-card {
-  @apply rounded-[28px] border border-black/10 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)];
+  @apply rounded-[28px] border border-black/10 bg-white p-6;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
 }
 
 .profile-card__user {

@@ -420,11 +420,11 @@ watch(() => route.params.id, loadDetail)
 
 <style scoped>
 .detail-page {
-  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+  @apply view-page;
 }
 
 .detail-container {
-  @apply mx-auto max-w-[1160px] px-4 pb-16 pt-6 sm:px-6 lg:px-8;
+  @apply view-container;
 }
 
 .detail-breadcrumb {

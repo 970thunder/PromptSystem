@@ -189,10 +189,10 @@ const handleLogout = async () => {
         class="category-bar"
         :class="{ 'category-bar--hidden': !categoryBarVisible }"
       >
-        <div class="category-bar__header">
+        <!-- <div class="category-bar__header">
           <span class="category-bar__title">分类</span>
           <span class="category-bar__hint">浏览</span>
-        </div>
+        </div> -->
         <div class="category-bar__scroll">
           <button
             :class="categoryBtnClass(activeCategoryId === 'all')"
@@ -359,15 +359,16 @@ const handleLogout = async () => {
 
 <style scoped>
 .home-page {
-  @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+  @apply view-page;
 }
 
 .home-container {
-  @apply mx-auto max-w-[1160px] px-3 pb-12 pt-4 sm:px-4 lg:px-5;
+  @apply view-container--home;
 }
 
 .home-header {
-  @apply sticky top-3 z-30 rounded-[20px] border border-black/10 bg-white/90 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.06)] backdrop-blur md:px-5;
+  @apply sticky top-3 z-30 rounded-[20px] border border-black/10 bg-white/90 px-4 py-3 backdrop-blur md:px-5;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .home-header__inner {
@@ -427,7 +428,8 @@ const handleLogout = async () => {
 }
 
 .category-bar {
-  @apply sticky top-[72px] z-20 mb-6 rounded-[20px] border border-black/10 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)];
+  @apply sticky top-[72px] z-20 mb-6 rounded-[20px] border border-black/10 bg-white px-4 py-3;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
   transform: translateY(0);
   opacity: 1;
   transition: transform 0.3s ease, opacity 0.3s ease;
