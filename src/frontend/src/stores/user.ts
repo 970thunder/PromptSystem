@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 import { userApi } from '@/api/userApi'
 import type { User } from '@/types'
 
+const bindPromptPendingKey = (userID: number) => `promptos:bind-github:pending:${userID}`
+const bindPromptDailyKey = (userID: number) => `promptos:bind-github:last-date:${userID}`
+
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const userInfo = ref<User | null>(
@@ -32,6 +35,41 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('userInfo')
   }
 
+  const markBindPromptPending = (userID: number) => {
+    localStorage.setItem(bindPromptPendingKey(userID), '1')
+  }
+
+  const clearBindPromptPending = (userID: number) => {
+    localStorage.removeItem(bindPromptPendingKey(userID))
+  }
+
+  const shouldPromptBindGitHub = () => {
+    const user = userInfo.value
+    if (!user || user.hasGitHubBound) {
+      return false
+    }
+
+    const pending = localStorage.getItem(bindPromptPendingKey(user.id)) === '1'
+    if (pending) {
+      return true
+    }
+
+    const today = new Date().toISOString().slice(0, 10)
+    const lastPromptDate = localStorage.getItem(bindPromptDailyKey(user.id))
+    return lastPromptDate !== today
+  }
+
+  const markBindPromptShown = () => {
+    const user = userInfo.value
+    if (!user) {
+      return
+    }
+
+    const today = new Date().toISOString().slice(0, 10)
+    clearBindPromptPending(user.id)
+    localStorage.setItem(bindPromptDailyKey(user.id), today)
+  }
+
   const isLoggedIn = computed(() => !!token.value)
 
   const login = async (payload: { email: string; password: string }) => {
@@ -52,6 +90,9 @@ export const useUserStore = defineStore('user', () => {
       const response = await userApi.register(payload)
       setToken(response.data.token)
       setUserInfo(response.data.user)
+      if (!response.data.user.hasGitHubBound) {
+        markBindPromptPending(response.data.user.id)
+      }
       return response.data.user
     } finally {
       loading.value = false
@@ -91,6 +132,8 @@ export const useUserStore = defineStore('user', () => {
     setToken,
     setUserInfo,
     logout,
+    shouldPromptBindGitHub,
+    markBindPromptShown,
     isLoggedIn,
     login,
     register,

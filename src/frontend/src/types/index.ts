@@ -9,6 +9,7 @@ export interface User {
   experience: number
   status: number
   createdAt: string
+  hasGitHubBound?: boolean
 }
 
 // Prompt types
