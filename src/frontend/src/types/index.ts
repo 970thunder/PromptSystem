@@ -99,6 +99,11 @@ export interface Comment {
   createdAt: string
 }
 
+export interface CreateCommentRequest {
+  content: string
+  parentId?: number | null
+}
+
 // API response types
 export interface ApiResponse<T> {
   code: number
@@ -108,6 +113,11 @@ export interface ApiResponse<T> {
 
 export interface PromptActionResponse {
   prompt: Prompt
+  applied: boolean
+}
+
+export interface CommentActionResponse {
+  comment: Comment
   applied: boolean
 }
 

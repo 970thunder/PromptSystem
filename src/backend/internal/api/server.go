@@ -21,6 +21,7 @@ type server struct {
 	tokenManager *auth.TokenManager
 	userStore    store.UserManager
 	promptStore  store.PromptManager
+	commentStore store.CommentManager
 	imageStorage storage.ImageStorage
 	storageMode  string
 }
@@ -33,6 +34,7 @@ func NewServer(cfg config.Config) http.Handler {
 
 	userStore := store.UserManager(store.NewUserStore())
 	promptStore := store.PromptManager(store.NewMemoryPromptStore())
+	commentStore := store.CommentManager(store.NewMemoryCommentStore())
 	storageMode := "memory"
 
 	db, err := database.OpenMySQL(cfg)
@@ -42,6 +44,7 @@ func NewServer(cfg config.Config) http.Handler {
 		} else if seedErr := store.SeedMySQLData(db); seedErr == nil {
 			userStore = store.NewMySQLUserStore(db)
 			promptStore = store.NewMySQLPromptStore(db)
+			commentStore = store.NewMySQLCommentStore(db)
 			storageMode = "mysql"
 			log.Printf("using MySQL-backed user and prompt stores at %s:%s/%s", cfg.MySQLHost, cfg.MySQLPort, cfg.MySQLDB)
 		} else {
@@ -56,6 +59,7 @@ func NewServer(cfg config.Config) http.Handler {
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
 		userStore:    userStore,
 		promptStore:  promptStore,
+		commentStore: commentStore,
 		imageStorage: imageStorage,
 		storageMode:  storageMode,
 	}
@@ -65,6 +69,14 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
 	mux.HandleFunc("/api/v1/prompts/search", s.handlePromptSearch)
 	mux.HandleFunc("/api/v1/prompts/", s.handlePromptDetail)
+	mux.HandleFunc("/api/v1/comments/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
+
+		s.withAuth(s.handleCommentLike).ServeHTTP(w, r)
+	})
 	mux.HandleFunc("/api/v1/uploads/images", s.withAuth(s.handleImageUpload))
 	mux.HandleFunc("/api/v1/auth/github", s.handleGitHubAuthStart)
 	mux.HandleFunc("/api/v1/auth/github/callback", s.handleGitHubAuthCallback)
@@ -224,6 +236,16 @@ type promptPayload struct {
 	Tags         []string           `json:"tags"`
 }
 
+type commentPayload struct {
+	Content  string `json:"content"`
+	ParentID *int   `json:"parentId"`
+}
+
+type commentActionResponse struct {
+	Comment store.Comment `json:"comment"`
+	Applied bool          `json:"applied"`
+}
+
 func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 	var payload promptPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -339,6 +361,18 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 				s.handlePromptFavorite(w, r, id)
 			}).ServeHTTP(w, r)
 			return
+		case "comments":
+			switch r.Method {
+			case http.MethodGet:
+				s.handlePromptComments(w, r, id)
+			case http.MethodPost:
+				s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+					s.handlePromptCommentCreate(w, r, id)
+				}).ServeHTTP(w, r)
+			default:
+				writeMethodNotAllowed(w)
+			}
+			return
 		default:
 			writeJSON(w, http.StatusNotFound, apiResponse[any]{
 				Code:    404,
@@ -382,6 +416,118 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+func (s *server) handlePromptComments(w http.ResponseWriter, r *http.Request, id int) {
+	comments, err := s.commentStore.ListByTarget("prompt", id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
+			Code:    500,
+			Message: "Failed to load comments",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.Comment]{
+		Code:    200,
+		Message: "Success",
+		Data:    comments,
+	})
+}
+
+func (s *server) handlePromptCommentCreate(w http.ResponseWriter, r *http.Request, id int) {
+	var payload commentPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	userRecord, found := s.userStore.FindByID(userID)
+	if !found {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	comment, err := s.commentStore.Create(store.CreateCommentInput{
+		TargetType: "prompt",
+		TargetID:   id,
+		User: store.User{
+			ID:         userRecord.ID,
+			Username:   userRecord.Username,
+			Avatar:     userRecord.Avatar,
+			Email:      userRecord.Email,
+			Bio:        userRecord.Bio,
+			Level:      userRecord.Level,
+			Experience: userRecord.Experience,
+			Status:     userRecord.Status,
+			CreatedAt:  userRecord.CreatedAt,
+		},
+		Content:  payload.Content,
+		ParentID: payload.ParentID,
+	})
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "prompt not found" {
+			status = http.StatusNotFound
+		}
+
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[store.Comment]{
+		Code:    200,
+		Message: "Success",
+		Data:    comment,
+	})
+}
+
+func (s *server) handleCommentLike(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/comments/")
+	path = strings.Trim(path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[1] != "like" {
+		writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "Not found"})
+		return
+	}
+
+	id, err := strconv.Atoi(parts[0])
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid comment id"})
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	comment, applied, err := s.commentStore.Like(id, userID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "comment not found" {
+			status = http.StatusNotFound
+		}
+
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[commentActionResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: commentActionResponse{
+			Comment: comment,
+			Applied: applied,
+		},
+	})
 }
 
 func (s *server) handlePromptLike(w http.ResponseWriter, r *http.Request, id int) {

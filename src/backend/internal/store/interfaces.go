@@ -17,3 +17,9 @@ type PromptManager interface {
 	Like(id int, userID int) (Prompt, bool, error)
 	Favorite(id int, userID int) (Prompt, bool, error)
 }
+
+type CommentManager interface {
+	ListByTarget(targetType string, targetID int) ([]Comment, error)
+	Create(input CreateCommentInput) (Comment, error)
+	Like(id int, userID int) (Comment, bool, error)
+}

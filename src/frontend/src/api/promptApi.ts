@@ -1,5 +1,16 @@
 import request from '@/utils/request'
-import type { ApiResponse, PageResponse, Prompt, PublishPromptRequest, Category, UploadImageResponse, PromptActionResponse } from '@/types'
+import type {
+  ApiResponse,
+  PageResponse,
+  Prompt,
+  PublishPromptRequest,
+  Category,
+  UploadImageResponse,
+  PromptActionResponse,
+  Comment,
+  CreateCommentRequest,
+  CommentActionResponse
+} from '@/types'
 
 export const promptApi = {
   // Get prompt list with pagination
@@ -54,6 +65,18 @@ export const promptApi = {
   // Favorite a prompt
   favoritePrompt(id: number): Promise<ApiResponse<PromptActionResponse>> {
     return request.post(`/prompts/${id}/favorite`)
+  },
+
+  getPromptComments(id: number): Promise<ApiResponse<Comment[]>> {
+    return request.get(`/prompts/${id}/comments`)
+  },
+
+  createPromptComment(id: number, data: CreateCommentRequest): Promise<ApiResponse<Comment>> {
+    return request.post(`/prompts/${id}/comments`, data)
+  },
+
+  likeComment(id: number): Promise<ApiResponse<CommentActionResponse>> {
+    return request.post(`/comments/${id}/like`)
   },
 
   // Get categories

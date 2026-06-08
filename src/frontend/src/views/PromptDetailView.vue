@@ -6,6 +6,7 @@ import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
+import type { Comment } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,9 +15,14 @@ const promptStore = usePromptStore()
 const userStore = useUserStore()
 const liking = ref(false)
 const favoriting = ref(false)
+const commentSubmitting = ref(false)
+const activeReplyId = ref<number | null>(null)
+const commentDraft = ref('')
+const replyDrafts = ref<Record<number, string>>({})
 
 const promptId = computed(() => Number(route.params.id))
 const prompt = computed(() => promptStore.currentPrompt)
+const comments = computed(() => promptStore.comments)
 
 const relatedPrompts = computed(() => {
   if (!prompt.value) {
@@ -122,6 +128,80 @@ const handleFavorite = async () => {
   }
 }
 
+const ensureCommentInput = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    message.warning('Please enter a comment first')
+    return ''
+  }
+
+  return trimmed
+}
+
+const submitComment = async (parentId?: number) => {
+  if (!prompt.value || commentSubmitting.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  const source = parentId ? replyDrafts.value[parentId] ?? '' : commentDraft.value
+  const content = ensureCommentInput(source)
+  if (!content) {
+    return
+  }
+
+  commentSubmitting.value = true
+  try {
+    await promptStore.createPromptComment(prompt.value.id, {
+      content,
+      parentId: parentId ?? null
+    })
+
+    if (parentId) {
+      replyDrafts.value = {
+        ...replyDrafts.value,
+        [parentId]: ''
+      }
+      activeReplyId.value = null
+    } else {
+      commentDraft.value = ''
+    }
+
+    message.success(parentId ? 'Reply posted' : 'Comment posted')
+  } finally {
+    commentSubmitting.value = false
+  }
+}
+
+const handleCommentLike = async (comment: Comment) => {
+  if (!prompt.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  await promptStore.likeComment(prompt.value.id, comment.id)
+  message.success('Comment liked')
+}
+
+const toggleReply = (commentId: number) => {
+  activeReplyId.value = activeReplyId.value === commentId ? null : commentId
+}
+
+const formatCommentTime = (value: string) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return date.toLocaleString()
+}
+
 const loadDetail = async () => {
   await promptStore.ensurePromptSeed()
 
@@ -131,6 +211,7 @@ const loadDetail = async () => {
   }
 
   await promptStore.loadPromptDetail(promptId.value)
+  await promptStore.loadPromptComments(promptId.value)
 }
 
 onMounted(loadDetail)
@@ -327,6 +408,163 @@ watch(() => route.params.id, loadDetail)
                   {{ item.description }}
                 </p>
               </RouterLink>
+            </div>
+          </section>
+
+          <section class="detail-content-card">
+            <div class="detail-comments-head">
+              <div>
+                <div class="detail-eyebrow">
+                  Comments
+                </div>
+                <h2 class="detail-section-title">
+                  Community feedback
+                </h2>
+              </div>
+              <div class="detail-comments-count">
+                {{ comments.length }}
+              </div>
+            </div>
+
+            <div class="detail-comment-editor">
+              <textarea
+                v-model="commentDraft"
+                class="detail-comment-textarea"
+                rows="4"
+                placeholder="Add a practical note, revision idea, or usage result"
+              />
+              <div class="detail-comment-actions">
+                <span class="detail-comment-tip">
+                  Comments stay under 1000 characters.
+                </span>
+                <button
+                  class="detail-btn-like"
+                  :disabled="commentSubmitting"
+                  @click="submitComment()"
+                >
+                  {{ commentSubmitting ? 'Posting...' : 'Post comment' }}
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="promptStore.commentsLoading"
+              class="detail-comments-loading"
+            >
+              Loading comments...
+            </div>
+
+            <div
+              v-else-if="comments.length === 0"
+              class="detail-comments-empty"
+            >
+              No comments yet.
+            </div>
+
+            <div
+              v-else
+              class="detail-comments-list"
+            >
+              <article
+                v-for="comment in comments"
+                :key="comment.id"
+                class="detail-comment-card"
+              >
+                <div class="detail-comment-header">
+                  <div>
+                    <div class="detail-comment-author">
+                      {{ comment.user.username }}
+                    </div>
+                    <div class="detail-comment-time">
+                      {{ formatCommentTime(comment.createdAt) }}
+                    </div>
+                  </div>
+                  <div class="detail-comment-meta">
+                    Lv.{{ comment.user.level }}
+                  </div>
+                </div>
+
+                <p class="detail-comment-content">
+                  {{ comment.content }}
+                </p>
+
+                <div class="detail-comment-row">
+                  <button
+                    class="detail-comment-link"
+                    @click="handleCommentLike(comment)"
+                  >
+                    Like · {{ comment.likes }}
+                  </button>
+                  <button
+                    class="detail-comment-link"
+                    @click="toggleReply(comment.id)"
+                  >
+                    Reply
+                  </button>
+                </div>
+
+                <div
+                  v-if="activeReplyId === comment.id"
+                  class="detail-reply-editor"
+                >
+                  <textarea
+                    v-model="replyDrafts[comment.id]"
+                    class="detail-comment-textarea"
+                    rows="3"
+                    placeholder="Write a direct reply"
+                  />
+                  <div class="detail-comment-actions">
+                    <span class="detail-comment-tip">
+                      Replying to {{ comment.user.username }}
+                    </span>
+                    <button
+                      class="detail-btn-favorite"
+                      :disabled="commentSubmitting"
+                      @click="submitComment(comment.id)"
+                    >
+                      {{ commentSubmitting ? 'Posting...' : 'Post reply' }}
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  v-if="comment.replies.length > 0"
+                  class="detail-replies"
+                >
+                  <article
+                    v-for="reply in comment.replies"
+                    :key="reply.id"
+                    class="detail-reply-card"
+                  >
+                    <div class="detail-comment-header">
+                      <div>
+                        <div class="detail-comment-author">
+                          {{ reply.user.username }}
+                        </div>
+                        <div class="detail-comment-time">
+                          {{ formatCommentTime(reply.createdAt) }}
+                        </div>
+                      </div>
+                      <div class="detail-comment-meta">
+                        Lv.{{ reply.user.level }}
+                      </div>
+                    </div>
+
+                    <p class="detail-comment-content">
+                      {{ reply.content }}
+                    </p>
+
+                    <div class="detail-comment-row">
+                      <button
+                        class="detail-comment-link"
+                        @click="handleCommentLike(reply)"
+                      >
+                        Like · {{ reply.likes }}
+                      </button>
+                    </div>
+                  </article>
+                </div>
+              </article>
             </div>
           </section>
         </div>
@@ -625,5 +863,76 @@ watch(() => route.params.id, loadDetail)
 
 .detail-section-title {
   @apply mt-2 text-2xl font-semibold text-black;
+}
+
+.detail-comments-head {
+  @apply flex items-center justify-between gap-4;
+}
+
+.detail-comments-count {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444];
+}
+
+.detail-comment-editor,
+.detail-reply-editor {
+  @apply mt-5 rounded-[20px] border border-black/10 bg-[#faf8f4] p-4;
+}
+
+.detail-comment-textarea {
+  @apply min-h-[110px] w-full resize-y rounded-[16px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[#222222] outline-none transition focus:border-black/20;
+}
+
+.detail-comment-actions {
+  @apply mt-3 flex flex-wrap items-center justify-between gap-3;
+}
+
+.detail-comment-tip {
+  @apply text-xs text-[#777777];
+}
+
+.detail-comments-loading,
+.detail-comments-empty {
+  @apply mt-5 rounded-[18px] border border-dashed border-black/10 bg-[#faf8f4] px-4 py-5 text-sm text-[#666666];
+}
+
+.detail-comments-list {
+  @apply mt-5 space-y-4;
+}
+
+.detail-comment-card,
+.detail-reply-card {
+  @apply rounded-[20px] border border-black/10 bg-[#faf8f4] p-4;
+}
+
+.detail-replies {
+  @apply mt-4 space-y-3 border-l border-black/10 pl-4;
+}
+
+.detail-comment-header {
+  @apply flex items-start justify-between gap-4;
+}
+
+.detail-comment-author {
+  @apply text-sm font-semibold text-black;
+}
+
+.detail-comment-time {
+  @apply mt-1 text-xs text-[#777777];
+}
+
+.detail-comment-meta {
+  @apply rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs text-[#555555];
+}
+
+.detail-comment-content {
+  @apply mt-3 whitespace-pre-wrap text-sm leading-6 text-[#333333];
+}
+
+.detail-comment-row {
+  @apply mt-3 flex flex-wrap gap-3;
+}
+
+.detail-comment-link {
+  @apply text-xs text-[#555555] transition hover:text-black;
 }
 </style>

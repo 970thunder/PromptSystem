@@ -47,6 +47,19 @@ type Category struct {
 	Count int    `json:"count"`
 }
 
+type Comment struct {
+	ID         int      `json:"id"`
+	TargetType string   `json:"targetType"`
+	TargetID   int      `json:"targetId"`
+	UserID     int      `json:"userId"`
+	User       User     `json:"user"`
+	Content    string   `json:"content"`
+	Likes      int      `json:"likes"`
+	ParentID   *int     `json:"parentId"`
+	Replies    []Comment `json:"replies"`
+	CreatedAt  string   `json:"createdAt"`
+}
+
 func Categories() []Category {
 	return append([]Category(nil), categories...)
 }
@@ -238,4 +251,55 @@ var prompts = []Prompt{
 		CreatedAt: "2026-05-07",
 		UpdatedAt: "2026-05-14",
 	},
+}
+
+var comments = []Comment{
+	{
+		ID:         1001,
+		TargetType: "prompt",
+		TargetID:   101,
+		UserID:     2,
+		User: User{
+			ID:         2,
+			Username:   "Nora Chen",
+			Avatar:     "",
+			Email:      "nora@example.com",
+			Bio:        "Growth copywriter",
+			Level:      6,
+			Experience: 910,
+			Status:     1,
+			CreatedAt:  "2026-04-20",
+		},
+		Content:   "The structure is solid. I would add one more constraint for product packshot composition.",
+		Likes:     3,
+		ParentID:  nil,
+		Replies:   []Comment{},
+		CreatedAt: "2026-06-07T10:30:00Z",
+	},
+	{
+		ID:         1002,
+		TargetType: "prompt",
+		TargetID:   101,
+		UserID:     1,
+		User: User{
+			ID:         1,
+			Username:   "Astra Lab",
+			Avatar:     "",
+			Email:      "astra@example.com",
+			Bio:        "Visual prompt designer",
+			Level:      8,
+			Experience: 1320,
+			Status:     1,
+			CreatedAt:  "2026-05-01",
+		},
+		Content:   "Agreed. I usually append packaging angle and lens language in the final line.",
+		Likes:     1,
+		ParentID:  intPtr(1001),
+		Replies:   []Comment{},
+		CreatedAt: "2026-06-07T12:00:00Z",
+	},
+}
+
+func intPtr(value int) *int {
+	return &value
 }

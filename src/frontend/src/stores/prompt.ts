@@ -3,14 +3,16 @@ import { computed, ref } from 'vue'
 import { promptApi } from '@/api/promptApi'
 import { categoryApi } from '@/api/categoryApi'
 import { mockCategories, mockPrompts } from '@/mock/prompts'
-import type { Prompt, Category } from '@/types'
+import type { Prompt, Category, Comment, CreateCommentRequest } from '@/types'
 
 export const usePromptStore = defineStore('prompt', () => {
   const prompts = ref<Prompt[]>([])
   const currentPrompt = ref<Prompt | null>(null)
+  const comments = ref<Comment[]>([])
   const categories = ref<Category[]>([])
   const loading = ref(false)
   const detailLoading = ref(false)
+  const commentsLoading = ref(false)
   const usingMockData = ref(false)
 
   const setPrompts = (list: Prompt[]) => {
@@ -39,6 +41,10 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const setCategories = (list: Category[]) => {
     categories.value = list
+  }
+
+  const setComments = (list: Comment[]) => {
+    comments.value = list
   }
 
   const setLoading = (status: boolean) => {
@@ -143,6 +149,41 @@ export const usePromptStore = defineStore('prompt', () => {
     }
   }
 
+  const loadPromptComments = async (id: number) => {
+    commentsLoading.value = true
+
+    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
+
+    if (!enablePromptApi) {
+      comments.value = []
+      commentsLoading.value = false
+      return []
+    }
+
+    try {
+      const response = await promptApi.getPromptComments(id)
+      comments.value = response.data
+      return response.data
+    } catch {
+      comments.value = []
+      return []
+    } finally {
+      commentsLoading.value = false
+    }
+  }
+
+  const createPromptComment = async (id: number, payload: CreateCommentRequest) => {
+    const response = await promptApi.createPromptComment(id, payload)
+    await loadPromptComments(id)
+    return response.data
+  }
+
+  const likeComment = async (promptID: number, commentID: number) => {
+    const response = await promptApi.likeComment(commentID)
+    await loadPromptComments(promptID)
+    return response.data
+  }
+
   const getRelatedPrompts = (promptId: number, categoryId: number) => {
     return prompts.value
       .filter((item) => item.id !== promptId && item.categoryId === categoryId)
@@ -152,9 +193,11 @@ export const usePromptStore = defineStore('prompt', () => {
   return {
     prompts,
     currentPrompt,
+    comments,
     categories,
     loading,
     detailLoading,
+    commentsLoading,
     usingMockData,
     featuredPrompts,
     latestPrompts,
@@ -162,6 +205,7 @@ export const usePromptStore = defineStore('prompt', () => {
     setCurrentPrompt,
     mergePrompt,
     setCategories,
+    setComments,
     setLoading,
     prependPrompt,
     upsertPrompt,
@@ -169,6 +213,9 @@ export const usePromptStore = defineStore('prompt', () => {
     ensurePromptSeed,
     loadHomeFeed,
     loadPromptDetail,
+    loadPromptComments,
+    createPromptComment,
+    likeComment,
     getRelatedPrompts
   }
 })
