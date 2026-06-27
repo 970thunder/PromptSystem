@@ -3,12 +3,15 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import { promptApi } from '@/api/promptApi'
+import { userApi } from '@/api/userApi'
 import { mockPrompts } from '@/mock/prompts'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { Prompt, User } from '@/types'
 import { githubAuthUrl } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
+
+type LibraryTab = 'published' | 'favorites' | 'likes'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +23,9 @@ const userStore = useUserStore()
 const loading = ref(false)
 const savingProfile = ref(false)
 const prompts = ref<Prompt[]>([])
+const favoritePrompts = ref<Prompt[]>([])
+const likedPrompts = ref<Prompt[]>([])
+const activeLibraryTab = ref<LibraryTab>('published')
 const profileUser = ref<User | null>(null)
 const profileForm = reactive({
   username: '',
@@ -62,6 +68,23 @@ const favoriteModels = computed(() => {
     .sort((left, right) => right[1] - left[1])
     .slice(0, 3)
 })
+
+const activePromptList = computed(() => {
+  if (activeLibraryTab.value === 'favorites') {
+    return favoritePrompts.value
+  }
+  if (activeLibraryTab.value === 'likes') {
+    return likedPrompts.value
+  }
+
+  return prompts.value
+})
+
+const libraryTabs = computed(() => [
+  { key: 'published' as const, label: '已发布', count: prompts.value.length },
+  { key: 'favorites' as const, label: '收藏', count: favoritePrompts.value.length },
+  { key: 'likes' as const, label: '点赞', count: likedPrompts.value.length }
+])
 
 const resolveCover = (prompt: Prompt, index: number) => {
   if (isDisplayableCover(prompt.cover)) {
@@ -129,10 +152,24 @@ const loadProfile = async () => {
   if (userStore.userInfo && viewedUserId.value === userStore.userInfo.id) {
     await userStore.fetchUserInfo()
     profileUser.value = userStore.userInfo
+    try {
+      const [favoritesRes, likesRes] = await Promise.all([
+        userApi.getFavoritePrompts(),
+        userApi.getLikedPrompts()
+      ])
+      favoritePrompts.value = favoritesRes.data
+      likedPrompts.value = likesRes.data
+    } catch {
+      favoritePrompts.value = []
+      likedPrompts.value = []
+    }
     syncProfileForm()
     return
   }
 
+  favoritePrompts.value = []
+  likedPrompts.value = []
+  activeLibraryTab.value = 'published'
   profileUser.value = prompts.value[0]?.user ?? null
 }
 
@@ -142,15 +179,15 @@ const handleEditPrompt = async (promptId: number) => {
 
 const handleDeletePrompt = (promptId: number) => {
   dialog.warning({
-    title: '删除提示词',
-    content: '该提示词将从你的已发布列表中移除。',
+    title: '删除 Prompt',
+    content: '该 Prompt 将从你的已发布列表中移除。',
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async () => {
       await promptApi.deletePrompt(promptId)
       promptStore.removePrompt(promptId)
       prompts.value = prompts.value.filter((item) => item.id !== promptId)
-      message.success('提示词已删除')
+      message.success('Prompt 已删除')
     }
   })
 }
@@ -186,7 +223,7 @@ watch(() => route.params.userId, loadProfile)
             to="/publish"
             class="btn-pill-primary"
           >
-            发布提示词
+            发布 Prompt
           </RouterLink>
         </div>
       </header>
@@ -206,7 +243,7 @@ watch(() => route.params.userId, loadProfile)
                   {{ profileUser?.email || '暂无邮箱' }}
                 </div>
                 <p class="profile-card__bio">
-                  {{ profileUser?.bio || '还没有简介。发布几条提示词，让这个页面更像真正的创作者主页。' }}
+                  {{ profileUser?.bio || '还没有简介。发布几条 Prompt 后，这里会更像真正的创作者主页。' }}
                 </p>
               </div>
             </div>
@@ -306,13 +343,30 @@ watch(() => route.params.userId, loadProfile)
           <div class="profile-prompts__head">
             <div>
               <div class="text-muted-sm">
-                已发布提示词
+                内容库
               </div>
               <div class="profile-prompts__count">
-                {{ prompts.length }} 条
+                {{ activePromptList.length }} 条
               </div>
             </div>
-            <div class="profile-prompts__sort">
+            <div
+              v-if="isOwnerView"
+              class="profile-library-tabs"
+            >
+              <button
+                v-for="tab in libraryTabs"
+                :key="tab.key"
+                class="profile-library-tab"
+                :class="{ 'profile-library-tab--active': activeLibraryTab === tab.key }"
+                @click="activeLibraryTab = tab.key"
+              >
+                {{ tab.label }} · {{ tab.count }}
+              </button>
+            </div>
+            <div
+              v-else
+              class="profile-prompts__sort"
+            >
               按最新排序
             </div>
           </div>
@@ -329,11 +383,11 @@ watch(() => route.params.userId, loadProfile)
           </div>
 
           <div
-            v-else-if="prompts.length > 0"
+            v-else-if="activePromptList.length > 0"
             class="profile-prompts__grid"
           >
             <article
-              v-for="(prompt, index) in prompts"
+              v-for="(prompt, index) in activePromptList"
               :key="prompt.id"
               class="profile-prompt-card"
             >
@@ -354,7 +408,7 @@ watch(() => route.params.userId, loadProfile)
                     <span>{{ prompt.model }}</span>
                   </div>
                   <div
-                    v-if="isOwnerView"
+                    v-if="isOwnerView && activeLibraryTab === 'published'"
                     class="profile-prompt-card__actions"
                   >
                     <button
@@ -395,12 +449,13 @@ watch(() => route.params.userId, loadProfile)
             class="profile-empty"
           >
             <div class="profile-empty__title">
-              还没有已发布的提示词
+              暂无内容
             </div>
             <p class="profile-empty__desc">
-              个人主页已就绪，发布前几条内容就能让它更有分量。
+              当前列表还没有 Prompt。发布、收藏或点赞后会在这里形成你的内容记录。
             </p>
             <RouterLink
+              v-if="activeLibraryTab === 'published'"
               to="/publish"
               class="btn-pill-primary profile-empty__cta"
             >
@@ -545,6 +600,18 @@ watch(() => route.params.userId, loadProfile)
 
 .profile-prompts__sort {
   @apply text-sm text-[#666666];
+}
+
+.profile-library-tabs {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.profile-library-tab {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#555555] transition hover:border-black/20 hover:text-black;
+}
+
+.profile-library-tab--active {
+  @apply border-black bg-black text-white hover:text-white;
 }
 
 .profile-prompts__grid {

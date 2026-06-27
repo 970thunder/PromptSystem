@@ -302,6 +302,64 @@ func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
 	return Prompt{}, false, fmt.Errorf("prompt not found")
 }
 
+func ListUserFavoritePrompts(userID int) []Prompt {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	ids := promptFavoritesByUserLocked(userID)
+	return promptsByIDLocked(ids)
+}
+
+func ListUserLikedPrompts(userID int) []Prompt {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	ids := promptLikesByUserLocked(userID)
+	return promptsByIDLocked(ids)
+}
+
+func promptFavoritesByUserLocked(userID int) []int {
+	ids := make([]int, 0)
+	for promptID, users := range promptFavorites {
+		if _, ok := users[userID]; ok {
+			ids = append(ids, promptID)
+		}
+	}
+
+	return ids
+}
+
+func promptLikesByUserLocked(userID int) []int {
+	ids := make([]int, 0)
+	for promptID, users := range promptLikes {
+		if _, ok := users[userID]; ok {
+			ids = append(ids, promptID)
+		}
+	}
+
+	return ids
+}
+
+func promptsByIDLocked(ids []int) []Prompt {
+	allowed := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		allowed[id] = struct{}{}
+	}
+
+	list := make([]Prompt, 0, len(ids))
+	for _, prompt := range prompts {
+		if _, ok := allowed[prompt.ID]; ok {
+			list = append(list, prompt)
+		}
+	}
+
+	sort.SliceStable(list, func(i, j int) bool {
+		return list[i].UpdatedAt > list[j].UpdatedAt
+	})
+
+	return list
+}
+
 func normalizeTags(tags []string) []string {
 	result := make([]string, 0, len(tags))
 	seen := make(map[string]struct{}, len(tags))

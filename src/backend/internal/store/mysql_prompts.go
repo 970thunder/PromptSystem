@@ -329,6 +329,56 @@ func (s *MySQLPromptStore) Favorite(id int, userID int) (Prompt, bool, error) {
 	return s.applyEngagement("favorites", "favorites", id, userID)
 }
 
+func (s *MySQLPromptStore) ListUserFavorites(userID int) ([]Prompt, error) {
+	return s.listUserEngagements("favorites", userID)
+}
+
+func (s *MySQLPromptStore) ListUserLikes(userID int) ([]Prompt, error) {
+	return s.listUserEngagements("likes", userID)
+}
+
+func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prompt, error) {
+	if table != "favorites" && table != "likes" {
+		return nil, errors.New("invalid engagement table")
+	}
+
+	rows, err := s.db.Query(`
+		SELECT
+			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.category_id, c.name, p.user_id,
+			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
+			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
+			COALESCE(GROUP_CONCAT(pt.tag ORDER BY pt.id SEPARATOR '||'), '')
+		FROM `+table+` e
+		JOIN prompts p ON p.id = e.target_id AND e.target_type = 'prompt'
+		JOIN categories c ON c.id = p.category_id
+		JOIN users u ON u.id = p.user_id
+		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
+		WHERE e.user_id = ? AND p.status = 1
+		GROUP BY p.id, e.created_at
+		ORDER BY e.created_at DESC, p.id DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]Prompt, 0)
+	for rows.Next() {
+		prompt, err := scanPrompt(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, prompt)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return list, nil
+}
+
 func (s *MySQLPromptStore) applyEngagement(table string, counterColumn string, id int, userID int) (Prompt, bool, error) {
 	tx, err := s.db.Begin()
 	if err != nil {

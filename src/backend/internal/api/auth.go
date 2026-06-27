@@ -178,6 +178,56 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
 }
 
+func (s *server) handleUserFavorites(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	list, err := s.promptStore.ListUserFavorites(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load favorites"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.Prompt]{
+		Code:    200,
+		Message: "Success",
+		Data:    list,
+	})
+}
+
+func (s *server) handleUserLikes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	list, err := s.promptStore.ListUserLikes(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load likes"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.Prompt]{
+		Code:    200,
+		Message: "Success",
+		Data:    list,
+	})
+}
+
 func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))

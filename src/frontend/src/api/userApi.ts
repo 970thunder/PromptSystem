@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { ApiResponse, LoginRequest, LoginResponse, RegisterRequest, User } from '@/types'
+import type { ApiResponse, LoginRequest, LoginResponse, Prompt, RegisterRequest, User } from '@/types'
 
 export const userApi = {
   login(data: LoginRequest): Promise<ApiResponse<LoginResponse>> {
@@ -16,6 +16,14 @@ export const userApi = {
 
   updateUserInfo(data: Partial<User>): Promise<ApiResponse<User>> {
     return request.put('/user/info', data)
+  },
+
+  getFavoritePrompts(): Promise<ApiResponse<Prompt[]>> {
+    return request.get('/user/favorites')
+  },
+
+  getLikedPrompts(): Promise<ApiResponse<Prompt[]>> {
+    return request.get('/user/likes')
   },
 
   logout(): Promise<ApiResponse<null>> {
