@@ -7,6 +7,7 @@ import { mockPrompts } from '@/mock/prompts'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { Prompt, User } from '@/types'
+import { githubAuthUrl } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 
 const route = useRoute()
@@ -154,6 +155,10 @@ const handleDeletePrompt = (promptId: number) => {
   })
 }
 
+const handleBindGitHub = () => {
+  window.location.href = githubAuthUrl()
+}
+
 onMounted(loadProfile)
 watch(() => route.params.userId, loadProfile)
 </script>
@@ -220,6 +225,32 @@ watch(() => route.params.userId, loadProfile)
                 </div>
               </div>
             </div>
+          </section>
+
+          <section
+            v-if="isOwnerView"
+            class="profile-card"
+          >
+            <div class="profile-card__title">
+              GitHub 账号
+            </div>
+            <div class="profile-bind-status">
+              <span
+                class="profile-bind-dot"
+                :class="{ 'profile-bind-dot--active': profileUser?.hasGitHubBound }"
+              />
+              <span>{{ profileUser?.hasGitHubBound ? '已绑定 GitHub' : '未绑定 GitHub' }}</span>
+            </div>
+            <p class="profile-bind-desc">
+              绑定后可以使用 GitHub 一键登录；如果邮箱一致，也会自动关联当前账号。
+            </p>
+            <button
+              v-if="!profileUser?.hasGitHubBound"
+              class="btn-pill-primary profile-bind-action"
+              @click="handleBindGitHub"
+            >
+              绑定 GitHub
+            </button>
           </section>
 
           <section
@@ -478,6 +509,26 @@ watch(() => route.params.userId, loadProfile)
 
 .profile-summary {
   @apply mt-4 space-y-3 text-sm text-[#4f4f4f];
+}
+
+.profile-bind-status {
+  @apply mt-4 flex items-center gap-2 text-sm font-medium text-black;
+}
+
+.profile-bind-dot {
+  @apply h-2.5 w-2.5 rounded-full bg-amber-500;
+}
+
+.profile-bind-dot--active {
+  @apply bg-emerald-500;
+}
+
+.profile-bind-desc {
+  @apply mt-3 text-sm leading-6 text-[#666666];
+}
+
+.profile-bind-action {
+  @apply mt-4 inline-flex px-5 py-3;
 }
 
 .profile-prompts {

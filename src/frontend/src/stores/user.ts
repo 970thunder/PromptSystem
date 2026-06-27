@@ -45,7 +45,7 @@ export const useUserStore = defineStore('user', () => {
 
   const shouldPromptBindGitHub = () => {
     const user = userInfo.value
-    if (!user || user.hasGitHubBound) {
+    if (!user || user.hasGitHubBound === true) {
       return false
     }
 
