@@ -175,6 +175,11 @@ export interface LoginResponse {
   user: User
 }
 
+export interface CaptchaResponse {
+  expiresInSeconds: number
+  devCode?: string
+}
+
 export interface UploadImageResponse {
   url: string
 }

@@ -19,6 +19,7 @@ import (
 type server struct {
 	config       config.Config
 	tokenManager *auth.TokenManager
+	captcha      *captchaManager
 	userStore    store.UserManager
 	promptStore  store.PromptManager
 	commentStore store.CommentManager
@@ -57,6 +58,7 @@ func NewServer(cfg config.Config) http.Handler {
 	s := &server{
 		config:       cfg,
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
+		captcha:      newCaptchaManager(),
 		userStore:    userStore,
 		promptStore:  promptStore,
 		commentStore: commentStore,
@@ -81,6 +83,7 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/auth/github", s.handleGitHubAuthStart)
 	mux.HandleFunc("/api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
+	mux.HandleFunc("/api/v1/user/captcha", s.handleCaptcha)
 	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))

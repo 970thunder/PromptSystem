@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type {
   ApiResponse,
+  CaptchaResponse,
   FollowActionResponse,
   FollowStatus,
   LoginRequest,
@@ -63,7 +64,7 @@ export const userApi = {
     return request.post('/user/logout')
   },
 
-  sendCaptcha(email: string): Promise<ApiResponse<null>> {
+  sendCaptcha(email: string): Promise<ApiResponse<CaptchaResponse>> {
     return request.post('/user/captcha', { email })
   }
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"promptos-backend/internal/auth"
 	"promptos-backend/internal/store"
@@ -28,6 +30,15 @@ type registerRequest struct {
 	Captcha  string `json:"captcha"`
 }
 
+type captchaRequest struct {
+	Email string `json:"email"`
+}
+
+type captchaResponse struct {
+	ExpiresInSeconds int    `json:"expiresInSeconds"`
+	DevCode          string `json:"devCode,omitempty"`
+}
+
 type updateUserRequest struct {
 	Username string `json:"username"`
 	Bio      string `json:"bio"`
@@ -42,6 +53,50 @@ type authResponse struct {
 type followActionResponse struct {
 	Status  store.FollowStatus `json:"status"`
 	Applied bool               `json:"applied"`
+}
+
+func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload captchaRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+		return
+	}
+
+	code, expiresAt, retryAfter, err := s.captcha.issue(payload.Email)
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidEmail) {
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+			return
+		}
+
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to generate captcha"})
+		return
+	}
+
+	if retryAfter > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+		writeJSON(w, http.StatusTooManyRequests, apiResponse[any]{Code: 429, Message: "Captcha was sent too frequently"})
+		return
+	}
+
+	log.Printf("dev email captcha for %s: %s", strings.TrimSpace(payload.Email), code)
+	response := captchaResponse{
+		ExpiresInSeconds: int(timeUntil(expiresAt).Seconds()),
+	}
+	if s.config.AppEnv != "production" {
+		response.DevCode = code
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[captchaResponse]{
+		Code:    200,
+		Message: "Success",
+		Data:    response,
+	})
 }
 
 func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +155,11 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.captcha.verify(payload.Email, payload.Captcha) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid or expired captcha"})
+		return
+	}
+
 	user, err := s.userStore.Register(payload.Username, payload.Email, payload.Password)
 	if err != nil {
 		switch {
@@ -129,6 +189,15 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			User:  store.ToPublicUser(user),
 		},
 	})
+}
+
+func timeUntil(target time.Time) time.Duration {
+	remaining := time.Until(target)
+	if remaining < 0 {
+		return 0
+	}
+
+	return remaining
 }
 
 func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {

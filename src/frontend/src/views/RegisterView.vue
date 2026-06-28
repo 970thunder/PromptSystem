@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
+import { userApi } from '@/api/userApi'
 import { githubAuthUrl } from '@/utils/authUrl'
 
 const router = useRouter()
@@ -16,18 +17,61 @@ const formValue = reactive({
   email: '',
   password: '',
   confirmPassword: '',
-  captcha: 'dev-bypass'
+  captcha: ''
 })
+
+const captchaLoading = ref(false)
+const captchaCountdown = ref(0)
+let countdownTimer: number | undefined
 
 const passwordMismatch = computed(
   () => formValue.confirmPassword.length > 0 && formValue.password !== formValue.confirmPassword
 )
 
+const canSendCaptcha = computed(
+  () => emailPattern.test(formValue.email.trim()) && !captchaLoading.value && captchaCountdown.value === 0
+)
+
 const infoItems = [
   '密码至少 8 位，并使用 bcrypt 哈希存储。',
-  '后端会校验邮箱唯一性，避免重复注册。',
+  '注册需要邮箱验证码，开发环境会直接回填验证码。',
   '未登录访问受保护页面时，将自动跳转到登录页。'
 ]
+
+const startCaptchaCountdown = (seconds: number) => {
+  captchaCountdown.value = Math.max(1, Math.min(seconds, 60))
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer)
+  }
+  countdownTimer = window.setInterval(() => {
+    captchaCountdown.value -= 1
+    if (captchaCountdown.value <= 0 && countdownTimer) {
+      window.clearInterval(countdownTimer)
+      countdownTimer = undefined
+    }
+  }, 1000)
+}
+
+const handleSendCaptcha = async () => {
+  if (!emailPattern.test(formValue.email.trim())) {
+    message.error('请先输入有效的邮箱地址')
+    return
+  }
+
+  captchaLoading.value = true
+  try {
+    const response = await userApi.sendCaptcha(formValue.email.trim())
+    if (response.data.devCode) {
+      formValue.captcha = response.data.devCode
+      message.success(`开发环境验证码已回填：${response.data.devCode}`)
+    } else {
+      message.success('验证码已发送，请查收邮箱')
+    }
+    startCaptchaCountdown(60)
+  } finally {
+    captchaLoading.value = false
+  }
+}
 
 const handleSubmit = async () => {
   if (passwordMismatch.value) {
@@ -44,11 +88,16 @@ const handleSubmit = async () => {
     return
   }
 
+  if (formValue.captcha.trim().length !== 6) {
+    message.error('请输入 6 位邮箱验证码')
+    return
+  }
+
   await userStore.register({
-    username: formValue.username,
-    email: formValue.email,
+    username: formValue.username.trim(),
+    email: formValue.email.trim(),
     password: formValue.password,
-    captcha: formValue.captcha
+    captcha: formValue.captcha.trim()
   })
 
   await router.push('/')
@@ -57,6 +106,12 @@ const handleSubmit = async () => {
 const handleGitHubLogin = () => {
   window.location.href = githubAuthUrl()
 }
+
+onBeforeUnmount(() => {
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer)
+  }
+})
 </script>
 
 <template>
@@ -70,7 +125,7 @@ const handleGitHubLogin = () => {
           创建 PromptOS 账号
         </h1>
         <p class="auth-hero__desc">
-          注册成功后将自动登录并建立 JWT 会话。验证码字段目前为开发占位，后续可替换为真实邮箱验证。
+          注册成功后将自动登录并建立 JWT 会话。开发环境验证码会直接回填，生产环境可接入真实邮件服务。
         </p>
 
         <div class="auth-info-list">
@@ -110,6 +165,27 @@ const handleGitHubLogin = () => {
                 placeholder="you@example.com"
                 size="large"
               />
+            </NFormItem>
+
+            <NFormItem label="邮箱验证码">
+              <div class="captcha-row">
+                <NInput
+                  v-model:value="formValue.captcha"
+                  placeholder="输入 6 位验证码"
+                  size="large"
+                  maxlength="6"
+                />
+                <NButton
+                  class="captcha-row__button"
+                  size="large"
+                  secondary
+                  :loading="captchaLoading"
+                  :disabled="!canSendCaptcha"
+                  @click="handleSendCaptcha"
+                >
+                  {{ captchaCountdown > 0 ? `${captchaCountdown}s` : '获取验证码' }}
+                </NButton>
+              </div>
             </NFormItem>
 
             <NFormItem label="密码">
@@ -229,6 +305,14 @@ const handleGitHubLogin = () => {
 
 .auth-card__github {
   @apply !mt-3;
+}
+
+.captcha-row {
+  @apply grid w-full grid-cols-[1fr_auto] gap-3;
+}
+
+.captcha-row__button {
+  @apply min-w-[118px];
 }
 
 .auth-card__footer {
