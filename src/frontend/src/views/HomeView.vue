@@ -11,6 +11,8 @@ const promptStore = usePromptStore()
 const userStore = useUserStore()
 const router = useRouter()
 const activeCategoryId = ref<number | 'all'>('all')
+const userMenuOpen = ref(false)
+const mobileNavOpen = ref(false)
 const { visible: categoryBarVisible } = useScrollCategoryBar()
 
 const navItems = [
@@ -88,6 +90,8 @@ const resolveCover = (prompt: Prompt, index: number) => {
 }
 
 const handlePublishClick = async () => {
+  userMenuOpen.value = false
+  mobileNavOpen.value = false
   if (!userStore.isLoggedIn) {
     await router.push('/login?redirect=/publish')
     return
@@ -97,8 +101,15 @@ const handlePublishClick = async () => {
 }
 
 const handleLogout = async () => {
+  userMenuOpen.value = false
+  mobileNavOpen.value = false
   userStore.logout()
   await router.push('/')
+}
+
+const closeMenus = () => {
+  userMenuOpen.value = false
+  mobileNavOpen.value = false
 }
 </script>
 
@@ -108,15 +119,28 @@ const handleLogout = async () => {
       <header class="home-header">
         <div class="home-header__inner">
           <div class="home-header__brand">
-            <RouterLink
-              to="/"
-              class="home-logo"
-            >
-              PromptOS
-            </RouterLink>
-            <div class="home-badge">
-              视觉提示词库
+            <div class="home-header__brand-main">
+              <RouterLink
+                to="/"
+                class="home-logo"
+                @click="closeMenus"
+              >
+                PromptOS
+              </RouterLink>
+              <div class="home-badge">
+                视觉提示词库
+              </div>
             </div>
+            <button
+              class="home-mobile-toggle"
+              type="button"
+              :aria-expanded="mobileNavOpen"
+              @click="mobileNavOpen = !mobileNavOpen"
+            >
+              <span />
+              <span />
+              <span />
+            </button>
           </div>
 
           <nav class="home-nav">
@@ -125,6 +149,7 @@ const handleLogout = async () => {
               :key="item.label"
               :to="item.to"
               class="home-nav__link"
+              @click="closeMenus"
             >
               {{ item.label }}
             </RouterLink>
@@ -134,6 +159,7 @@ const handleLogout = async () => {
             <RouterLink
               to="/search"
               class="home-actions__search"
+              @click="closeMenus"
             >
               搜索
             </RouterLink>
@@ -141,30 +167,108 @@ const handleLogout = async () => {
               v-if="!userStore.isLoggedIn"
               to="/login"
               class="home-actions__link"
+              @click="closeMenus"
             >
               登录
             </RouterLink>
-            <RouterLink
+            <div
               v-else
-              to="/profile"
-              class="home-actions__link"
+              class="home-user-menu"
             >
-              {{ userStore.userInfo?.username ?? '个人主页' }}
-            </RouterLink>
+              <button
+                class="home-user-menu__trigger"
+                type="button"
+                @click="userMenuOpen = !userMenuOpen"
+              >
+                <span class="home-user-menu__avatar">
+                  {{ userStore.userInfo?.username?.slice(0, 1) ?? 'U' }}
+                </span>
+                <span>{{ userStore.userInfo?.username ?? '个人主页' }}</span>
+              </button>
+              <div
+                v-if="userMenuOpen"
+                class="home-user-menu__panel"
+              >
+                <RouterLink
+                  to="/profile"
+                  class="home-user-menu__item"
+                  @click="closeMenus"
+                >
+                  个人主页
+                </RouterLink>
+                <RouterLink
+                  to="/publish"
+                  class="home-user-menu__item"
+                  @click="closeMenus"
+                >
+                  发布 Prompt
+                </RouterLink>
+                <button
+                  class="home-user-menu__item home-user-menu__item--danger"
+                  @click="handleLogout"
+                >
+                  退出登录
+                </button>
+              </div>
+            </div>
             <button
               class="btn-pill-primary"
               @click="handlePublishClick"
             >
               发布
             </button>
-            <button
-              v-if="userStore.isLoggedIn"
-              class="home-actions__link home-actions__link--outline"
-              @click="handleLogout"
-            >
-              退出
-            </button>
           </div>
+        </div>
+
+        <div
+          v-if="mobileNavOpen"
+          class="home-mobile-panel"
+        >
+          <RouterLink
+            v-for="item in navItems"
+            :key="item.label"
+            :to="item.to"
+            class="home-mobile-panel__link"
+            @click="closeMenus"
+          >
+            {{ item.label }}
+          </RouterLink>
+          <RouterLink
+            to="/search"
+            class="home-mobile-panel__link"
+            @click="closeMenus"
+          >
+            搜索
+          </RouterLink>
+          <RouterLink
+            v-if="!userStore.isLoggedIn"
+            to="/login"
+            class="home-mobile-panel__link"
+            @click="closeMenus"
+          >
+            登录
+          </RouterLink>
+          <RouterLink
+            v-else
+            to="/profile"
+            class="home-mobile-panel__link"
+            @click="closeMenus"
+          >
+            个人主页
+          </RouterLink>
+          <button
+            class="home-mobile-panel__primary"
+            @click="handlePublishClick"
+          >
+            发布 Prompt
+          </button>
+          <button
+            v-if="userStore.isLoggedIn"
+            class="home-mobile-panel__link home-mobile-panel__danger"
+            @click="handleLogout"
+          >
+            退出登录
+          </button>
         </div>
       </header>
 
@@ -379,6 +483,10 @@ const handleLogout = async () => {
   @apply flex items-center justify-between gap-4;
 }
 
+.home-header__brand-main {
+  @apply flex items-center gap-4;
+}
+
 .home-logo {
   @apply text-lg font-semibold tracking-[0.08em] text-[#111111];
 }
@@ -387,8 +495,16 @@ const handleLogout = async () => {
   @apply hidden rounded-full border border-black/10 bg-black px-3 py-1 text-xs text-white sm:inline-flex;
 }
 
+.home-mobile-toggle {
+  @apply flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-full border border-black/10 bg-[#f7f5f0] lg:hidden;
+}
+
+.home-mobile-toggle span {
+  @apply h-0.5 w-4 rounded-full bg-black;
+}
+
 .home-nav {
-  @apply flex flex-wrap items-center gap-2;
+  @apply hidden flex-wrap items-center gap-2 lg:flex;
 }
 
 .home-nav__link {
@@ -396,7 +512,7 @@ const handleLogout = async () => {
 }
 
 .home-actions {
-  @apply flex flex-wrap items-center justify-end gap-2;
+  @apply hidden flex-wrap items-center justify-end gap-2 lg:flex;
 }
 
 .home-actions__search {
@@ -407,8 +523,46 @@ const handleLogout = async () => {
   @apply rounded-full px-4 py-2 text-sm text-[#555555] transition hover:bg-black hover:text-white;
 }
 
-.home-actions__link--outline {
-  @apply border border-black/10;
+.home-user-menu {
+  @apply relative;
+}
+
+.home-user-menu__trigger {
+  @apply flex items-center gap-2 rounded-full border border-black/10 bg-[#f7f5f0] px-3 py-2 text-sm text-[#333333] transition hover:border-black/20 hover:text-black;
+}
+
+.home-user-menu__avatar {
+  @apply flex h-6 w-6 items-center justify-center rounded-full bg-black text-xs font-semibold text-white;
+}
+
+.home-user-menu__panel {
+  @apply absolute right-0 top-[calc(100%+8px)] z-40 grid min-w-[160px] gap-1 rounded-[18px] border border-black/10 bg-white p-2;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+}
+
+.home-user-menu__item {
+  @apply rounded-[12px] px-3 py-2 text-left text-sm text-[#444444] transition hover:bg-[#f6f4ef] hover:text-black;
+}
+
+.home-user-menu__item--danger {
+  @apply text-red-600 hover:bg-red-50 hover:text-red-700;
+}
+
+.home-mobile-panel {
+  @apply mt-3 grid gap-2 border-t border-black/10 pt-3 lg:hidden;
+}
+
+.home-mobile-panel__link,
+.home-mobile-panel__primary {
+  @apply rounded-[14px] px-4 py-3 text-left text-sm text-[#444444] transition hover:bg-[#f6f4ef] hover:text-black;
+}
+
+.home-mobile-panel__primary {
+  @apply bg-black text-center font-medium text-white hover:bg-black/80 hover:text-white;
+}
+
+.home-mobile-panel__danger {
+  @apply text-red-600 hover:bg-red-50 hover:text-red-700;
 }
 
 .stats-row {
