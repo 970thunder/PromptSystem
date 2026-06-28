@@ -11,6 +11,7 @@ import (
 var promptMu sync.RWMutex
 var promptLikes = make(map[int]map[int]struct{})
 var promptFavorites = make(map[int]map[int]struct{})
+var promptViewHistory = make(map[int]map[int]time.Time)
 
 type CreatePromptInput struct {
 	Title        string
@@ -302,6 +303,30 @@ func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
 	return Prompt{}, false, fmt.Errorf("prompt not found")
 }
 
+func RecordPromptView(id int, userID int) (Prompt, bool, error) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	for index := range prompts {
+		if prompts[index].ID != id {
+			continue
+		}
+
+		if _, ok := promptViewHistory[userID]; !ok {
+			promptViewHistory[userID] = make(map[int]time.Time)
+		}
+		_, existed := promptViewHistory[userID][id]
+		promptViewHistory[userID][id] = time.Now().UTC()
+		if !existed {
+			prompts[index].Views++
+		}
+
+		return prompts[index], !existed, nil
+	}
+
+	return Prompt{}, false, fmt.Errorf("prompt not found")
+}
+
 func ListUserFavoritePrompts(userID int) []Prompt {
 	promptMu.RLock()
 	defer promptMu.RUnlock()
@@ -316,6 +341,24 @@ func ListUserLikedPrompts(userID int) []Prompt {
 
 	ids := promptLikesByUserLocked(userID)
 	return promptsByIDLocked(ids)
+}
+
+func ListUserHistoryPrompts(userID int) []Prompt {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	visitedAt := promptViewHistory[userID]
+	ids := make([]int, 0, len(visitedAt))
+	for promptID := range visitedAt {
+		ids = append(ids, promptID)
+	}
+
+	list := promptsByIDLocked(ids)
+	sort.SliceStable(list, func(i, j int) bool {
+		return visitedAt[list[i].ID].After(visitedAt[list[j].ID])
+	})
+
+	return list
 }
 
 func promptFavoritesByUserLocked(userID int) []int {

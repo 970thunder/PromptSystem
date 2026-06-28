@@ -68,6 +68,10 @@ export const promptApi = {
     return request.post(`/prompts/${id}/favorite`)
   },
 
+  recordPromptView(id: number): Promise<ApiResponse<PromptActionResponse>> {
+    return request.post(`/prompts/${id}/view`)
+  },
+
   getPromptComments(id: number, sort?: string): Promise<ApiResponse<Comment[]>> {
     return request.get(`/prompts/${id}/comments`, {
       params: sort ? { sort } : undefined

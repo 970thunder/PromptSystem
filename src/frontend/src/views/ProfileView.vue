@@ -11,7 +11,7 @@ import type { FollowStatus, Prompt, User } from '@/types'
 import { githubAuthUrl } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 
-type LibraryTab = 'published' | 'favorites' | 'likes' | 'following' | 'followers'
+type LibraryTab = 'published' | 'favorites' | 'likes' | 'history' | 'following' | 'followers'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +26,7 @@ const uploadingAvatar = ref(false)
 const prompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
 const likedPrompts = ref<Prompt[]>([])
+const historyPrompts = ref<Prompt[]>([])
 const followingUsers = ref<User[]>([])
 const followerUsers = ref<User[]>([])
 const followStatus = ref<FollowStatus | null>(null)
@@ -88,6 +89,9 @@ const activePromptList = computed(() => {
   if (activeLibraryTab.value === 'likes') {
     return likedPrompts.value
   }
+  if (activeLibraryTab.value === 'history') {
+    return historyPrompts.value
+  }
 
   return prompts.value
 })
@@ -109,6 +113,7 @@ const libraryTabs = computed(() => [
   { key: 'published' as const, label: '已发布', count: prompts.value.length },
   { key: 'favorites' as const, label: '收藏', count: favoritePrompts.value.length },
   { key: 'likes' as const, label: '点赞', count: likedPrompts.value.length },
+  { key: 'history' as const, label: '浏览', count: historyPrompts.value.length },
   { key: 'following' as const, label: '关注', count: followingUsers.value.length },
   { key: 'followers' as const, label: '粉丝', count: followerUsers.value.length }
 ])
@@ -241,15 +246,18 @@ const loadProfile = async () => {
     await userStore.fetchUserInfo()
     profileUser.value = userStore.userInfo
     try {
-      const [favoritesRes, likesRes] = await Promise.all([
+      const [favoritesRes, likesRes, historyRes] = await Promise.all([
         userApi.getFavoritePrompts(),
-        userApi.getLikedPrompts()
+        userApi.getLikedPrompts(),
+        userApi.getHistoryPrompts()
       ])
       favoritePrompts.value = favoritesRes.data
       likedPrompts.value = likesRes.data
+      historyPrompts.value = historyRes.data
     } catch {
       favoritePrompts.value = []
       likedPrompts.value = []
+      historyPrompts.value = []
     }
     await loadSocialData()
     followStatus.value = null
@@ -259,6 +267,7 @@ const loadProfile = async () => {
 
   favoritePrompts.value = []
   likedPrompts.value = []
+  historyPrompts.value = []
   followingUsers.value = []
   followerUsers.value = []
   activeLibraryTab.value = 'published'

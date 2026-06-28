@@ -329,12 +329,81 @@ func (s *MySQLPromptStore) Favorite(id int, userID int) (Prompt, bool, error) {
 	return s.applyEngagement("favorites", "favorites", id, userID)
 }
 
+func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Prompt{}, false, err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(`
+		INSERT INTO view_histories (user_id, prompt_id, viewed_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON DUPLICATE KEY UPDATE viewed_at = CURRENT_TIMESTAMP
+	`, userID, id)
+	if err != nil {
+		return Prompt{}, false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Prompt{}, false, err
+	}
+	applied := affected == 1
+	if applied {
+		if _, err := tx.Exec(`
+			UPDATE prompts SET views = views + 1 WHERE id = ? AND status = 1
+		`, id); err != nil {
+			return Prompt{}, false, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Prompt{}, false, err
+	}
+
+	prompt, found, err := s.FindByID(id)
+	if err != nil {
+		return Prompt{}, false, err
+	}
+	if !found {
+		return Prompt{}, false, errors.New("prompt not found")
+	}
+
+	return prompt, applied, nil
+}
+
 func (s *MySQLPromptStore) ListUserFavorites(userID int) ([]Prompt, error) {
 	return s.listUserEngagements("favorites", userID)
 }
 
 func (s *MySQLPromptStore) ListUserLikes(userID int) ([]Prompt, error) {
 	return s.listUserEngagements("likes", userID)
+}
+
+func (s *MySQLPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.category_id, c.name, p.user_id,
+			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
+			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
+			COALESCE(GROUP_CONCAT(pt.tag ORDER BY pt.id SEPARATOR '||'), '')
+		FROM view_histories vh
+		JOIN prompts p ON p.id = vh.prompt_id
+		JOIN categories c ON c.id = p.category_id
+		JOIN users u ON u.id = p.user_id
+		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
+		WHERE vh.user_id = ? AND p.status = 1
+		GROUP BY p.id, vh.viewed_at
+		ORDER BY vh.viewed_at DESC, p.id DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanPromptRows(rows)
 }
 
 func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prompt, error) {
@@ -363,6 +432,10 @@ func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prom
 	}
 	defer rows.Close()
 
+	return scanPromptRows(rows)
+}
+
+func scanPromptRows(rows *sql.Rows) ([]Prompt, error) {
 	list := make([]Prompt, 0)
 	for rows.Next() {
 		prompt, err := scanPrompt(rows.Scan)

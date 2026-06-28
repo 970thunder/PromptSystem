@@ -290,6 +290,14 @@ const loadDetail = async () => {
   }
 
   await promptStore.loadPromptDetail(promptId.value)
+  if (prompt.value && userStore.isLoggedIn) {
+    try {
+      const response = await promptApi.recordPromptView(prompt.value.id)
+      promptStore.mergePrompt(response.data.prompt)
+    } catch {
+      // Browsing should never block reading a prompt.
+    }
+  }
   await promptStore.loadPromptComments(promptId.value, commentSort.value)
   await loadFollowStatus()
 }

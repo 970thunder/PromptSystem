@@ -85,6 +85,7 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))
 	mux.HandleFunc("/api/v1/user/likes", s.withAuth(s.handleUserLikes))
+	mux.HandleFunc("/api/v1/user/history", s.withAuth(s.handleUserHistory))
 	mux.HandleFunc("/api/v1/user/following", s.withAuth(s.handleUserFollowing))
 	mux.HandleFunc("/api/v1/user/followers", s.withAuth(s.handleUserFollowers))
 	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
@@ -376,6 +377,15 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 				s.handlePromptFavorite(w, r, id)
 			}).ServeHTTP(w, r)
 			return
+		case "view":
+			if r.Method != http.MethodPost {
+				writeMethodNotAllowed(w)
+				return
+			}
+			s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+				s.handlePromptView(w, r, id)
+			}).ServeHTTP(w, r)
+			return
 		case "comments":
 			switch r.Method {
 			case http.MethodGet:
@@ -635,6 +645,34 @@ func (s *server) handlePromptFavorite(w http.ResponseWriter, r *http.Request, id
 	}
 
 	prompt, applied, err := s.promptStore.Favorite(id, userID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "prompt not found" {
+			status = http.StatusNotFound
+		}
+
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: promptActionResponse{
+			Prompt:  prompt,
+			Applied: applied,
+		},
+	})
+}
+
+func (s *server) handlePromptView(w http.ResponseWriter, r *http.Request, id int) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	prompt, applied, err := s.promptStore.RecordView(id, userID)
 	if err != nil {
 		status := http.StatusBadRequest
 		if err.Error() == "prompt not found" {

@@ -21,8 +21,10 @@ type PromptManager interface {
 	Delete(id int, userID int) error
 	Like(id int, userID int) (Prompt, bool, error)
 	Favorite(id int, userID int) (Prompt, bool, error)
+	RecordView(id int, userID int) (Prompt, bool, error)
 	ListUserFavorites(userID int) ([]Prompt, error)
 	ListUserLikes(userID int) ([]Prompt, error)
+	ListUserHistory(userID int) ([]Prompt, error)
 }
 
 type CommentManager interface {

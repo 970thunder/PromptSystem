@@ -233,6 +233,31 @@ func (s *server) handleUserLikes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *server) handleUserHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	list, err := s.promptStore.ListUserHistory(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load history"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.Prompt]{
+		Code:    200,
+		Message: "Success",
+		Data:    list,
+	})
+}
+
 func (s *server) handleUserFollowing(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

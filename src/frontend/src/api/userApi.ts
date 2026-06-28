@@ -35,6 +35,10 @@ export const userApi = {
     return request.get('/user/likes')
   },
 
+  getHistoryPrompts(): Promise<ApiResponse<Prompt[]>> {
+    return request.get('/user/history')
+  },
+
   getFollowingUsers(): Promise<ApiResponse<User[]>> {
     return request.get('/user/following')
   },
