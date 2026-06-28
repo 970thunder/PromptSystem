@@ -23,6 +23,7 @@ export const promptApi = {
     userId?: number
     keyword?: string
     model?: string
+    tag?: string
   }): Promise<ApiResponse<PageResponse<Prompt>>> {
     return request.get('/prompts', { params })
   },
@@ -118,6 +119,7 @@ export const promptApi = {
     categoryId?: number
     model?: string
     sort?: string
+    tag?: string
   }): Promise<ApiResponse<PageResponse<Prompt>>> {
     return request.get('/prompts/search', { params })
   }

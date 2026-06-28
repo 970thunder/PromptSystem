@@ -149,6 +149,7 @@ func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 	sortBy := query.Get("sort")
 	keyword := query.Get("keyword")
 	model := query.Get("model")
+	tag := query.Get("tag")
 
 	list, err := s.promptStore.Query(store.PromptFilter{
 		CategoryID: categoryID,
@@ -156,6 +157,7 @@ func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 		UserID:     userID,
 		Keyword:    keyword,
 		Model:      model,
+		Tag:        tag,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load prompts"})
@@ -197,6 +199,7 @@ func (s *server) handlePromptSearch(w http.ResponseWriter, r *http.Request) {
 	sortBy := query.Get("sort")
 	keyword := query.Get("keyword")
 	model := query.Get("model")
+	tag := query.Get("tag")
 
 	list, err := s.promptStore.Query(store.PromptFilter{
 		CategoryID: categoryID,
@@ -204,6 +207,7 @@ func (s *server) handlePromptSearch(w http.ResponseWriter, r *http.Request) {
 		UserID:     userID,
 		Keyword:    keyword,
 		Model:      model,
+		Tag:        tag,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to search prompts"})

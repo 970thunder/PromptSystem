@@ -48,6 +48,12 @@ func (s *MySQLPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
 		conditions = append(conditions, "LOWER(p.model) LIKE ?")
 		args = append(args, "%"+strings.ToLower(model)+"%")
 	}
+	if tag := strings.TrimSpace(filter.Tag); tag != "" {
+		conditions = append(conditions, `EXISTS (
+			SELECT 1 FROM prompt_tags filter_tags WHERE filter_tags.prompt_id = p.id AND LOWER(filter_tags.tag) = ?
+		)`)
+		args = append(args, strings.ToLower(tag))
+	}
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
 		like := "%" + strings.ToLower(keyword) + "%"
 		conditions = append(conditions, `(LOWER(p.title) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(p.content) LIKE ? OR LOWER(p.system_prompt) LIKE ? OR LOWER(c.name) LIKE ? OR LOWER(p.model) LIKE ? OR LOWER(u.username) LIKE ? OR EXISTS (

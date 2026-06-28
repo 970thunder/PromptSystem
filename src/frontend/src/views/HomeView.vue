@@ -11,6 +11,7 @@ const promptStore = usePromptStore()
 const userStore = useUserStore()
 const router = useRouter()
 const activeCategoryId = ref<number | 'all'>('all')
+const activeTag = ref<string>('')
 const userMenuOpen = ref(false)
 const mobileNavOpen = ref(false)
 const { visible: categoryBarVisible } = useScrollCategoryBar()
@@ -44,6 +45,7 @@ onMounted(() => {
 
 const handleCategoryChange = async (categoryId: number | 'all') => {
   activeCategoryId.value = categoryId
+  activeTag.value = ''
   await promptStore.loadHomeFeed(categoryId === 'all' ? undefined : categoryId)
 }
 
@@ -104,6 +106,20 @@ const handleLogout = async () => {
 const closeMenus = () => {
   userMenuOpen.value = false
   mobileNavOpen.value = false
+}
+
+const handleTagChange = async (tag: string) => {
+  activeTag.value = activeTag.value === tag ? '' : tag
+  await promptStore.loadHomeFeed(
+    activeCategoryId.value === 'all' ? undefined : activeCategoryId.value,
+    activeTag.value || undefined
+  )
+}
+
+const clearFilters = async () => {
+  activeCategoryId.value = 'all'
+  activeTag.value = ''
+  await promptStore.loadHomeFeed()
 }
 
 const loadMore = async () => {
@@ -314,6 +330,34 @@ const loadMore = async () => {
       </div>
 
       <section
+        v-if="promptStore.hotTags.length > 0"
+        class="tag-filter"
+      >
+        <div class="tag-filter__head">
+          <span class="tag-filter__title">热门标签</span>
+          <button
+            v-if="activeTag || activeCategoryId !== 'all'"
+            class="tag-filter__clear"
+            @click="clearFilters"
+          >
+            清除筛选
+          </button>
+        </div>
+        <div class="tag-filter__list">
+          <button
+            v-for="tag in promptStore.hotTags"
+            :key="tag.name"
+            class="tag-filter__chip"
+            :class="{ 'tag-filter__chip--active': activeTag === tag.name }"
+            @click="handleTagChange(tag.name)"
+          >
+            #{{ tag.name }}
+            <span>{{ tag.count }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section
         v-if="featuredPrompt"
         class="featured-section"
       >
@@ -392,6 +436,7 @@ const loadMore = async () => {
         </div>
         <div class="gallery-header__count">
           {{ promptStore.total || visiblePrompts.length }} 条结果
+          <span v-if="activeTag"> · #{{ activeTag }}</span>
         </div>
       </section>
 
@@ -641,6 +686,43 @@ const loadMore = async () => {
 
 .category-btn--active {
   @apply border-transparent bg-black text-white;
+}
+
+.tag-filter {
+  @apply mb-6 rounded-[20px] border border-black/10 bg-white px-4 py-3;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.tag-filter__head {
+  @apply mb-3 flex items-center justify-between gap-3;
+}
+
+.tag-filter__title {
+  @apply text-sm text-[#777777];
+}
+
+.tag-filter__clear {
+  @apply rounded-full px-3 py-1 text-xs text-[#777777] transition hover:bg-[#f6f4ef] hover:text-black;
+}
+
+.tag-filter__list {
+  @apply flex flex-wrap gap-2;
+}
+
+.tag-filter__chip {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-sm text-[#555555] transition hover:border-black/20 hover:text-black;
+}
+
+.tag-filter__chip span {
+  @apply ml-1 text-xs text-[#999999];
+}
+
+.tag-filter__chip--active {
+  @apply border-transparent bg-black text-white hover:text-white;
+}
+
+.tag-filter__chip--active span {
+  @apply text-white/60;
 }
 
 .featured-section {

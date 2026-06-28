@@ -33,6 +33,7 @@ type PromptFilter struct {
 	UserID     int
 	Keyword    string
 	Model      string
+	Tag        string
 }
 
 func FilterPrompts(categoryID int, sortBy string) []Prompt {
@@ -49,6 +50,7 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 	list := make([]Prompt, 0, len(prompts))
 	keyword := strings.ToLower(strings.TrimSpace(filter.Keyword))
 	model := strings.ToLower(strings.TrimSpace(filter.Model))
+	tag := strings.ToLower(strings.TrimSpace(filter.Tag))
 
 	for _, prompt := range prompts {
 		if prompt.Status != 1 {
@@ -61,6 +63,9 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 			continue
 		}
 		if model != "" && !strings.Contains(strings.ToLower(prompt.Model), model) {
+			continue
+		}
+		if tag != "" && !hasPromptTag(prompt, tag) {
 			continue
 		}
 		if keyword != "" && !matchesKeyword(prompt, keyword) {
@@ -82,6 +87,16 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 	}
 
 	return list
+}
+
+func hasPromptTag(prompt Prompt, tag string) bool {
+	for _, item := range prompt.Tags {
+		if strings.ToLower(strings.TrimSpace(item)) == tag {
+			return true
+		}
+	}
+
+	return false
 }
 
 func sanitizeTags(tags []string) []string {
