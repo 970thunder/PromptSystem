@@ -55,6 +55,38 @@ const visiblePrompts = computed(() => {
 
 const featuredPrompt = computed(() => visiblePrompts.value[0] ?? promptStore.prompts[0] ?? null)
 
+const activityCards = computed(() => {
+  const [first, second, third] = visiblePrompts.value
+  return [
+    {
+      id: 'weekly-visual',
+      title: first?.title ?? '本周视觉 Prompt 精选',
+      desc: first?.description ?? '精选高完成度图像案例，适合直接拆解参数和镜头语言。',
+      meta: 'Weekly Pick',
+      image: first ? resolveCover(first, 0) : fallbackCoverMap[101],
+      to: first ? `/prompt/${first.id}` : '/search'
+    },
+    {
+      id: 'creator-lab',
+      title: second?.title ?? '创作者工作台开放',
+      desc: second?.description ?? '从灵感、草稿到发布，把可复用 Prompt 沉淀成个人作品集。',
+      meta: 'Creator Lab',
+      image: second ? resolveCover(second, 1) : fallbackCoverMap[102],
+      to: second ? `/prompt/${second.id}` : '/publish'
+    },
+    {
+      id: 'model-focus',
+      title: third?.title ?? '模型参数灵感包',
+      desc: third?.description ?? '收藏高质量案例，快速找到适配不同模型的参数组合。',
+      meta: 'Model Focus',
+      image: third ? resolveCover(third, 2) : fallbackCoverMap[103],
+      to: third ? `/prompt/${third.id}` : '/search'
+    }
+  ]
+})
+
+const featuredRailPrompts = computed(() => visiblePrompts.value.slice(0, 8))
+
 const curatedPrompts = computed(() =>
   visiblePrompts.value.map((prompt, index) => ({
     ...prompt,
@@ -354,6 +386,78 @@ const loadMore = async () => {
             #{{ tag.name }}
             <span>{{ tag.count }}</span>
           </button>
+        </div>
+      </section>
+
+      <section class="activity-section">
+        <div class="activity-section__head">
+          <div>
+            <div class="gallery-header__label">
+              活动
+            </div>
+            <h2 class="activity-section__title">
+              正在被收藏的创作方向
+            </h2>
+          </div>
+          <RouterLink
+            to="/search"
+            class="activity-section__more"
+          >
+            查看更多
+          </RouterLink>
+        </div>
+
+        <div class="activity-banners">
+          <RouterLink
+            v-for="activity in activityCards"
+            :key="activity.id"
+            :to="activity.to"
+            class="activity-banner"
+          >
+            <img
+              :src="activity.image"
+              :alt="activity.title"
+              class="activity-banner__image"
+            >
+            <div class="activity-banner__overlay" />
+            <div class="activity-banner__content">
+              <div class="activity-banner__meta">
+                {{ activity.meta }}
+              </div>
+              <h3 class="activity-banner__title">
+                {{ activity.title }}
+              </h3>
+              <p class="activity-banner__desc">
+                {{ activity.desc }}
+              </p>
+            </div>
+          </RouterLink>
+        </div>
+
+        <div
+          v-if="featuredRailPrompts.length > 0"
+          class="featured-rail"
+        >
+          <RouterLink
+            v-for="(prompt, index) in featuredRailPrompts"
+            :key="prompt.id"
+            :to="`/prompt/${prompt.id}`"
+            class="featured-rail__item"
+          >
+            <img
+              :src="resolveCover(prompt, index)"
+              :alt="prompt.title"
+              class="featured-rail__image"
+            >
+            <div class="featured-rail__body">
+              <div class="featured-rail__meta">
+                {{ prompt.categoryName }} · {{ prompt.model }}
+              </div>
+              <div class="featured-rail__title">
+                {{ prompt.title }}
+              </div>
+            </div>
+          </RouterLink>
         </div>
       </section>
 
@@ -723,6 +827,90 @@ const loadMore = async () => {
 
 .tag-filter__chip--active span {
   @apply text-white/60;
+}
+
+.activity-section {
+  @apply mb-6 rounded-[24px] border border-black/10 bg-white p-4;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.activity-section__head {
+  @apply mb-4 flex items-end justify-between gap-4;
+}
+
+.activity-section__title {
+  @apply mt-1 text-xl font-semibold text-black;
+}
+
+.activity-section__more {
+  @apply shrink-0 rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm text-[#555555] transition hover:border-black/20 hover:text-black;
+}
+
+.activity-banners {
+  @apply grid gap-3 lg:grid-cols-3;
+}
+
+.activity-banner {
+  @apply relative block h-[220px] overflow-hidden rounded-[20px] bg-black;
+}
+
+.activity-banner__image {
+  @apply h-full w-full object-cover transition duration-500;
+}
+
+.activity-banner:hover .activity-banner__image {
+  @apply scale-[1.03];
+}
+
+.activity-banner__overlay {
+  @apply absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent;
+}
+
+.activity-banner__content {
+  @apply absolute inset-x-0 bottom-0 p-4 text-white;
+}
+
+.activity-banner__meta {
+  @apply text-xs uppercase tracking-[0.18em] text-white/65;
+}
+
+.activity-banner__title {
+  @apply mt-2 line-clamp-2 text-lg font-semibold leading-tight;
+}
+
+.activity-banner__desc {
+  @apply mt-2 line-clamp-2 text-sm leading-5 text-white/70;
+}
+
+.featured-rail {
+  @apply mt-3 flex gap-3 overflow-x-auto pb-1;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.featured-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.featured-rail__item {
+  @apply grid w-[260px] shrink-0 grid-cols-[86px_1fr] overflow-hidden rounded-[18px] border border-black/10 bg-[#f8f6f1] transition hover:border-black/20 hover:bg-white;
+  scroll-snap-align: start;
+}
+
+.featured-rail__image {
+  @apply h-full min-h-[92px] w-full object-cover;
+}
+
+.featured-rail__body {
+  @apply min-w-0 p-3;
+}
+
+.featured-rail__meta {
+  @apply truncate text-xs text-[#777777];
+}
+
+.featured-rail__title {
+  @apply mt-2 line-clamp-2 text-sm font-medium leading-5 text-black;
 }
 
 .featured-section {
