@@ -65,6 +65,20 @@ const coverImage = computed(() => {
 })
 
 const showCoverImage = computed(() => isDisplayableCover(prompt.value?.cover))
+const shareUrl = computed(() => {
+  if (!prompt.value) {
+    return window.location.href
+  }
+
+  return `${window.location.origin}/prompt/${prompt.value.id}`
+})
+const shareText = computed(() => {
+  if (!prompt.value) {
+    return ''
+  }
+
+  return `${prompt.value.title} - ${prompt.value.description}`
+})
 
 const copyText = async (label: string, text: string) => {
   if (!text.trim()) {
@@ -78,6 +92,32 @@ const copyText = async (label: string, text: string) => {
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
+}
+
+const handleShare = async () => {
+  if (!prompt.value) {
+    return
+  }
+
+  const payload = {
+    title: prompt.value.title,
+    text: shareText.value,
+    url: shareUrl.value
+  }
+
+  if (navigator.share) {
+    try {
+      await navigator.share(payload)
+      message.success('分享面板已打开')
+      return
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+    }
+  }
+
+  await copyText('分享链接', shareUrl.value)
 }
 
 const statCards = computed(() => {
@@ -439,6 +479,12 @@ watch(commentSort, async () => {
                     @click="handleFavorite"
                   >
                     {{ favoriting ? '收藏中...' : `收藏 · ${prompt.favorites.toLocaleString()}` }}
+                  </button>
+                  <button
+                    class="detail-btn-share"
+                    @click="handleShare"
+                  >
+                    分享
                   </button>
                 </div>
 
@@ -931,6 +977,10 @@ watch(commentSort, async () => {
 
 .detail-btn-favorite {
   @apply rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70;
+}
+
+.detail-btn-share {
+  @apply rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black;
 }
 
 .detail-stat-grid {
