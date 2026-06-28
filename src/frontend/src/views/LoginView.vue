@@ -112,6 +112,15 @@ const handleGitHubLogin = () => {
             演示账号：`astra@example.com` / `PromptOS123!`
           </div>
 
+          <div class="auth-card__actions">
+            <RouterLink
+              to="/forgot-password"
+              class="auth-card__link"
+            >
+              忘记密码？
+            </RouterLink>
+          </div>
+
           <div class="auth-card__footer">
             还没有账号？
             <RouterLink
@@ -191,6 +200,10 @@ const handleGitHubLogin = () => {
 
 .auth-card__hint {
   @apply mt-5;
+}
+
+.auth-card__actions {
+  @apply mt-4 text-right text-sm;
 }
 
 .auth-card__footer {

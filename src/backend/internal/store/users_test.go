@@ -24,6 +24,26 @@ func TestUserStoreRegisterAndAuthenticate(t *testing.T) {
 	}
 }
 
+func TestUserStoreResetPassword(t *testing.T) {
+	userStore := NewUserStore()
+
+	if _, err := userStore.Register("Reset User", "reset@example.com", "OldPass123!"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	if err := userStore.ResetPassword("reset@example.com", "NewPass123!"); err != nil {
+		t.Fatalf("ResetPassword() error = %v", err)
+	}
+
+	if _, err := userStore.Authenticate("reset@example.com", "OldPass123!"); err == nil {
+		t.Fatal("expected old password to fail after reset")
+	}
+
+	if _, err := userStore.Authenticate("reset@example.com", "NewPass123!"); err != nil {
+		t.Fatalf("Authenticate() with new password error = %v", err)
+	}
+}
+
 func TestUserStoreUpsertGitHubUserResolvesUsernameCollision(t *testing.T) {
 	userStore := NewUserStore()
 

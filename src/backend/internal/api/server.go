@@ -84,6 +84,7 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
 	mux.HandleFunc("/api/v1/user/captcha", s.handleCaptcha)
+	mux.HandleFunc("/api/v1/user/password/reset", s.handleResetPassword)
 	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))

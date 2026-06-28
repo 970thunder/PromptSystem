@@ -173,6 +173,35 @@ func (s *UserStore) Authenticate(email, password string) (AuthUser, error) {
 	return user, nil
 }
 
+func (s *UserStore) ResetPassword(email, password string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	if !IsValidEmail(email) {
+		return ErrInvalidEmail
+	}
+	if len(password) < 8 {
+		return ErrWeakPassword
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	userID, exists := s.emailIndex[email]
+	if !exists {
+		return ErrUserNotFound
+	}
+
+	user := s.users[userID]
+	user.PasswordHash = string(passwordHash)
+	s.users[userID] = user
+	return nil
+}
+
 func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	avatar = strings.TrimSpace(avatar)

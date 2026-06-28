@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '注册' }
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/ForgotPasswordView.vue'),
+    meta: { title: '找回密码' }
+  },
+  {
     path: '/auth/callback',
     name: 'AuthCallback',
     component: () => import('@/views/AuthCallbackView.vue'),
@@ -79,7 +85,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if ((to.path === '/login' || to.path === '/register') && userStore.isLoggedIn) {
+  if ((to.path === '/login' || to.path === '/register' || to.path === '/forgot-password') && userStore.isLoggedIn) {
     return '/'
   }
 

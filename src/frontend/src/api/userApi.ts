@@ -8,6 +8,7 @@ import type {
   LoginResponse,
   Prompt,
   RegisterRequest,
+  ResetPasswordRequest,
   User
 } from '@/types'
 
@@ -18,6 +19,10 @@ export const userApi = {
 
   register(data: RegisterRequest): Promise<ApiResponse<LoginResponse>> {
     return request.post('/user/register', data)
+  },
+
+  resetPassword(data: ResetPasswordRequest): Promise<ApiResponse<null>> {
+    return request.post('/user/password/reset', data)
   },
 
   getUserInfo(): Promise<ApiResponse<User>> {

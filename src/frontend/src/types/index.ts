@@ -170,6 +170,12 @@ export interface RegisterRequest {
   captcha: string
 }
 
+export interface ResetPasswordRequest {
+  email: string
+  password: string
+  captcha: string
+}
+
 export interface LoginResponse {
   token: string
   user: User

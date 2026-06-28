@@ -91,6 +91,47 @@ func (s *MySQLUserStore) Authenticate(email, password string) (AuthUser, error) 
 	return user, nil
 }
 
+func (s *MySQLUserStore) ResetPassword(email, password string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	if !IsValidEmail(email) {
+		return ErrInvalidEmail
+	}
+	if len(password) < 8 {
+		return ErrWeakPassword
+	}
+
+	if _, found, err := s.findByEmail(email); err != nil {
+		return err
+	} else if !found {
+		return ErrUserNotFound
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	result, err := s.db.Exec(`
+		UPDATE users
+		SET password = ?
+		WHERE email = ?
+	`, string(passwordHash), email)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
 func (s *MySQLUserStore) FindByID(id int) (AuthUser, bool) {
 	row := s.db.QueryRow(`SELECT`+userSelectColumns+` FROM users WHERE id = ?`, id)
 

@@ -34,6 +34,12 @@ type captchaRequest struct {
 	Email string `json:"email"`
 }
 
+type resetPasswordRequest struct {
+	Email    string `json:"email"`
+	Captcha  string `json:"captcha"`
+	Password string `json:"password"`
+}
+
 type captchaResponse struct {
 	ExpiresInSeconds int    `json:"expiresInSeconds"`
 	DevCode          string `json:"devCode,omitempty"`
@@ -131,6 +137,50 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			User:  store.ToPublicUser(user),
 		},
 	})
+}
+
+func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload resetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+		return
+	}
+
+	if strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Email and password are required"})
+		return
+	}
+
+	if !store.IsValidEmail(payload.Email) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+		return
+	}
+
+	if !s.captcha.verify(payload.Email, payload.Captcha) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid or expired captcha"})
+		return
+	}
+
+	if err := s.userStore.ResetPassword(payload.Email, payload.Password); err != nil {
+		switch {
+		case errors.Is(err, store.ErrUserNotFound):
+			writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "User not found"})
+		case errors.Is(err, store.ErrInvalidEmail):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+		case errors.Is(err, store.ErrWeakPassword):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be at least 8 characters"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Reset password failed"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
 }
 
 func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {

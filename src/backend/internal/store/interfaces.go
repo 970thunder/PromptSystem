@@ -3,6 +3,7 @@ package store
 type UserManager interface {
 	Register(username, email, password string) (AuthUser, error)
 	Authenticate(email, password string) (AuthUser, error)
+	ResetPassword(email, password string) error
 	FindByID(id int) (AuthUser, bool)
 	UpdateProfile(id int, username, bio, avatar string) (AuthUser, error)
 	UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error)
