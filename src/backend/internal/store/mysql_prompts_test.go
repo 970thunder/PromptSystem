@@ -16,28 +16,29 @@ func TestScanPromptHandlesNullUserBioAndAvatar(t *testing.T) {
 		*(dest[1].(*string)) = "Test Prompt"
 		*(dest[2].(*sql.NullString)) = sql.NullString{String: "desc", Valid: true}
 		*(dest[3].(*sql.NullString)) = sql.NullString{}
-		*(dest[4].(*string)) = "content body"
-		*(dest[5].(*sql.NullString)) = sql.NullString{}
-		*(dest[6].(*string)) = "gpt-4"
-		*(dest[7].(*sql.NullString)) = sql.NullString{}
-		*(dest[8].(*int)) = 1
-		*(dest[9].(*string)) = "摄影"
-		*(dest[10].(*int)) = 42
-		*(dest[11].(*string)) = "octocat"
-		*(dest[12].(*sql.NullString)) = sql.NullString{}
-		*(dest[13].(*string)) = "octocat@users.noreply.github.com"
-		*(dest[14].(*sql.NullString)) = sql.NullString{}
-		*(dest[15].(*int)) = 1
-		*(dest[16].(*int)) = 0
-		*(dest[17].(*int)) = 1
-		*(dest[18].(*time.Time)) = userCreatedAt
-		*(dest[19].(*int)) = 10
-		*(dest[20].(*int)) = 2
-		*(dest[21].(*int)) = 1
+		*(dest[4].(*sql.NullString)) = sql.NullString{String: `["https://example.com/a.png"]`, Valid: true}
+		*(dest[5].(*string)) = "content body"
+		*(dest[6].(*sql.NullString)) = sql.NullString{}
+		*(dest[7].(*string)) = "gpt-4"
+		*(dest[8].(*sql.NullString)) = sql.NullString{}
+		*(dest[9].(*int)) = 1
+		*(dest[10].(*string)) = "摄影"
+		*(dest[11].(*int)) = 42
+		*(dest[12].(*string)) = "octocat"
+		*(dest[13].(*sql.NullString)) = sql.NullString{}
+		*(dest[14].(*string)) = "octocat@users.noreply.github.com"
+		*(dest[15].(*sql.NullString)) = sql.NullString{}
+		*(dest[16].(*int)) = 1
+		*(dest[17].(*int)) = 0
+		*(dest[18].(*int)) = 1
+		*(dest[19].(*time.Time)) = userCreatedAt
+		*(dest[20].(*int)) = 10
+		*(dest[21].(*int)) = 2
 		*(dest[22].(*int)) = 1
-		*(dest[23].(*time.Time)) = promptCreatedAt
-		*(dest[24].(*time.Time)) = promptUpdatedAt
-		*(dest[25].(*string)) = "tag1||tag2"
+		*(dest[23].(*int)) = 1
+		*(dest[24].(*time.Time)) = promptCreatedAt
+		*(dest[25].(*time.Time)) = promptUpdatedAt
+		*(dest[26].(*string)) = "tag1||tag2"
 		return nil
 	})
 	if err != nil {
@@ -53,6 +54,9 @@ func TestScanPromptHandlesNullUserBioAndAvatar(t *testing.T) {
 	if prompt.Cover != "" || prompt.SystemPrompt != "" {
 		t.Fatalf("expected empty cover/system_prompt for NULL columns, got cover=%q system_prompt=%q", prompt.Cover, prompt.SystemPrompt)
 	}
+	if len(prompt.Images) != 1 || prompt.Images[0] != "https://example.com/a.png" {
+		t.Fatalf("unexpected images: %+v", prompt.Images)
+	}
 	if len(prompt.Tags) != 2 || prompt.Tags[0] != "tag1" || prompt.Tags[1] != "tag2" {
 		t.Fatalf("unexpected tags: %+v", prompt.Tags)
 	}
@@ -66,28 +70,29 @@ func TestScanPromptHandlesNullParams(t *testing.T) {
 		*(dest[1].(*string)) = "Title"
 		*(dest[2].(*sql.NullString)) = sql.NullString{}
 		*(dest[3].(*sql.NullString)) = sql.NullString{}
-		*(dest[4].(*string)) = "content"
-		*(dest[5].(*sql.NullString)) = sql.NullString{}
-		*(dest[6].(*string)) = ""
-		*(dest[7].(*sql.NullString)) = sql.NullString{}
-		*(dest[8].(*int)) = 1
-		*(dest[9].(*string)) = "摄影"
-		*(dest[10].(*int)) = 1
-		*(dest[11].(*string)) = "user"
-		*(dest[12].(*sql.NullString)) = sql.NullString{}
-		*(dest[13].(*string)) = "user@example.com"
-		*(dest[14].(*sql.NullString)) = sql.NullString{}
-		*(dest[15].(*int)) = 1
-		*(dest[16].(*int)) = 0
-		*(dest[17].(*int)) = 1
-		*(dest[18].(*time.Time)) = now
-		*(dest[19].(*int)) = 0
+		*(dest[4].(*sql.NullString)) = sql.NullString{}
+		*(dest[5].(*string)) = "content"
+		*(dest[6].(*sql.NullString)) = sql.NullString{}
+		*(dest[7].(*string)) = ""
+		*(dest[8].(*sql.NullString)) = sql.NullString{}
+		*(dest[9].(*int)) = 1
+		*(dest[10].(*string)) = "摄影"
+		*(dest[11].(*int)) = 1
+		*(dest[12].(*string)) = "user"
+		*(dest[13].(*sql.NullString)) = sql.NullString{}
+		*(dest[14].(*string)) = "user@example.com"
+		*(dest[15].(*sql.NullString)) = sql.NullString{}
+		*(dest[16].(*int)) = 1
+		*(dest[17].(*int)) = 0
+		*(dest[18].(*int)) = 1
+		*(dest[19].(*time.Time)) = now
 		*(dest[20].(*int)) = 0
 		*(dest[21].(*int)) = 0
-		*(dest[22].(*int)) = 1
-		*(dest[23].(*time.Time)) = now
+		*(dest[22].(*int)) = 0
+		*(dest[23].(*int)) = 1
 		*(dest[24].(*time.Time)) = now
-		*(dest[25].(*string)) = ""
+		*(dest[25].(*time.Time)) = now
+		*(dest[26].(*string)) = ""
 		return nil
 	})
 	if err != nil {

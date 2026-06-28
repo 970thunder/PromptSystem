@@ -19,7 +19,7 @@ func NewMySQLPromptStore(db *sql.DB) *MySQLPromptStore {
 func (s *MySQLPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
 	baseQuery := `
 		SELECT
-			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
 			p.category_id, c.name, p.user_id,
 			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
 			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
@@ -112,7 +112,7 @@ func (s *MySQLPromptStore) FindOwnedByID(id int, userID int) (Prompt, bool, erro
 func (s *MySQLPromptStore) findOne(whereClause string, args ...any) (Prompt, bool, error) {
 	row := s.db.QueryRow(`
 		SELECT
-			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
 			p.category_id, c.name, p.user_id,
 			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
 			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
@@ -153,14 +153,15 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 
 	result, err := tx.Exec(`
 		INSERT INTO prompts (
-			title, description, cover, content, system_prompt, model, params,
+			title, description, cover, images, content, system_prompt, model, params,
 			category_id, user_id, views, likes, favorites, status
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
 	`,
 		strings.TrimSpace(input.Title),
 		strings.TrimSpace(input.Description),
 		strings.TrimSpace(input.Cover),
+		mustJSON(sanitizeImages(input.Images)),
 		strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.SystemPrompt),
 		strings.TrimSpace(input.Model),
@@ -199,6 +200,7 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 			Title:        strings.TrimSpace(input.Title),
 			Description:  strings.TrimSpace(input.Description),
 			Cover:        strings.TrimSpace(input.Cover),
+			Images:       sanitizeImages(input.Images),
 			Content:      strings.TrimSpace(input.Content),
 			SystemPrompt: strings.TrimSpace(input.SystemPrompt),
 			Model:        strings.TrimSpace(input.Model),
@@ -247,12 +249,13 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 
 	if _, err := tx.Exec(`
 		UPDATE prompts
-		SET title = ?, description = ?, cover = ?, content = ?, system_prompt = ?, model = ?, params = ?, category_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+		SET title = ?, description = ?, cover = ?, images = ?, content = ?, system_prompt = ?, model = ?, params = ?, category_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ? AND user_id = ? AND status <> -1
 	`,
 		strings.TrimSpace(input.Title),
 		strings.TrimSpace(input.Description),
 		strings.TrimSpace(input.Cover),
+		mustJSON(sanitizeImages(input.Images)),
 		strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.SystemPrompt),
 		strings.TrimSpace(input.Model),
@@ -290,6 +293,7 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 			Title:        strings.TrimSpace(input.Title),
 			Description:  strings.TrimSpace(input.Description),
 			Cover:        strings.TrimSpace(input.Cover),
+			Images:       sanitizeImages(input.Images),
 			Content:      strings.TrimSpace(input.Content),
 			SystemPrompt: strings.TrimSpace(input.SystemPrompt),
 			Model:        strings.TrimSpace(input.Model),
@@ -412,7 +416,7 @@ func (s *MySQLPromptStore) ListUserLikes(userID int) ([]Prompt, error) {
 func (s *MySQLPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
 	rows, err := s.db.Query(`
 		SELECT
-			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
 			p.category_id, c.name, p.user_id,
 			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
 			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
@@ -437,7 +441,7 @@ func (s *MySQLPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
 func (s *MySQLPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {
 	rows, err := s.db.Query(`
 		SELECT
-			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
 			p.category_id, c.name, p.user_id,
 			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
 			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
@@ -465,7 +469,7 @@ func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prom
 
 	rows, err := s.db.Query(`
 		SELECT
-			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
 			p.category_id, c.name, p.user_id,
 			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
 			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
@@ -561,6 +565,7 @@ func scanPrompt(scan func(dest ...any) error) (Prompt, error) {
 		prompt          Prompt
 		description     sql.NullString
 		cover           sql.NullString
+		imagesRaw       sql.NullString
 		systemPrompt    sql.NullString
 		paramsRaw       sql.NullString
 		userAvatar      sql.NullString
@@ -576,6 +581,7 @@ func scanPrompt(scan func(dest ...any) error) (Prompt, error) {
 		&prompt.Title,
 		&description,
 		&cover,
+		&imagesRaw,
 		&prompt.Content,
 		&systemPrompt,
 		&prompt.Model,
@@ -608,6 +614,11 @@ func scanPrompt(scan func(dest ...any) error) (Prompt, error) {
 	}
 	if cover.Valid {
 		prompt.Cover = cover.String
+	}
+	if imagesRaw.Valid && strings.TrimSpace(imagesRaw.String) != "" {
+		if err := json.Unmarshal([]byte(imagesRaw.String), &prompt.Images); err != nil {
+			return Prompt{}, err
+		}
 	}
 	if systemPrompt.Valid {
 		prompt.SystemPrompt = systemPrompt.String
@@ -649,4 +660,13 @@ func splitTags(raw string) []string {
 	}
 
 	return result
+}
+
+func mustJSON(value any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "[]"
+	}
+
+	return string(encoded)
 }

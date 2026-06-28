@@ -20,6 +20,7 @@ import { renderMarkdownPreview } from '@/utils/markdownPreview'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const MAX_TAGS = 30
+const MAX_IMAGES = 12
 
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +30,7 @@ const promptStore = usePromptStore()
 const submitting = ref(false)
 const savingDraft = ref(false)
 const uploading = ref(false)
+const galleryUploading = ref(false)
 const loadingPrompt = ref(false)
 const selectedFileName = ref('')
 const tagInput = ref('')
@@ -60,6 +62,7 @@ const form = reactive<PublishPromptRequest>({
   title: '',
   description: '',
   cover: '',
+  images: [],
   content: '',
   systemPrompt: '',
   model: 'Midjourney v6',
@@ -174,6 +177,7 @@ onMounted(async () => {
       form.title = prompt.title
       form.description = prompt.description
       form.cover = prompt.cover
+      form.images = [...(prompt.images ?? [])]
       form.content = prompt.content
       form.systemPrompt = prompt.systemPrompt
       form.model = prompt.model
@@ -270,6 +274,50 @@ const handleCoverChange = async (event: Event) => {
   }
 }
 
+const handleGalleryImagesChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (files.length === 0) {
+    return
+  }
+
+  const remaining = MAX_IMAGES - form.images.length
+  if (remaining <= 0) {
+    message.warning(`最多上传 ${MAX_IMAGES} 张展示图`)
+    input.value = ''
+    return
+  }
+
+  const uploadFiles = files.slice(0, remaining)
+  if (files.length > remaining) {
+    message.warning(`最多上传 ${MAX_IMAGES} 张展示图，已自动截断`)
+  }
+
+  if (uploadFiles.some((file) => !file.type.startsWith('image/'))) {
+    message.error('请选择图片文件')
+    input.value = ''
+    return
+  }
+
+  galleryUploading.value = true
+  try {
+    for (const file of uploadFiles) {
+      const response = await promptApi.uploadCover(file)
+      if (!form.images.includes(response.data.url)) {
+        form.images.push(response.data.url)
+      }
+    }
+    message.success('展示图上传成功')
+  } finally {
+    galleryUploading.value = false
+    input.value = ''
+  }
+}
+
+const removeGalleryImage = (image: string) => {
+  form.images = form.images.filter((item) => item !== image)
+}
+
 const formatJsonContent = () => {
   if (!form.content.trim()) {
     message.warning('请先输入 JSON 内容')
@@ -316,6 +364,7 @@ const buildPayload = (status = 1): PublishPromptRequest => {
     title: form.title.trim(),
     description: form.description.trim(),
     cover: form.cover.trim(),
+    images: [...form.images],
     content: form.content.trim(),
     systemPrompt: useSystemPrompt.value ? form.systemPrompt.trim() : '',
     model: form.model.trim(),
@@ -475,6 +524,49 @@ const handleSaveDraft = async () => {
           >
             第一步需上传封面，完成后点击「下一步」
           </p>
+
+          <div
+            v-if="form.cover"
+            class="publish-gallery"
+          >
+            <div class="publish-gallery__head">
+              <span>附加展示图</span>
+              <span>{{ form.images.length }} / {{ MAX_IMAGES }}</span>
+            </div>
+            <div
+              v-if="form.images.length > 0"
+              class="publish-gallery__grid"
+            >
+              <div
+                v-for="image in form.images"
+                :key="image"
+                class="publish-gallery__item"
+              >
+                <img
+                  :src="resolveMediaUrl(image)"
+                  alt="展示图预览"
+                  class="publish-gallery__image"
+                >
+                <button
+                  class="publish-gallery__remove"
+                  type="button"
+                  @click="removeGalleryImage(image)"
+                >
+                  移除
+                </button>
+              </div>
+            </div>
+            <label class="publish-gallery__upload">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                class="hidden"
+                multiple
+                @change="handleGalleryImagesChange"
+              >
+              {{ galleryUploading ? '上传中...' : '上传展示图' }}
+            </label>
+          </div>
         </div>
       </section>
 
@@ -775,6 +867,14 @@ const handleSaveDraft = async () => {
                 </div>
                 <div class="publish-confirm__row">
                   <dt class="publish-confirm__label">
+                    展示图
+                  </dt>
+                  <dd class="publish-confirm__value">
+                    {{ form.images.length }} 张
+                  </dd>
+                </div>
+                <div class="publish-confirm__row">
+                  <dt class="publish-confirm__label">
                     系统提示词
                   </dt>
                   <dd class="publish-confirm__value">
@@ -811,7 +911,7 @@ const handleSaveDraft = async () => {
             <NButton
               secondary
               :loading="savingDraft"
-              :disabled="uploading || !canSaveDraft"
+              :disabled="uploading || galleryUploading || !canSaveDraft"
               @click="handleSaveDraft"
             >
               保存草稿
@@ -820,7 +920,7 @@ const handleSaveDraft = async () => {
               v-if="currentStep < wizardSteps.length - 1"
               type="primary"
               class="publish-primary-btn"
-              :disabled="!stepValid || uploading"
+              :disabled="!stepValid || uploading || galleryUploading"
               @click="goNext"
             >
               下一步
@@ -830,7 +930,7 @@ const handleSaveDraft = async () => {
               type="primary"
               class="publish-primary-btn"
               :loading="submitting"
-              :disabled="!canSubmit || uploading"
+              :disabled="!canSubmit || uploading || galleryUploading"
               @click="handleSubmit"
             >
               {{ isEditing ? '保存修改' : '发布提示词' }}
@@ -918,6 +1018,34 @@ const handleSaveDraft = async () => {
 
 .publish-cover-hint {
   @apply mt-4 text-center text-sm text-[#888888];
+}
+
+.publish-gallery {
+  @apply mt-4 rounded-[22px] border border-black/10 bg-white/70 p-4;
+}
+
+.publish-gallery__head {
+  @apply flex items-center justify-between gap-3 text-sm text-[#666666];
+}
+
+.publish-gallery__grid {
+  @apply mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4;
+}
+
+.publish-gallery__item {
+  @apply relative aspect-square overflow-hidden rounded-[14px] bg-black/5;
+}
+
+.publish-gallery__image {
+  @apply h-full w-full object-cover;
+}
+
+.publish-gallery__remove {
+  @apply absolute inset-x-1 bottom-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white transition hover:bg-black;
+}
+
+.publish-gallery__upload {
+  @apply mt-3 inline-flex cursor-pointer rounded-full bg-[#111111] px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80;
 }
 
 .publish-wizard {

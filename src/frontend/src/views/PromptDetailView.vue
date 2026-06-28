@@ -24,6 +24,7 @@ const activeReplyId = ref<number | null>(null)
 const commentDraft = ref('')
 const replyDrafts = ref<Record<number, string>>({})
 const commentSort = ref<'latest' | 'popular' | 'oldest'>('latest')
+const activeImageIndex = ref(0)
 
 const promptId = computed(() => Number(route.params.id))
 const prompt = computed(() => promptStore.currentPrompt)
@@ -56,15 +57,20 @@ const promptMeta = computed(() => {
   ]
 })
 
-const coverImage = computed(() => {
+const galleryImages = computed(() => {
   if (!prompt.value) {
-    return ''
+    return []
   }
 
-  return resolveMediaUrl(prompt.value.cover)
+  const images = [prompt.value.cover, ...(prompt.value.images ?? [])]
+    .filter((image) => isDisplayableCover(image))
+    .map((image) => resolveMediaUrl(image))
+
+  return Array.from(new Set(images))
 })
 
-const showCoverImage = computed(() => isDisplayableCover(prompt.value?.cover))
+const activeGalleryImage = computed(() => galleryImages.value[activeImageIndex.value] ?? '')
+const showCoverImage = computed(() => galleryImages.value.length > 0)
 const shareUrl = computed(() => {
   if (!prompt.value) {
     return window.location.href
@@ -79,6 +85,25 @@ const shareText = computed(() => {
 
   return `${prompt.value.title} - ${prompt.value.description}`
 })
+
+const setActiveImage = (index: number) => {
+  if (galleryImages.value.length === 0) {
+    activeImageIndex.value = 0
+    return
+  }
+
+  const next = Math.max(0, Math.min(index, galleryImages.value.length - 1))
+  activeImageIndex.value = next
+}
+
+const goImage = (direction: -1 | 1) => {
+  if (galleryImages.value.length <= 1) {
+    return
+  }
+
+  const next = (activeImageIndex.value + direction + galleryImages.value.length) % galleryImages.value.length
+  activeImageIndex.value = next
+}
 
 const copyText = async (label: string, text: string) => {
   if (!text.trim()) {
@@ -340,7 +365,10 @@ const loadDetail = async () => {
   }
   await promptStore.loadPromptComments(promptId.value, commentSort.value)
   await loadFollowStatus()
+  setActiveImage(0)
 }
+
+watch(galleryImages, () => setActiveImage(0))
 
 onMounted(loadDetail)
 watch(() => route.params.id, loadDetail)
@@ -392,10 +420,52 @@ watch(commentSort, async () => {
             >
               <div class="detail-cover-inner">
                 <img
-                  :src="coverImage"
+                  :src="activeGalleryImage"
                   :alt="prompt.title"
                   class="detail-cover-image"
                 >
+                <button
+                  v-if="galleryImages.length > 1"
+                  class="detail-gallery-nav detail-gallery-nav--prev"
+                  type="button"
+                  @click="goImage(-1)"
+                >
+                  上一张
+                </button>
+                <button
+                  v-if="galleryImages.length > 1"
+                  class="detail-gallery-nav detail-gallery-nav--next"
+                  type="button"
+                  @click="goImage(1)"
+                >
+                  下一张
+                </button>
+                <div
+                  v-if="galleryImages.length > 1"
+                  class="detail-gallery-counter"
+                >
+                  {{ activeImageIndex + 1 }} / {{ galleryImages.length }}
+                </div>
+              </div>
+
+              <div
+                v-if="galleryImages.length > 1"
+                class="detail-gallery-thumbs"
+              >
+                <button
+                  v-for="(image, index) in galleryImages"
+                  :key="image"
+                  class="detail-gallery-thumb"
+                  :class="{ 'detail-gallery-thumb--active': activeImageIndex === index }"
+                  type="button"
+                  @click="setActiveImage(index)"
+                >
+                  <img
+                    :src="image"
+                    :alt="`${prompt.title} ${index + 1}`"
+                    class="detail-gallery-thumb__image"
+                  >
+                </button>
               </div>
             </div>
 
@@ -899,11 +969,48 @@ watch(commentSort, async () => {
 }
 
 .detail-cover-inner {
-  @apply flex max-h-[420px] items-center justify-center overflow-hidden;
+  @apply relative flex max-h-[420px] items-center justify-center overflow-hidden;
 }
 
 .detail-cover-image {
   @apply max-h-[420px] max-w-full h-auto w-auto object-contain;
+}
+
+.detail-gallery-nav {
+  @apply absolute top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-2 text-xs font-medium text-white transition hover:bg-black;
+}
+
+.detail-gallery-nav--prev {
+  @apply left-4;
+}
+
+.detail-gallery-nav--next {
+  @apply right-4;
+}
+
+.detail-gallery-counter {
+  @apply absolute bottom-4 right-4 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white;
+}
+
+.detail-gallery-thumbs {
+  @apply flex gap-2 overflow-x-auto border-t border-black/10 bg-white p-3;
+  scrollbar-width: none;
+}
+
+.detail-gallery-thumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.detail-gallery-thumb {
+  @apply h-16 w-20 shrink-0 overflow-hidden rounded-[12px] border border-black/10 bg-[#f6f4ef] opacity-70 transition hover:opacity-100;
+}
+
+.detail-gallery-thumb--active {
+  @apply border-black opacity-100;
+}
+
+.detail-gallery-thumb__image {
+  @apply h-full w-full object-cover;
 }
 
 .detail-hero__grid {

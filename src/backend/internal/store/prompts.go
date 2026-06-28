@@ -17,6 +17,7 @@ type CreatePromptInput struct {
 	Title        string
 	Description  string
 	Cover        string
+	Images       []string
 	Content      string
 	SystemPrompt string
 	Model        string
@@ -203,6 +204,7 @@ func CreatePrompt(input CreatePromptInput) (Prompt, error) {
 		Title:        strings.TrimSpace(input.Title),
 		Description:  strings.TrimSpace(input.Description),
 		Cover:        strings.TrimSpace(input.Cover),
+		Images:       sanitizeImages(input.Images),
 		Content:      strings.TrimSpace(input.Content),
 		SystemPrompt: strings.TrimSpace(input.SystemPrompt),
 		Model:        strings.TrimSpace(input.Model),
@@ -250,6 +252,7 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 		prompts[index].Title = strings.TrimSpace(input.Title)
 		prompts[index].Description = strings.TrimSpace(input.Description)
 		prompts[index].Cover = strings.TrimSpace(input.Cover)
+		prompts[index].Images = sanitizeImages(input.Images)
 		prompts[index].Content = strings.TrimSpace(input.Content)
 		prompts[index].SystemPrompt = strings.TrimSpace(input.SystemPrompt)
 		prompts[index].Model = strings.TrimSpace(input.Model)
@@ -483,6 +486,27 @@ func normalizeTags(tags []string) []string {
 	}
 
 	return result
+}
+
+func sanitizeImages(images []string) []string {
+	seen := make(map[string]struct{}, len(images))
+	cleaned := make([]string, 0, len(images))
+	for _, raw := range images {
+		image := strings.TrimSpace(raw)
+		if image == "" {
+			continue
+		}
+		if _, exists := seen[image]; exists {
+			continue
+		}
+		seen[image] = struct{}{}
+		cleaned = append(cleaned, image)
+		if len(cleaned) >= 12 {
+			break
+		}
+	}
+
+	return cleaned
 }
 
 func findCategoryByID(categoryID int) (Category, bool) {

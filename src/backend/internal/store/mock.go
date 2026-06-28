@@ -23,6 +23,7 @@ type Prompt struct {
 	Title        string       `json:"title"`
 	Description  string       `json:"description"`
 	Cover        string       `json:"cover"`
+	Images       []string     `json:"images"`
 	Content      string       `json:"content"`
 	SystemPrompt string       `json:"systemPrompt"`
 	Model        string       `json:"model"`
@@ -77,10 +78,14 @@ func Categories() []Category {
 
 var prompts = []Prompt{
 	{
-		ID:           101,
-		Title:        "Brand Poster Prompt Builder",
-		Description:  "Turn a short slogan into polished Midjourney and SDXL prompt variants for campaign visuals and ecommerce launches.",
-		Cover:        "Aurora campaign board",
+		ID:          101,
+		Title:       "Brand Poster Prompt Builder",
+		Description: "Turn a short slogan into polished Midjourney and SDXL prompt variants for campaign visuals and ecommerce launches.",
+		Cover:       "Aurora campaign board",
+		Images: []string{
+			"https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80",
+			"https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
+		},
 		Content:      "You are a senior visual director. Turn the input slogan into cinematic prompt variants...",
 		SystemPrompt: "Act as a multidisciplinary art director and prompt engineer.",
 		Model:        "Midjourney v6",
@@ -108,10 +113,13 @@ var prompts = []Prompt{
 		UpdatedAt: "2026-05-15",
 	},
 	{
-		ID:           102,
-		Title:        "SaaS Landing Page Copy Rewrite",
-		Description:  "Input product positioning and competitor context, then generate homepage headlines, supporting copy, feature points, and CTA options.",
-		Cover:        "Copywriting desk",
+		ID:          102,
+		Title:       "SaaS Landing Page Copy Rewrite",
+		Description: "Input product positioning and competitor context, then generate homepage headlines, supporting copy, feature points, and CTA options.",
+		Cover:       "Copywriting desk",
+		Images: []string{
+			"https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
+		},
 		Content:      "Rewrite the landing page copy for a B2B SaaS company with a confident tone...",
 		SystemPrompt: "You are a conversion-focused SaaS copywriter.",
 		Model:        "GPT-4.1",
@@ -139,10 +147,13 @@ var prompts = []Prompt{
 		UpdatedAt: "2026-05-15",
 	},
 	{
-		ID:           103,
-		Title:        "Code Review Assistant",
-		Description:  "Review a PR diff, prioritize risks, call out regressions, and suggest targeted follow-up tests for engineering teams.",
-		Cover:        "Review terminal",
+		ID:          103,
+		Title:       "Code Review Assistant",
+		Description: "Review a PR diff, prioritize risks, call out regressions, and suggest targeted follow-up tests for engineering teams.",
+		Cover:       "Review terminal",
+		Images: []string{
+			"https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
+		},
 		Content:      "Review the code diff and prioritize bugs, regressions, and missing tests...",
 		SystemPrompt: "You are a meticulous senior engineer who reviews for correctness first.",
 		Model:        "GPT-4.1",

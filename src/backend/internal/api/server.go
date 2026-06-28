@@ -244,6 +244,7 @@ type promptPayload struct {
 	Title        string             `json:"title"`
 	Description  string             `json:"description"`
 	Cover        string             `json:"cover"`
+	Images       []string           `json:"images"`
 	Content      string             `json:"content"`
 	SystemPrompt string             `json:"systemPrompt"`
 	Model        string             `json:"model"`
@@ -313,6 +314,7 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		Title:        payload.Title,
 		Description:  payload.Description,
 		Cover:        payload.Cover,
+		Images:       payload.Images,
 		Content:      payload.Content,
 		SystemPrompt: payload.SystemPrompt,
 		Model:        payload.Model,
@@ -768,6 +770,7 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		Title:        payload.Title,
 		Description:  payload.Description,
 		Cover:        payload.Cover,
+		Images:       payload.Images,
 		Content:      payload.Content,
 		SystemPrompt: payload.SystemPrompt,
 		Model:        payload.Model,

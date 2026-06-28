@@ -40,6 +40,7 @@ CREATE TABLE prompts (
     title VARCHAR(200) NOT NULL,
     description VARCHAR(1000) DEFAULT '',
     cover VARCHAR(1024) DEFAULT '',
+    images JSON NULL COMMENT 'Additional result image URLs',
     content TEXT NOT NULL,
     system_prompt VARCHAR(2000) DEFAULT '',
     model VARCHAR(50) DEFAULT '',

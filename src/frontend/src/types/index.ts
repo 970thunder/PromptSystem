@@ -30,6 +30,7 @@ export interface Prompt {
   title: string
   description: string
   cover: string
+  images: string[]
   content: string
   systemPrompt: string
   model: string
@@ -194,6 +195,7 @@ export interface PublishPromptRequest {
   title: string
   description: string
   cover: string
+  images: string[]
   content: string
   systemPrompt: string
   model: string

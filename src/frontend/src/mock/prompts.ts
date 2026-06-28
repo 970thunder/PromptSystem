@@ -39,6 +39,10 @@ export const mockPrompts: Prompt[] = [
     title: 'Brand Poster Prompt Builder',
     description: 'Turn a short slogan into polished Midjourney and SDXL prompt variants for campaign visuals and ecommerce launches.',
     cover: 'Aurora campaign board',
+    images: [
+      'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80'
+    ],
     content: 'You are a senior visual director. Turn the input slogan into cinematic prompt variants...',
     systemPrompt: 'Act as a multidisciplinary art director and prompt engineer.',
     model: 'Midjourney v6',
@@ -70,6 +74,9 @@ export const mockPrompts: Prompt[] = [
     title: 'SaaS Landing Page Copy Rewrite',
     description: 'Input product positioning and competitor context, then generate homepage headlines, supporting copy, feature points, and CTA options.',
     cover: 'Copywriting desk',
+    images: [
+      'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80'
+    ],
     content: 'Rewrite the landing page copy for a B2B SaaS company with a confident tone...',
     systemPrompt: 'You are a conversion-focused SaaS copywriter.',
     model: 'GPT-4.1',
@@ -101,6 +108,9 @@ export const mockPrompts: Prompt[] = [
     title: 'Code Review Assistant',
     description: 'Review a PR diff, prioritize risks, call out regressions, and suggest targeted follow-up tests for engineering teams.',
     cover: 'Review terminal',
+    images: [
+      'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80'
+    ],
     content: 'Review the code diff and prioritize bugs, regressions, and missing tests...',
     systemPrompt: 'You are a meticulous senior engineer who reviews for correctness first.',
     model: 'GPT-4.1',
@@ -132,6 +142,7 @@ export const mockPrompts: Prompt[] = [
     title: 'Short Video Script Factory',
     description: 'Generate 15s, 30s, and 60s short-form video scripts from product selling points, complete with hook and pacing guidance.',
     cover: 'Studio storyboard',
+    images: [],
     content: 'Generate three short-form video scripts with hooks, scene pacing, and voiceover...',
     systemPrompt: 'You are a short-form video creative strategist.',
     model: 'Claude 3.7 Sonnet',
@@ -163,6 +174,7 @@ export const mockPrompts: Prompt[] = [
     title: 'Multi-Agent Research Coordinator',
     description: 'Break a research goal into parallel agent tasks, reporting contracts, and a practical merge plan for final synthesis.',
     cover: 'Coordination map',
+    images: [],
     content: 'Break down the research goal into parallel agents with a shared reporting contract...',
     systemPrompt: 'You are an operations-minded AI orchestration designer.',
     model: 'o3',
@@ -194,6 +206,7 @@ export const mockPrompts: Prompt[] = [
     title: 'Customer Support SOP Workflow',
     description: 'Generate customer support flows, escalation rules, and reusable response templates from docs, FAQs, and tone guidance.',
     cover: 'Support workflow board',
+    images: [],
     content: 'Create a customer support workflow with escalation rules and reusable reply templates...',
     systemPrompt: 'You are a CX operations architect.',
     model: 'GPT-4o',

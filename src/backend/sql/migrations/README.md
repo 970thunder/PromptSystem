@@ -25,5 +25,9 @@ Current files:
 - `0002_fix_seed_text_encoding.sql`
 - `0003_users_github_oauth.sql`
 - `0004_users_oauth_profile.sql`
+- `0005_image_categories_zh.sql`
+- `0006_comment_reports.sql`
+- `0007_view_histories.sql`
+- `0008_prompt_images.sql`
 
 The Go backend runs pending migrations automatically on startup when MySQL is available (`schema_migrations` table). Docker images include `sql/migrations` at `/app/sql/migrations`.
