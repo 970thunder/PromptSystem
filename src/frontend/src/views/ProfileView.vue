@@ -22,18 +22,25 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const savingProfile = ref(false)
+const uploadingAvatar = ref(false)
 const prompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
 const likedPrompts = ref<Prompt[]>([])
 const activeLibraryTab = ref<LibraryTab>('published')
 const profileUser = ref<User | null>(null)
+const avatarInput = ref<HTMLInputElement | null>(null)
 const profileForm = reactive({
   username: '',
-  bio: ''
+  bio: '',
+  avatar: ''
 })
 
 const viewedUserId = computed(() => Number(route.params.userId) || userStore.userInfo?.id || 0)
 const isOwnerView = computed(() => Boolean(userStore.userInfo && viewedUserId.value === userStore.userInfo.id))
+const resolvedAvatar = computed(() => {
+  const avatar = profileForm.avatar || profileUser.value?.avatar || ''
+  return avatar ? resolveMediaUrl(avatar) : ''
+})
 
 const fallbackCoverMap: Record<number, string> = {
   101: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
@@ -101,6 +108,7 @@ const syncProfileForm = () => {
 
   profileForm.username = profileUser.value.username
   profileForm.bio = profileUser.value.bio
+  profileForm.avatar = profileUser.value.avatar
 }
 
 const handleSaveProfile = async () => {
@@ -112,12 +120,52 @@ const handleSaveProfile = async () => {
   try {
     const updated = await userStore.updateProfile({
       username: profileForm.username.trim(),
-      bio: profileForm.bio.trim()
+      bio: profileForm.bio.trim(),
+      avatar: profileForm.avatar.trim()
     })
     profileUser.value = updated
+    syncProfileForm()
     message.success('资料已更新')
   } finally {
     savingProfile.value = false
+  }
+}
+
+const handleAvatarClick = () => {
+  if (!isOwnerView.value || uploadingAvatar.value) {
+    return
+  }
+
+  avatarInput.value?.click()
+}
+
+const handleAvatarUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+
+  if (!file) {
+    return
+  }
+
+  if (!file.type.startsWith('image/')) {
+    message.error('请选择图片文件')
+    return
+  }
+
+  uploadingAvatar.value = true
+  try {
+    const uploadRes = await promptApi.uploadCover(file)
+    const updated = await userStore.updateProfile({
+      username: profileForm.username.trim(),
+      bio: profileForm.bio.trim(),
+      avatar: uploadRes.data.url
+    })
+    profileUser.value = updated
+    syncProfileForm()
+    message.success('头像已更新')
+  } finally {
+    uploadingAvatar.value = false
   }
 }
 
@@ -171,6 +219,7 @@ const loadProfile = async () => {
   likedPrompts.value = []
   activeLibraryTab.value = 'published'
   profileUser.value = prompts.value[0]?.user ?? null
+  syncProfileForm()
 }
 
 const handleEditPrompt = async (promptId: number) => {
@@ -232,9 +281,34 @@ watch(() => route.params.userId, loadProfile)
         <aside class="profile-sidebar">
           <section class="profile-card">
             <div class="profile-card__user">
-              <div class="profile-avatar">
-                {{ profileUser?.username?.slice(0, 1) || '?' }}
-              </div>
+              <button
+                class="profile-avatar"
+                :class="{ 'profile-avatar--clickable': isOwnerView }"
+                type="button"
+                :disabled="!isOwnerView || uploadingAvatar"
+                @click="handleAvatarClick"
+              >
+                <img
+                  v-if="resolvedAvatar"
+                  :src="resolvedAvatar"
+                  :alt="profileUser?.username || 'avatar'"
+                  class="profile-avatar__image"
+                >
+                <span v-else>{{ profileUser?.username?.slice(0, 1) || '?' }}</span>
+                <span
+                  v-if="isOwnerView"
+                  class="profile-avatar__hint"
+                >
+                  {{ uploadingAvatar ? '上传中' : '更换' }}
+                </span>
+              </button>
+              <input
+                ref="avatarInput"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                class="profile-avatar-input"
+                @change="handleAvatarUpload"
+              >
               <div class="profile-card__info">
                 <div class="profile-card__name">
                   {{ profileUser?.username || '创作者' }}
@@ -315,6 +389,15 @@ watch(() => route.params.userId, loadProfile)
                   maxlength="500"
                   class="profile-input"
                 />
+              </label>
+              <label class="profile-field">
+                头像地址
+                <input
+                  v-model="profileForm.avatar"
+                  type="text"
+                  class="profile-input"
+                  placeholder="上传头像后自动填充"
+                >
               </label>
               <button
                 class="btn-pill-primary profile-save"
@@ -507,7 +590,23 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-avatar {
-  @apply flex h-16 w-16 items-center justify-center rounded-full bg-black text-xl font-semibold text-white;
+  @apply relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-semibold text-white transition disabled:cursor-default;
+}
+
+.profile-avatar--clickable {
+  @apply cursor-pointer hover:ring-2 hover:ring-black/20;
+}
+
+.profile-avatar__image {
+  @apply h-full w-full object-cover;
+}
+
+.profile-avatar__hint {
+  @apply absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-[10px] font-medium text-white;
+}
+
+.profile-avatar-input {
+  @apply hidden;
 }
 
 .profile-card__info {
