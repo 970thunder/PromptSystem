@@ -16,6 +16,10 @@ const hasLoaded = ref(false)
 const syncingRoute = ref(false)
 const total = ref(0)
 const results = ref<Prompt[]>([])
+const searchHistory = ref<string[]>([])
+
+const searchHistoryKey = 'promptos:search-history'
+const maxSearchHistory = 8
 
 const filters = reactive({
   keyword: '',
@@ -46,6 +50,46 @@ const sortLabels: Record<string, string> = {
 }
 
 const formatSortLabel = (sort: string) => sortLabels[sort] ?? sort
+
+const keywordPool = computed(() => {
+  const counts = new Map<string, number>()
+  const addKeyword = (value: string, weight = 1) => {
+    const keyword = value.trim()
+    if (!keyword || keyword.length > 24) {
+      return
+    }
+    counts.set(keyword, (counts.get(keyword) ?? 0) + weight)
+  }
+
+  const source = [...promptStore.prompts, ...results.value]
+  source.forEach((prompt) => {
+    addKeyword(prompt.model, 2)
+    addKeyword(prompt.categoryName, 2)
+    prompt.tags.forEach((tag) => addKeyword(tag, 3))
+    prompt.title
+      .split(/[\s,，、:：|｜/]+/)
+      .filter((part) => part.length >= 2)
+      .slice(0, 4)
+      .forEach((part) => addKeyword(part))
+  })
+
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'zh-Hans-CN'))
+    .map(([name]) => name)
+})
+
+const hotSearches = computed(() => keywordPool.value.slice(0, 10))
+
+const searchSuggestions = computed(() => {
+  const keyword = filters.keyword.trim().toLowerCase()
+  if (!keyword) {
+    return []
+  }
+
+  return keywordPool.value
+    .filter((item) => item.toLowerCase().includes(keyword) && item.toLowerCase() !== keyword)
+    .slice(0, 6)
+})
 
 const activeFilterCount = computed(() => {
   let count = 0
@@ -89,6 +133,35 @@ const updateRouteQuery = async () => {
 
   await router.replace({ path: '/search', query })
   syncingRoute.value = false
+}
+
+const loadSearchHistory = () => {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(searchHistoryKey) ?? '[]')
+    if (Array.isArray(parsed)) {
+      searchHistory.value = parsed.filter((item): item is string => typeof item === 'string').slice(0, maxSearchHistory)
+    }
+  } catch {
+    searchHistory.value = []
+  }
+}
+
+const saveSearchHistory = (keyword: string) => {
+  const cleanKeyword = keyword.trim()
+  if (!cleanKeyword) {
+    return
+  }
+
+  searchHistory.value = [
+    cleanKeyword,
+    ...searchHistory.value.filter((item) => item.toLowerCase() !== cleanKeyword.toLowerCase())
+  ].slice(0, maxSearchHistory)
+  localStorage.setItem(searchHistoryKey, JSON.stringify(searchHistory.value))
+}
+
+const clearSearchHistory = () => {
+  searchHistory.value = []
+  localStorage.removeItem(searchHistoryKey)
 }
 
 const filterMockPrompts = () => {
@@ -154,8 +227,14 @@ const loadResults = async () => {
 }
 
 const submitSearch = async () => {
+  saveSearchHistory(filters.keyword)
   await updateRouteQuery()
   await loadResults()
+}
+
+const applyKeyword = async (keyword: string) => {
+  filters.keyword = keyword
+  await submitSearch()
 }
 
 const clearFilters = async () => {
@@ -180,6 +259,7 @@ watch(
 )
 
 onMounted(async () => {
+  loadSearchHistory()
   if (promptStore.categories.length === 0 || promptStore.prompts.length === 0) {
     await promptStore.loadHomeFeed()
   }
@@ -234,6 +314,71 @@ onMounted(async () => {
                 @keyup.enter="submitSearch"
               >
             </label>
+
+            <div
+              v-if="searchSuggestions.length > 0"
+              class="search-assist"
+            >
+              <div class="search-assist__label">
+                搜索建议
+              </div>
+              <div class="search-assist__chips">
+                <button
+                  v-for="keyword in searchSuggestions"
+                  :key="keyword"
+                  class="search-assist__chip"
+                  @click="applyKeyword(keyword)"
+                >
+                  {{ keyword }}
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="hotSearches.length > 0"
+              class="search-assist"
+            >
+              <div class="search-assist__label">
+                热门搜索
+              </div>
+              <div class="search-assist__chips">
+                <button
+                  v-for="keyword in hotSearches"
+                  :key="keyword"
+                  class="search-assist__chip"
+                  @click="applyKeyword(keyword)"
+                >
+                  {{ keyword }}
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="searchHistory.length > 0"
+              class="search-assist"
+            >
+              <div class="search-assist__head">
+                <div class="search-assist__label">
+                  搜索历史
+                </div>
+                <button
+                  class="search-assist__clear"
+                  @click="clearSearchHistory"
+                >
+                  清空
+                </button>
+              </div>
+              <div class="search-assist__chips">
+                <button
+                  v-for="keyword in searchHistory"
+                  :key="keyword"
+                  class="search-assist__chip"
+                  @click="applyKeyword(keyword)"
+                >
+                  {{ keyword }}
+                </button>
+              </div>
+            </div>
 
             <label class="search-field">
               <span class="search-field__label">分类</span>
@@ -461,6 +606,30 @@ onMounted(async () => {
 
 .search-field__label {
   @apply text-sm font-medium text-[#333333];
+}
+
+.search-assist {
+  @apply grid gap-2 rounded-[16px] border border-black/10 bg-[#faf8f4] p-3;
+}
+
+.search-assist__head {
+  @apply flex items-center justify-between gap-3;
+}
+
+.search-assist__label {
+  @apply text-xs font-medium text-[#777777];
+}
+
+.search-assist__clear {
+  @apply text-xs text-[#777777] transition hover:text-black;
+}
+
+.search-assist__chips {
+  @apply flex flex-wrap gap-2;
+}
+
+.search-assist__chip {
+  @apply rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#555555] transition hover:border-black/20 hover:text-black;
 }
 
 .search-submit {
