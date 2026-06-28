@@ -39,3 +39,54 @@ func TestUserStoreUpsertGitHubUserResolvesUsernameCollision(t *testing.T) {
 		t.Fatalf("expected github id 4242, got %d", user.GitHubID)
 	}
 }
+
+func TestUserStoreUpsertGitHubUserCreatesNewAccount(t *testing.T) {
+	userStore := NewUserStore()
+
+	user, err := userStore.UpsertGitHubUser(5252, "octocat", "octocat@users.noreply.github.com", "https://example.com/avatar.png")
+	if err != nil {
+		t.Fatalf("UpsertGitHubUser() error = %v", err)
+	}
+
+	if user.ID == 0 {
+		t.Fatal("expected created user id")
+	}
+	if user.GitHubID != 5252 {
+		t.Fatalf("expected github id 5252, got %d", user.GitHubID)
+	}
+	if user.Email != "octocat@users.noreply.github.com" {
+		t.Fatalf("expected github email persisted, got %s", user.Email)
+	}
+	if user.PasswordHash != "" {
+		t.Fatal("github-only account should not have a password hash")
+	}
+}
+
+func TestUserStoreUpsertGitHubUserBindsExistingEmailAccount(t *testing.T) {
+	userStore := NewUserStore()
+
+	registered, err := userStore.Register("Email User", "bind-me@example.com", "StrongPass123!")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	bound, err := userStore.UpsertGitHubUser(6262, "email-user", "bind-me@example.com", "https://example.com/avatar.png")
+	if err != nil {
+		t.Fatalf("UpsertGitHubUser() error = %v", err)
+	}
+
+	if bound.ID != registered.ID {
+		t.Fatalf("expected github login to bind existing user %d, got %d", registered.ID, bound.ID)
+	}
+	if bound.GitHubID != 6262 {
+		t.Fatalf("expected github id 6262, got %d", bound.GitHubID)
+	}
+
+	authUser, err := userStore.Authenticate("bind-me@example.com", "StrongPass123!")
+	if err != nil {
+		t.Fatalf("Authenticate() after github bind error = %v", err)
+	}
+	if authUser.ID != registered.ID {
+		t.Fatalf("expected email login to keep same user %d, got %d", registered.ID, authUser.ID)
+	}
+}

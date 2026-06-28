@@ -6,6 +6,14 @@ import type { User } from '@/types'
 const bindPromptPendingKey = (userID: number) => `promptos:bind-github:pending:${userID}`
 const bindPromptDailyKey = (userID: number) => `promptos:bind-github:last-date:${userID}`
 
+const localDateKey = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const userInfo = ref<User | null>(
@@ -54,7 +62,7 @@ export const useUserStore = defineStore('user', () => {
       return true
     }
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateKey()
     const lastPromptDate = localStorage.getItem(bindPromptDailyKey(user.id))
     return lastPromptDate !== today
   }
@@ -65,7 +73,7 @@ export const useUserStore = defineStore('user', () => {
       return
     }
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateKey()
     clearBindPromptPending(user.id)
     localStorage.setItem(bindPromptDailyKey(user.id), today)
   }

@@ -15,7 +15,7 @@
 |------|-----|
 | 项目 | PromptOS — AI 提示词 & 技能社区平台 |
 | 当前 Phase | **Phase 1 MVP** |
-| 当前聚焦模块 | **Phase 1 — 首页导航（用户菜单/移动端导航）** |
+| 当前聚焦模块 | **Phase 1 — 用户登录与 GitHub OAuth 绑定提醒** |
 | 设计文档 | `prompt_platform_full_ai_dev_prd_and_prompt_pack.md` §二十（MVP 优先级） |
 | 源码状态 | 前端: `src/frontend/` · 后端: `src/backend/`（Go） |
 | 任务清单 | `TODO.md`（以代码为准，完成项须同步勾选） |
