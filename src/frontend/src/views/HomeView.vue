@@ -31,14 +31,7 @@ const fallbackCoverMap: Record<number, string> = {
   106: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'
 }
 
-const cardSizePattern = [
-  'gallery-card--large',
-  'gallery-card--small',
-  'gallery-card--tall',
-  'gallery-card--small',
-  'gallery-card--wide',
-  'gallery-card--small'
-]
+const cardSizePattern = ['gallery-card--large', 'gallery-card--medium', 'gallery-card--tall', 'gallery-card--small']
 
 const categoryBtnClass = (active: boolean) => ({
   'category-btn': true,
@@ -49,12 +42,13 @@ onMounted(() => {
   promptStore.loadHomeFeed()
 })
 
-const visiblePrompts = computed(() => {
-  if (activeCategoryId.value === 'all') {
-    return promptStore.prompts
-  }
+const handleCategoryChange = async (categoryId: number | 'all') => {
+  activeCategoryId.value = categoryId
+  await promptStore.loadHomeFeed(categoryId === 'all' ? undefined : categoryId)
+}
 
-  return promptStore.prompts.filter((prompt) => prompt.categoryId === activeCategoryId.value)
+const visiblePrompts = computed(() => {
+  return promptStore.prompts
 })
 
 const featuredPrompt = computed(() => visiblePrompts.value[0] ?? promptStore.prompts[0] ?? null)
@@ -68,7 +62,7 @@ const curatedPrompts = computed(() =>
 )
 
 const communityStats = computed(() => [
-  { label: '精选提示词', value: `${promptStore.prompts.length * 24}+` },
+  { label: '精选提示词', value: `${promptStore.total || promptStore.prompts.length}` },
   { label: '活跃创作者', value: '320+' },
   { label: '本周收藏', value: '1.8k' }
 ])
@@ -110,6 +104,10 @@ const handleLogout = async () => {
 const closeMenus = () => {
   userMenuOpen.value = false
   mobileNavOpen.value = false
+}
+
+const loadMore = async () => {
+  await promptStore.loadMorePrompts()
 }
 </script>
 
@@ -300,7 +298,7 @@ const closeMenus = () => {
         <div class="category-bar__scroll">
           <button
             :class="categoryBtnClass(activeCategoryId === 'all')"
-            @click="activeCategoryId = 'all'"
+            @click="handleCategoryChange('all')"
           >
             全部
           </button>
@@ -308,7 +306,7 @@ const closeMenus = () => {
             v-for="category in promptStore.categories"
             :key="category.id"
             :class="categoryBtnClass(activeCategoryId === category.id)"
-            @click="activeCategoryId = category.id"
+            @click="handleCategoryChange(category.id)"
           >
             {{ category.name }} · {{ category.count }}
           </button>
@@ -393,13 +391,13 @@ const closeMenus = () => {
           画廊
         </div>
         <div class="gallery-header__count">
-          {{ visiblePrompts.length }} 条结果
+          {{ promptStore.total || visiblePrompts.length }} 条结果
         </div>
       </section>
 
       <section
         v-if="promptStore.loading"
-        class="gallery-grid"
+        class="gallery-masonry"
       >
         <div
           v-for="index in 6"
@@ -411,7 +409,7 @@ const closeMenus = () => {
 
       <section
         v-else-if="curatedPrompts.length > 0"
-        class="gallery-grid"
+        class="gallery-masonry"
       >
         <RouterLink
           v-for="prompt in curatedPrompts"
@@ -445,6 +443,26 @@ const closeMenus = () => {
           </div>
         </RouterLink>
       </section>
+
+      <div
+        v-if="!promptStore.loading && curatedPrompts.length > 0"
+        class="gallery-pagination"
+      >
+        <button
+          v-if="promptStore.hasMore"
+          class="gallery-load-more"
+          :disabled="promptStore.loadingMore"
+          @click="loadMore"
+        >
+          {{ promptStore.loadingMore ? '加载中...' : '加载更多' }}
+        </button>
+        <div
+          v-else
+          class="gallery-end"
+        >
+          已经到底了
+        </div>
+      </div>
 
       <section
         v-else
@@ -706,32 +724,53 @@ const closeMenus = () => {
   @apply text-sm text-[#777777];
 }
 
-.gallery-grid {
-  @apply grid auto-rows-[168px] grid-cols-1 gap-3 pb-8 md:grid-cols-3;
+.gallery-masonry {
+  column-count: 1;
+  column-gap: 0.75rem;
+  padding-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .gallery-masonry {
+    column-count: 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gallery-masonry {
+    column-count: 3;
+  }
+}
+
+@media (min-width: 1440px) {
+  .gallery-masonry {
+    column-count: 4;
+  }
 }
 
 .gallery-skeleton {
-  @apply animate-pulse rounded-[20px] bg-black/5;
+  @apply mb-3 h-[280px] break-inside-avoid animate-pulse rounded-[20px] bg-black/5;
 }
 
 .gallery-card {
-  @apply relative h-full min-h-0 overflow-hidden rounded-[20px] bg-black;
+  @apply relative mb-3 block h-[320px] min-h-0 break-inside-avoid overflow-hidden rounded-[20px] bg-black transition;
+  transform: translateZ(0);
 }
 
 .gallery-card--large {
-  @apply md:col-span-2 md:row-span-2;
+  @apply h-[430px];
 }
 
 .gallery-card--small {
-  @apply md:col-span-1 md:row-span-1;
+  @apply h-[260px];
 }
 
 .gallery-card--tall {
-  @apply md:col-span-1 md:row-span-2;
+  @apply h-[520px];
 }
 
-.gallery-card--wide {
-  @apply md:col-span-2 md:row-span-1;
+.gallery-card--medium {
+  @apply h-[360px];
 }
 
 .gallery-card__image {
@@ -740,6 +779,10 @@ const closeMenus = () => {
 
 .gallery-card:hover .gallery-card__image {
   @apply scale-[1.03];
+}
+
+.gallery-card:hover {
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
 }
 
 .gallery-card__overlay {
@@ -764,6 +807,22 @@ const closeMenus = () => {
 
 .gallery-card__stats {
   @apply mt-3 flex flex-wrap items-center gap-3 text-sm text-white/70;
+}
+
+.gallery-pagination {
+  @apply flex items-center justify-center pb-10 pt-2;
+}
+
+.gallery-load-more {
+  @apply rounded-full border border-black/10 bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-black/80 disabled:cursor-wait disabled:opacity-60;
+}
+
+.gallery-end {
+  @apply rounded-full border border-black/10 bg-white px-5 py-2 text-sm text-[#777777];
+}
+
+.empty-state {
+  @apply rounded-[24px] border border-dashed border-black/10 bg-white px-6 py-16 text-center;
 }
 
 .empty-state__title {

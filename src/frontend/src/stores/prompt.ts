@@ -14,6 +14,11 @@ export const usePromptStore = defineStore('prompt', () => {
   const detailLoading = ref(false)
   const commentsLoading = ref(false)
   const usingMockData = ref(false)
+  const page = ref(1)
+  const pageSize = ref(12)
+  const total = ref(0)
+  const currentCategoryId = ref<number | undefined>(undefined)
+  const loadingMore = ref(false)
 
   const setPrompts = (list: Prompt[]) => {
     prompts.value = list
@@ -76,6 +81,7 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const featuredPrompts = computed(() => prompts.value.slice(0, 3))
   const latestPrompts = computed(() => prompts.value.slice(3))
+  const hasMore = computed(() => prompts.value.length < total.value)
 
   const ensurePromptSeed = async () => {
     if (prompts.value.length > 0 && categories.value.length > 0) {
@@ -85,14 +91,18 @@ export const usePromptStore = defineStore('prompt', () => {
     await loadHomeFeed()
   }
 
-  const loadHomeFeed = async () => {
+  const loadHomeFeed = async (categoryId?: number) => {
     loading.value = true
+    page.value = 1
+    currentCategoryId.value = categoryId
 
     const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
 
     if (!enablePromptApi) {
       categories.value = mockCategories
-      prompts.value = mockPrompts
+      const filtered = categoryId ? mockPrompts.filter((item) => item.categoryId === categoryId) : mockPrompts
+      prompts.value = filtered
+      total.value = filtered.length
       usingMockData.value = true
       loading.value = false
       return
@@ -101,18 +111,59 @@ export const usePromptStore = defineStore('prompt', () => {
     try {
       const [categoryRes, promptRes] = await Promise.all([
         categoryApi.getCategoryList(),
-        promptApi.getPromptList({ page: 1, pageSize: 12, sort: 'latest' })
+        promptApi.getPromptList({
+          page: page.value,
+          pageSize: pageSize.value,
+          sort: 'latest',
+          categoryId
+        })
       ])
 
       categories.value = categoryRes.data
       prompts.value = promptRes.data.list
+      total.value = promptRes.data.total
       usingMockData.value = false
     } catch {
       categories.value = mockCategories
-      prompts.value = mockPrompts
+      const filtered = categoryId ? mockPrompts.filter((item) => item.categoryId === categoryId) : mockPrompts
+      prompts.value = filtered
+      total.value = filtered.length
       usingMockData.value = true
     } finally {
       loading.value = false
+    }
+  }
+
+  const loadMorePrompts = async () => {
+    if (loadingMore.value || loading.value || !hasMore.value) {
+      return
+    }
+
+    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
+    if (!enablePromptApi) {
+      return
+    }
+
+    loadingMore.value = true
+    try {
+      const nextPage = page.value + 1
+      const response = await promptApi.getPromptList({
+        page: nextPage,
+        pageSize: pageSize.value,
+        sort: 'latest',
+        categoryId: currentCategoryId.value
+      })
+
+      page.value = response.data.page
+      total.value = response.data.total
+      const existing = new Set(prompts.value.map((item) => item.id))
+      prompts.value = [
+        ...prompts.value,
+        ...response.data.list.filter((item) => !existing.has(item.id))
+      ]
+      usingMockData.value = false
+    } finally {
+      loadingMore.value = false
     }
   }
 
@@ -204,6 +255,11 @@ export const usePromptStore = defineStore('prompt', () => {
     detailLoading,
     commentsLoading,
     usingMockData,
+    page,
+    pageSize,
+    total,
+    hasMore,
+    loadingMore,
     featuredPrompts,
     latestPrompts,
     setPrompts,
@@ -217,6 +273,7 @@ export const usePromptStore = defineStore('prompt', () => {
     removePrompt,
     ensurePromptSeed,
     loadHomeFeed,
+    loadMorePrompts,
     loadPromptDetail,
     loadPromptComments,
     createPromptComment,
