@@ -39,6 +39,11 @@ type authResponse struct {
 	User  store.PublicUser `json:"user"`
 }
 
+type followActionResponse struct {
+	Status  store.FollowStatus `json:"status"`
+	Applied bool               `json:"applied"`
+}
+
 func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -225,6 +230,155 @@ func (s *server) handleUserLikes(w http.ResponseWriter, r *http.Request) {
 		Code:    200,
 		Message: "Success",
 		Data:    list,
+	})
+}
+
+func (s *server) handleUserFollowing(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	list, err := s.userStore.ListFollowing(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load following"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.PublicUser]{
+		Code:    200,
+		Message: "Success",
+		Data:    list,
+	})
+}
+
+func (s *server) handleUserFollowers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	list, err := s.userStore.ListFollowers(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load followers"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.PublicUser]{
+		Code:    200,
+		Message: "Success",
+		Data:    list,
+	})
+}
+
+func (s *server) handleUserAction(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/users/")
+	path = strings.Trim(path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 {
+		writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "Not found"})
+		return
+	}
+
+	targetID, err := strconv.Atoi(parts[0])
+	if err != nil || targetID <= 0 {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid user id"})
+		return
+	}
+
+	switch parts[1] {
+	case "follow":
+		s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+			s.handleUserFollow(w, r, targetID)
+		}).ServeHTTP(w, r)
+	case "follow-status":
+		s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+			s.handleUserFollowStatus(w, r, targetID)
+		}).ServeHTTP(w, r)
+	default:
+		writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "Not found"})
+	}
+}
+
+func (s *server) handleUserFollow(w http.ResponseWriter, r *http.Request, targetID int) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	var (
+		status  store.FollowStatus
+		applied bool
+		err     error
+	)
+	switch r.Method {
+	case http.MethodPost:
+		status, applied, err = s.userStore.Follow(userID, targetID)
+	case http.MethodDelete:
+		status, applied, err = s.userStore.Unfollow(userID, targetID)
+	default:
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		if errors.Is(err, store.ErrUserNotFound) {
+			statusCode = http.StatusNotFound
+		}
+		writeJSON(w, statusCode, apiResponse[any]{Code: statusCode, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[followActionResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: followActionResponse{
+			Status:  status,
+			Applied: applied,
+		},
+	})
+}
+
+func (s *server) handleUserFollowStatus(w http.ResponseWriter, r *http.Request, targetID int) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	status, err := s.userStore.FollowStatus(targetID, userID)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if errors.Is(err, store.ErrUserNotFound) {
+			statusCode = http.StatusNotFound
+		}
+		writeJSON(w, statusCode, apiResponse[any]{Code: statusCode, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[store.FollowStatus]{
+		Code:    200,
+		Message: "Success",
+		Data:    status,
 	})
 }
 

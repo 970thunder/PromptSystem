@@ -7,11 +7,11 @@ import { userApi } from '@/api/userApi'
 import { mockPrompts } from '@/mock/prompts'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
-import type { Prompt, User } from '@/types'
+import type { FollowStatus, Prompt, User } from '@/types'
 import { githubAuthUrl } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 
-type LibraryTab = 'published' | 'favorites' | 'likes'
+type LibraryTab = 'published' | 'favorites' | 'likes' | 'following' | 'followers'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,6 +26,9 @@ const uploadingAvatar = ref(false)
 const prompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
 const likedPrompts = ref<Prompt[]>([])
+const followingUsers = ref<User[]>([])
+const followerUsers = ref<User[]>([])
+const followStatus = ref<FollowStatus | null>(null)
 const activeLibraryTab = ref<LibraryTab>('published')
 const profileUser = ref<User | null>(null)
 const avatarInput = ref<HTMLInputElement | null>(null)
@@ -61,7 +64,9 @@ const stats = computed(() => {
     { label: '已发布', value: published },
     { label: '获赞', value: totalLikes },
     { label: '收藏', value: totalFavorites },
-    { label: '浏览', value: totalViews }
+    { label: '浏览', value: totalViews },
+    { label: '关注', value: isOwnerView.value ? followingUsers.value.length : followStatus.value?.followingCount ?? 0 },
+    { label: '粉丝', value: isOwnerView.value ? followerUsers.value.length : followStatus.value?.followerCount ?? 0 }
   ]
 })
 
@@ -87,10 +92,25 @@ const activePromptList = computed(() => {
   return prompts.value
 })
 
+const activeUserList = computed(() => {
+  if (activeLibraryTab.value === 'following') {
+    return followingUsers.value
+  }
+  if (activeLibraryTab.value === 'followers') {
+    return followerUsers.value
+  }
+
+  return []
+})
+
+const isUserLibraryTab = computed(() => activeLibraryTab.value === 'following' || activeLibraryTab.value === 'followers')
+
 const libraryTabs = computed(() => [
   { key: 'published' as const, label: '已发布', count: prompts.value.length },
   { key: 'favorites' as const, label: '收藏', count: favoritePrompts.value.length },
-  { key: 'likes' as const, label: '点赞', count: likedPrompts.value.length }
+  { key: 'likes' as const, label: '点赞', count: likedPrompts.value.length },
+  { key: 'following' as const, label: '关注', count: followingUsers.value.length },
+  { key: 'followers' as const, label: '粉丝', count: followerUsers.value.length }
 ])
 
 const resolveCover = (prompt: Prompt, index: number) => {
@@ -177,6 +197,26 @@ const formatCount = (value: number) => {
   return `${value}`
 }
 
+const loadSocialData = async () => {
+  if (!userStore.isLoggedIn || !isOwnerView.value) {
+    followingUsers.value = []
+    followerUsers.value = []
+    return
+  }
+
+  try {
+    const [followingRes, followersRes] = await Promise.all([
+      userApi.getFollowingUsers(),
+      userApi.getFollowerUsers()
+    ])
+    followingUsers.value = followingRes.data
+    followerUsers.value = followersRes.data
+  } catch {
+    followingUsers.value = []
+    followerUsers.value = []
+  }
+}
+
 const loadProfile = async () => {
   if (promptStore.categories.length === 0) {
     await promptStore.loadHomeFeed()
@@ -211,14 +251,28 @@ const loadProfile = async () => {
       favoritePrompts.value = []
       likedPrompts.value = []
     }
+    await loadSocialData()
+    followStatus.value = null
     syncProfileForm()
     return
   }
 
   favoritePrompts.value = []
   likedPrompts.value = []
+  followingUsers.value = []
+  followerUsers.value = []
   activeLibraryTab.value = 'published'
   profileUser.value = prompts.value[0]?.user ?? null
+  if (userStore.isLoggedIn && viewedUserId.value > 0) {
+    try {
+      const statusRes = await userApi.getFollowStatus(viewedUserId.value)
+      followStatus.value = statusRes.data
+    } catch {
+      followStatus.value = null
+    }
+  } else {
+    followStatus.value = null
+  }
   syncProfileForm()
 }
 
@@ -429,7 +483,7 @@ watch(() => route.params.userId, loadProfile)
                 内容库
               </div>
               <div class="profile-prompts__count">
-                {{ activePromptList.length }} 条
+                {{ isUserLibraryTab ? activeUserList.length : activePromptList.length }} 条
               </div>
             </div>
             <div
@@ -466,7 +520,40 @@ watch(() => route.params.userId, loadProfile)
           </div>
 
           <div
-            v-else-if="activePromptList.length > 0"
+            v-else-if="isUserLibraryTab && activeUserList.length > 0"
+            class="profile-users-list"
+          >
+            <RouterLink
+              v-for="user in activeUserList"
+              :key="user.id"
+              :to="`/profile/${user.id}`"
+              class="profile-user-row"
+            >
+              <div class="profile-user-row__avatar">
+                <img
+                  v-if="user.avatar"
+                  :src="resolveMediaUrl(user.avatar)"
+                  :alt="user.username"
+                  class="profile-user-row__image"
+                >
+                <span v-else>{{ user.username.slice(0, 1) }}</span>
+              </div>
+              <div class="profile-user-row__body">
+                <div class="profile-user-row__name">
+                  {{ user.username }}
+                </div>
+                <p class="profile-user-row__bio">
+                  {{ user.bio || '这个创作者还没有填写简介。' }}
+                </p>
+              </div>
+              <div class="profile-user-row__meta">
+                Lv.{{ user.level }}
+              </div>
+            </RouterLink>
+          </div>
+
+          <div
+            v-else-if="!isUserLibraryTab && activePromptList.length > 0"
             class="profile-prompts__grid"
           >
             <article
@@ -535,7 +622,7 @@ watch(() => route.params.userId, loadProfile)
               暂无内容
             </div>
             <p class="profile-empty__desc">
-              当前列表还没有 Prompt。发布、收藏或点赞后会在这里形成你的内容记录。
+              当前列表还没有内容。发布、收藏、点赞或关注创作者后会在这里形成你的记录。
             </p>
             <RouterLink
               v-if="activeLibraryTab === 'published'"
@@ -715,6 +802,38 @@ watch(() => route.params.userId, loadProfile)
 
 .profile-prompts__grid {
   @apply mt-6 grid gap-4 md:grid-cols-2;
+}
+
+.profile-users-list {
+  @apply mt-6 grid gap-3;
+}
+
+.profile-user-row {
+  @apply flex items-center gap-4 rounded-[20px] border border-black/10 bg-[#faf8f4] p-4 transition hover:-translate-y-0.5 hover:border-black/20 hover:bg-white;
+}
+
+.profile-user-row__avatar {
+  @apply flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-sm font-semibold text-white;
+}
+
+.profile-user-row__image {
+  @apply h-full w-full object-cover;
+}
+
+.profile-user-row__body {
+  @apply min-w-0 flex-1;
+}
+
+.profile-user-row__name {
+  @apply text-sm font-semibold text-black;
+}
+
+.profile-user-row__bio {
+  @apply mt-1 line-clamp-1 text-sm text-[#666666];
+}
+
+.profile-user-row__meta {
+  @apply rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#555555];
 }
 
 .profile-skeleton {

@@ -12,6 +12,18 @@ export interface User {
   hasGitHubBound?: boolean
 }
 
+export interface FollowStatus {
+  userId: number
+  following: boolean
+  followerCount: number
+  followingCount: number
+}
+
+export interface FollowActionResponse {
+  status: FollowStatus
+  applied: boolean
+}
+
 // Prompt types
 export interface Prompt {
   id: number

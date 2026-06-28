@@ -85,7 +85,10 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))
 	mux.HandleFunc("/api/v1/user/likes", s.withAuth(s.handleUserLikes))
+	mux.HandleFunc("/api/v1/user/following", s.withAuth(s.handleUserFollowing))
+	mux.HandleFunc("/api/v1/user/followers", s.withAuth(s.handleUserFollowers))
 	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
+	mux.HandleFunc("/api/v1/users/", s.handleUserAction)
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir))))
 
 	return s.withCORS(mux)

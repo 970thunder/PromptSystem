@@ -3,10 +3,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { promptApi } from '@/api/promptApi'
+import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
-import type { Comment } from '@/types'
+import type { Comment, FollowStatus } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +17,7 @@ const promptStore = usePromptStore()
 const userStore = useUserStore()
 const liking = ref(false)
 const favoriting = ref(false)
+const followingCreator = ref(false)
 const commentSubmitting = ref(false)
 const commentReporting = ref(false)
 const activeReplyId = ref<number | null>(null)
@@ -26,6 +28,7 @@ const commentSort = ref<'latest' | 'popular' | 'oldest'>('latest')
 const promptId = computed(() => Number(route.params.id))
 const prompt = computed(() => promptStore.currentPrompt)
 const comments = computed(() => promptStore.comments)
+const followStatus = ref<FollowStatus | null>(null)
 const commentSortOptions = [
   { label: '最新', value: 'latest' },
   { label: '热门', value: 'popular' },
@@ -89,6 +92,10 @@ const statCards = computed(() => {
   ]
 })
 
+const canFollowCreator = computed(() => {
+  return Boolean(prompt.value && userStore.userInfo?.id !== prompt.value.userId)
+})
+
 const ensureAuthenticated = async () => {
   if (userStore.isLoggedIn) {
     return true
@@ -133,6 +140,41 @@ const handleFavorite = async () => {
     message.success(response.data.applied ? '已收藏' : '你已经收藏过了')
   } finally {
     favoriting.value = false
+  }
+}
+
+const loadFollowStatus = async () => {
+  if (!prompt.value || !userStore.isLoggedIn || !canFollowCreator.value) {
+    followStatus.value = null
+    return
+  }
+
+  try {
+    const response = await userApi.getFollowStatus(prompt.value.userId)
+    followStatus.value = response.data
+  } catch {
+    followStatus.value = null
+  }
+}
+
+const handleFollowCreator = async () => {
+  if (!prompt.value || followingCreator.value || !canFollowCreator.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  followingCreator.value = true
+  try {
+    const response = followStatus.value?.following
+      ? await userApi.unfollowUser(prompt.value.userId)
+      : await userApi.followUser(prompt.value.userId)
+    followStatus.value = response.data.status
+    message.success(response.data.status.following ? '已关注创作者' : '已取消关注')
+  } finally {
+    followingCreator.value = false
   }
 }
 
@@ -249,6 +291,7 @@ const loadDetail = async () => {
 
   await promptStore.loadPromptDetail(promptId.value)
   await promptStore.loadPromptComments(promptId.value, commentSort.value)
+  await loadFollowStatus()
 }
 
 onMounted(loadDetail)
@@ -342,6 +385,36 @@ watch(commentSort, async () => {
                   <p class="detail-creator-bio">
                     {{ prompt.user.bio }}
                   </p>
+                  <div class="detail-creator-follow">
+                    <RouterLink
+                      :to="`/profile/${prompt.userId}`"
+                      class="detail-creator-link"
+                    >
+                      查看主页
+                    </RouterLink>
+                    <button
+                      v-if="canFollowCreator"
+                      class="detail-btn-follow"
+                      :class="{ 'detail-btn-follow--active': followStatus?.following }"
+                      :disabled="followingCreator"
+                      @click="handleFollowCreator"
+                    >
+                      {{
+                        followingCreator
+                          ? '处理中...'
+                          : followStatus?.following
+                            ? '已关注'
+                            : '关注创作者'
+                      }}
+                    </button>
+                  </div>
+                  <div
+                    v-if="followStatus"
+                    class="detail-creator-stats"
+                  >
+                    <span>{{ followStatus.followerCount }} 粉丝</span>
+                    <span>{{ followStatus.followingCount }} 关注</span>
+                  </div>
                 </div>
 
                 <div class="detail-actions">
@@ -821,6 +894,23 @@ watch(commentSort, async () => {
 
 .detail-creator-bio {
   @apply mt-3 text-sm leading-6 text-[#555555];
+}
+
+.detail-creator-follow {
+  @apply mt-5 flex flex-wrap items-center gap-2;
+}
+
+.detail-creator-link,
+.detail-btn-follow {
+  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70;
+}
+
+.detail-btn-follow--active {
+  @apply bg-black text-white hover:text-white;
+}
+
+.detail-creator-stats {
+  @apply mt-3 flex flex-wrap gap-3 text-xs text-[#777777];
 }
 
 .detail-actions {

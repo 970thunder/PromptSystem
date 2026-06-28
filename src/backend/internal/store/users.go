@@ -24,6 +24,7 @@ type UserStore struct {
 	users         map[int]AuthUser
 	emailIndex    map[string]int
 	githubIDIndex map[int64]int
+	follows       map[int]map[int]struct{}
 }
 
 type AuthUser struct {
@@ -41,16 +42,23 @@ type AuthUser struct {
 }
 
 type PublicUser struct {
-	ID              int    `json:"id"`
-	Username        string `json:"username"`
-	Avatar          string `json:"avatar"`
-	Email           string `json:"email"`
-	Bio             string `json:"bio"`
-	Level           int    `json:"level"`
-	Experience      int    `json:"experience"`
-	Status          int    `json:"status"`
-	CreatedAt       string `json:"createdAt"`
-	HasGitHubBound  bool   `json:"hasGitHubBound"`
+	ID             int    `json:"id"`
+	Username       string `json:"username"`
+	Avatar         string `json:"avatar"`
+	Email          string `json:"email"`
+	Bio            string `json:"bio"`
+	Level          int    `json:"level"`
+	Experience     int    `json:"experience"`
+	Status         int    `json:"status"`
+	CreatedAt      string `json:"createdAt"`
+	HasGitHubBound bool   `json:"hasGitHubBound"`
+}
+
+type FollowStatus struct {
+	UserID         int  `json:"userId"`
+	Following      bool `json:"following"`
+	FollowerCount  int  `json:"followerCount"`
+	FollowingCount int  `json:"followingCount"`
 }
 
 func NewUserStore() *UserStore {
@@ -59,6 +67,7 @@ func NewUserStore() *UserStore {
 		users:         map[int]AuthUser{},
 		emailIndex:    map[string]int{},
 		githubIDIndex: map[int64]int{},
+		follows:       map[int]map[int]struct{}{},
 	}
 
 	seedUsers := []AuthUser{
@@ -296,6 +305,121 @@ func (s *UserStore) UpdateProfile(id int, username, bio, avatar string) (AuthUse
 
 	s.users[id] = user
 	return user, nil
+}
+
+func (s *UserStore) Follow(followerID, followingID int) (FollowStatus, bool, error) {
+	if followerID == followingID {
+		return FollowStatus{}, false, errors.New("cannot follow yourself")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.users[followerID]; !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+	if _, ok := s.users[followingID]; !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+	if _, ok := s.follows[followerID]; !ok {
+		s.follows[followerID] = map[int]struct{}{}
+	}
+	if _, exists := s.follows[followerID][followingID]; exists {
+		return s.followStatusLocked(followingID, followerID), false, nil
+	}
+
+	s.follows[followerID][followingID] = struct{}{}
+	return s.followStatusLocked(followingID, followerID), true, nil
+}
+
+func (s *UserStore) Unfollow(followerID, followingID int) (FollowStatus, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.users[followerID]; !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+	if _, ok := s.users[followingID]; !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+	if _, ok := s.follows[followerID]; !ok {
+		return s.followStatusLocked(followingID, followerID), false, nil
+	}
+	if _, exists := s.follows[followerID][followingID]; !exists {
+		return s.followStatusLocked(followingID, followerID), false, nil
+	}
+
+	delete(s.follows[followerID], followingID)
+	return s.followStatusLocked(followingID, followerID), true, nil
+}
+
+func (s *UserStore) FollowStatus(userID, viewerID int) (FollowStatus, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, ok := s.users[userID]; !ok {
+		return FollowStatus{}, ErrUserNotFound
+	}
+
+	return s.followStatusLocked(userID, viewerID), nil
+}
+
+func (s *UserStore) ListFollowing(userID int) ([]PublicUser, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, ok := s.users[userID]; !ok {
+		return nil, ErrUserNotFound
+	}
+
+	list := make([]PublicUser, 0)
+	for followingID := range s.follows[userID] {
+		if user, ok := s.users[followingID]; ok {
+			list = append(list, ToPublicUser(user))
+		}
+	}
+
+	return list, nil
+}
+
+func (s *UserStore) ListFollowers(userID int) ([]PublicUser, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, ok := s.users[userID]; !ok {
+		return nil, ErrUserNotFound
+	}
+
+	list := make([]PublicUser, 0)
+	for followerID, following := range s.follows {
+		if _, ok := following[userID]; !ok {
+			continue
+		}
+		if user, ok := s.users[followerID]; ok {
+			list = append(list, ToPublicUser(user))
+		}
+	}
+
+	return list, nil
+}
+
+func (s *UserStore) followStatusLocked(userID, viewerID int) FollowStatus {
+	status := FollowStatus{
+		UserID:         userID,
+		Following:      false,
+		FollowerCount:  0,
+		FollowingCount: len(s.follows[userID]),
+	}
+	if viewerID > 0 {
+		_, status.Following = s.follows[viewerID][userID]
+	}
+	for _, following := range s.follows {
+		if _, ok := following[userID]; ok {
+			status.FollowerCount++
+		}
+	}
+
+	return status
 }
 
 func ToPublicUser(user AuthUser) PublicUser {

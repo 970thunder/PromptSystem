@@ -6,6 +6,11 @@ type UserManager interface {
 	FindByID(id int) (AuthUser, bool)
 	UpdateProfile(id int, username, bio, avatar string) (AuthUser, error)
 	UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error)
+	Follow(followerID, followingID int) (FollowStatus, bool, error)
+	Unfollow(followerID, followingID int) (FollowStatus, bool, error)
+	FollowStatus(userID, viewerID int) (FollowStatus, error)
+	ListFollowing(userID int) ([]PublicUser, error)
+	ListFollowers(userID int) ([]PublicUser, error)
 }
 
 type PromptManager interface {

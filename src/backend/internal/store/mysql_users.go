@@ -22,6 +22,11 @@ const userSelectColumns = `
 	id, username, avatar, email, github_id, password, bio, level, experience, status, created_at
 `
 
+const qualifiedUserSelectColumns = `
+	users.id, users.username, users.avatar, users.email, users.github_id, users.password, users.bio,
+	users.level, users.experience, users.status, users.created_at
+`
+
 func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	username = strings.TrimSpace(username)
@@ -207,6 +212,141 @@ func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avata
 	return user, nil
 }
 
+func (s *MySQLUserStore) Follow(followerID, followingID int) (FollowStatus, bool, error) {
+	if followerID == followingID {
+		return FollowStatus{}, false, errors.New("cannot follow yourself")
+	}
+	if _, ok := s.FindByID(followerID); !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+	if _, ok := s.FindByID(followingID); !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+
+	result, err := s.db.Exec(`
+		INSERT IGNORE INTO follows (follower_id, following_id)
+		VALUES (?, ?)
+	`, followerID, followingID)
+	if err != nil {
+		return FollowStatus{}, false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return FollowStatus{}, false, err
+	}
+
+	status, err := s.FollowStatus(followingID, followerID)
+	if err != nil {
+		return FollowStatus{}, false, err
+	}
+
+	return status, affected > 0, nil
+}
+
+func (s *MySQLUserStore) Unfollow(followerID, followingID int) (FollowStatus, bool, error) {
+	if _, ok := s.FindByID(followerID); !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+	if _, ok := s.FindByID(followingID); !ok {
+		return FollowStatus{}, false, ErrUserNotFound
+	}
+
+	result, err := s.db.Exec(`
+		DELETE FROM follows
+		WHERE follower_id = ? AND following_id = ?
+	`, followerID, followingID)
+	if err != nil {
+		return FollowStatus{}, false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return FollowStatus{}, false, err
+	}
+
+	status, err := s.FollowStatus(followingID, followerID)
+	if err != nil {
+		return FollowStatus{}, false, err
+	}
+
+	return status, affected > 0, nil
+}
+
+func (s *MySQLUserStore) FollowStatus(userID, viewerID int) (FollowStatus, error) {
+	if _, ok := s.FindByID(userID); !ok {
+		return FollowStatus{}, ErrUserNotFound
+	}
+
+	status := FollowStatus{UserID: userID}
+	if viewerID > 0 {
+		var following int
+		if err := s.db.QueryRow(`
+			SELECT 1 FROM follows
+			WHERE follower_id = ? AND following_id = ?
+			LIMIT 1
+		`, viewerID, userID).Scan(&following); err == nil {
+			status.Following = following == 1
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return FollowStatus{}, err
+		}
+	}
+
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM follows WHERE following_id = ?
+	`, userID).Scan(&status.FollowerCount); err != nil {
+		return FollowStatus{}, err
+	}
+
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM follows WHERE follower_id = ?
+	`, userID).Scan(&status.FollowingCount); err != nil {
+		return FollowStatus{}, err
+	}
+
+	return status, nil
+}
+
+func (s *MySQLUserStore) ListFollowing(userID int) ([]PublicUser, error) {
+	if _, ok := s.FindByID(userID); !ok {
+		return nil, ErrUserNotFound
+	}
+
+	rows, err := s.db.Query(`
+		SELECT `+qualifiedUserSelectColumns+`
+		FROM users
+		JOIN follows ON follows.following_id = users.id
+		WHERE follows.follower_id = ?
+		ORDER BY follows.created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanPublicUsers(rows)
+}
+
+func (s *MySQLUserStore) ListFollowers(userID int) ([]PublicUser, error) {
+	if _, ok := s.FindByID(userID); !ok {
+		return nil, ErrUserNotFound
+	}
+
+	rows, err := s.db.Query(`
+		SELECT `+qualifiedUserSelectColumns+`
+		FROM users
+		JOIN follows ON follows.follower_id = users.id
+		WHERE follows.following_id = ?
+		ORDER BY follows.created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanPublicUsers(rows)
+}
+
 func (s *MySQLUserStore) updateGitHubProfile(id int, username, avatar string, githubID int64) (AuthUser, error) {
 	resolvedUsername, err := s.resolveUsername(username, githubID, id)
 	if err != nil {
@@ -275,6 +415,24 @@ func (s *MySQLUserStore) findByEmail(email string) (AuthUser, bool, error) {
 func (s *MySQLUserStore) findByGitHubID(githubID int64) (AuthUser, bool, error) {
 	row := s.db.QueryRow(`SELECT`+userSelectColumns+` FROM users WHERE github_id = ?`, githubID)
 	return scanAuthUser(row.Scan)
+}
+
+func scanPublicUsers(rows *sql.Rows) ([]PublicUser, error) {
+	list := make([]PublicUser, 0)
+	for rows.Next() {
+		user, found, err := scanAuthUser(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			list = append(list, ToPublicUser(user))
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return list, nil
 }
 
 func scanAuthUser(scan func(dest ...any) error) (AuthUser, bool, error) {
