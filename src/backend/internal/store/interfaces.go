@@ -16,6 +16,7 @@ type UserManager interface {
 type PromptManager interface {
 	Query(filter PromptFilter) ([]Prompt, error)
 	FindByID(id int) (Prompt, bool, error)
+	FindOwnedByID(id int, userID int) (Prompt, bool, error)
 	Create(input CreatePromptInput) (Prompt, error)
 	Update(id int, userID int, input CreatePromptInput) (Prompt, error)
 	Delete(id int, userID int) error
@@ -25,6 +26,7 @@ type PromptManager interface {
 	ListUserFavorites(userID int) ([]Prompt, error)
 	ListUserLikes(userID int) ([]Prompt, error)
 	ListUserHistory(userID int) ([]Prompt, error)
+	ListUserDrafts(userID int) ([]Prompt, error)
 }
 
 type CommentManager interface {

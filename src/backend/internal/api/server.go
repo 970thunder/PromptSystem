@@ -86,6 +86,8 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))
 	mux.HandleFunc("/api/v1/user/likes", s.withAuth(s.handleUserLikes))
 	mux.HandleFunc("/api/v1/user/history", s.withAuth(s.handleUserHistory))
+	mux.HandleFunc("/api/v1/user/drafts", s.withAuth(s.handleUserDrafts))
+	mux.HandleFunc("/api/v1/user/prompts/", s.withAuth(s.handleUserPromptDetail))
 	mux.HandleFunc("/api/v1/user/following", s.withAuth(s.handleUserFollowing))
 	mux.HandleFunc("/api/v1/user/followers", s.withAuth(s.handleUserFollowers))
 	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
@@ -240,6 +242,7 @@ type promptPayload struct {
 	Params       store.PromptParams `json:"params"`
 	CategoryID   int                `json:"categoryId"`
 	Tags         []string           `json:"tags"`
+	Status       *int               `json:"status"`
 }
 
 type commentPayload struct {
@@ -308,6 +311,7 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		Params:       payload.Params,
 		CategoryID:   payload.CategoryID,
 		Tags:         payload.Tags,
+		Status:       promptPayloadStatus(payload),
 		User: store.User{
 			ID:         userRecord.ID,
 			Username:   userRecord.Username,
@@ -441,6 +445,42 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+func (s *server) handleUserPromptDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/user/prompts/")
+	id, err := strconv.Atoi(strings.Trim(path, "/"))
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid prompt id"})
+		return
+	}
+
+	prompt, found, err := s.promptStore.FindOwnedByID(id, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load prompt"})
+		return
+	}
+	if !found {
+		writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "Prompt not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{
+		Code:    200,
+		Message: "Success",
+		Data:    prompt,
+	})
 }
 
 func (s *server) handlePromptComments(w http.ResponseWriter, r *http.Request, id int) {
@@ -726,6 +766,7 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		Params:       payload.Params,
 		CategoryID:   payload.CategoryID,
 		Tags:         payload.Tags,
+		Status:       promptPayloadStatus(payload),
 		User: store.User{
 			ID:         userRecord.ID,
 			Username:   userRecord.Username,
@@ -751,6 +792,31 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 	}
 
 	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{Code: 200, Message: "Success", Data: prompt})
+}
+
+func (s *server) handleUserDrafts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	list, err := s.promptStore.ListUserDrafts(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load drafts"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[[]store.Prompt]{
+		Code:    200,
+		Message: "Success",
+		Data:    list,
+	})
 }
 
 func (s *server) handlePromptDelete(w http.ResponseWriter, r *http.Request, id int) {
@@ -817,6 +883,9 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func validatePromptPayload(payload promptPayload) string {
+	if promptPayloadStatus(payload) == 0 {
+		return validatePromptDraftPayload(payload)
+	}
 	if strings.TrimSpace(payload.Title) == "" {
 		return "Title is required"
 	}
@@ -842,6 +911,29 @@ func validatePromptPayload(payload promptPayload) string {
 	return ""
 }
 
+func validatePromptDraftPayload(payload promptPayload) string {
+	if uniqueTagCount(payload.Tags) > store.MaxPromptTags {
+		return fmt.Sprintf("At most %d tags are allowed", store.MaxPromptTags)
+	}
+
+	if payload.CategoryID <= 0 {
+		return "Category is required"
+	}
+
+	hasContent := strings.TrimSpace(payload.Title) != "" ||
+		strings.TrimSpace(payload.Description) != "" ||
+		strings.TrimSpace(payload.Cover) != "" ||
+		strings.TrimSpace(payload.Content) != "" ||
+		strings.TrimSpace(payload.SystemPrompt) != "" ||
+		strings.TrimSpace(payload.Model) != "" ||
+		len(payload.Tags) > 0
+	if !hasContent {
+		return "Draft needs at least one field"
+	}
+
+	return ""
+}
+
 func uniqueTagCount(tags []string) int {
 	seen := make(map[string]struct{}, len(tags))
 	for _, raw := range tags {
@@ -853,6 +945,14 @@ func uniqueTagCount(tags []string) int {
 	}
 
 	return len(seen)
+}
+
+func promptPayloadStatus(payload promptPayload) int {
+	if payload.Status != nil && *payload.Status == 0 {
+		return 0
+	}
+
+	return 1
 }
 
 type apiResponse[T any] struct {

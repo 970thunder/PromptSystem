@@ -37,6 +37,18 @@ export const promptApi = {
     return request.post('/prompts', data)
   },
 
+  savePromptDraft(data: PublishPromptRequest): Promise<ApiResponse<Prompt>> {
+    return request.post('/prompts', { ...data, status: 0 })
+  },
+
+  getMyPromptDetail(id: number): Promise<ApiResponse<Prompt>> {
+    return request.get(`/user/prompts/${id}`)
+  },
+
+  getMyDraftPrompts(): Promise<ApiResponse<Prompt[]>> {
+    return request.get('/user/drafts')
+  },
+
   uploadCover(file: File): Promise<ApiResponse<UploadImageResponse>> {
     const formData = new FormData()
     formData.append('file', file)

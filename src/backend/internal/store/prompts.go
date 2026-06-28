@@ -24,6 +24,7 @@ type CreatePromptInput struct {
 	CategoryID   int
 	Tags         []string
 	User         User
+	Status       int
 }
 
 type PromptFilter struct {
@@ -50,6 +51,9 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 	model := strings.ToLower(strings.TrimSpace(filter.Model))
 
 	for _, prompt := range prompts {
+		if prompt.Status != 1 {
+			continue
+		}
 		if filter.CategoryID > 0 && prompt.CategoryID != filter.CategoryID {
 			continue
 		}
@@ -148,7 +152,20 @@ func FindPromptByID(id int) (Prompt, bool) {
 	defer promptMu.RUnlock()
 
 	for _, prompt := range prompts {
-		if prompt.ID == id {
+		if prompt.ID == id && prompt.Status == 1 {
+			return prompt, true
+		}
+	}
+
+	return Prompt{}, false
+}
+
+func FindOwnedPromptByID(id int, userID int) (Prompt, bool) {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	for _, prompt := range prompts {
+		if prompt.ID == id && prompt.UserID == userID && prompt.Status != -1 {
 			return prompt, true
 		}
 	}
@@ -183,13 +200,15 @@ func CreatePrompt(input CreatePromptInput) (Prompt, error) {
 		Views:        0,
 		Likes:        0,
 		Favorites:    0,
-		Status:       1,
+		Status:       normalizePromptStatus(input.Status),
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
 
 	prompts = append([]Prompt{prompt}, prompts...)
-	incrementCategoryCountLocked(input.CategoryID)
+	if prompt.Status == 1 {
+		incrementCategoryCountLocked(input.CategoryID)
+	}
 
 	return prompt, nil
 }
@@ -204,7 +223,7 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 	}
 
 	for index := range prompts {
-		if prompts[index].ID != id {
+		if prompts[index].ID != id || prompts[index].Status == -1 {
 			continue
 		}
 		if prompts[index].UserID != userID {
@@ -212,6 +231,7 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 		}
 
 		previousCategoryID := prompts[index].CategoryID
+		previousStatus := prompts[index].Status
 		prompts[index].Title = strings.TrimSpace(input.Title)
 		prompts[index].Description = strings.TrimSpace(input.Description)
 		prompts[index].Cover = strings.TrimSpace(input.Cover)
@@ -222,9 +242,14 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 		prompts[index].CategoryID = input.CategoryID
 		prompts[index].CategoryName = category.Name
 		prompts[index].Tags = normalizeTags(input.Tags)
+		prompts[index].Status = normalizePromptStatus(input.Status)
 		prompts[index].UpdatedAt = time.Now().UTC().Format(time.DateOnly)
 
-		if previousCategoryID != input.CategoryID {
+		if previousStatus == 1 && prompts[index].Status != 1 {
+			decrementCategoryCountLocked(previousCategoryID)
+		} else if previousStatus != 1 && prompts[index].Status == 1 {
+			incrementCategoryCountLocked(input.CategoryID)
+		} else if prompts[index].Status == 1 && previousCategoryID != input.CategoryID {
 			decrementCategoryCountLocked(previousCategoryID)
 			incrementCategoryCountLocked(input.CategoryID)
 		}
@@ -240,15 +265,18 @@ func DeletePrompt(id int, userID int) error {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id {
+		if prompts[index].ID != id || prompts[index].Status == -1 {
 			continue
 		}
 		if prompts[index].UserID != userID {
 			return fmt.Errorf("forbidden")
 		}
 
-		decrementCategoryCountLocked(prompts[index].CategoryID)
-		prompts = append(prompts[:index], prompts[index+1:]...)
+		if prompts[index].Status == 1 {
+			decrementCategoryCountLocked(prompts[index].CategoryID)
+		}
+		prompts[index].Status = -1
+		prompts[index].UpdatedAt = time.Now().UTC().Format(time.DateOnly)
 		return nil
 	}
 
@@ -260,7 +288,7 @@ func LikePrompt(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id {
+		if prompts[index].ID != id || prompts[index].Status != 1 {
 			continue
 		}
 
@@ -284,7 +312,7 @@ func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id {
+		if prompts[index].ID != id || prompts[index].Status != 1 {
 			continue
 		}
 
@@ -308,7 +336,7 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id {
+		if prompts[index].ID != id || prompts[index].Status != 1 {
 			continue
 		}
 
@@ -356,6 +384,24 @@ func ListUserHistoryPrompts(userID int) []Prompt {
 	list := promptsByIDLocked(ids)
 	sort.SliceStable(list, func(i, j int) bool {
 		return visitedAt[list[i].ID].After(visitedAt[list[j].ID])
+	})
+
+	return list
+}
+
+func ListUserDraftPrompts(userID int) []Prompt {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	list := make([]Prompt, 0)
+	for _, prompt := range prompts {
+		if prompt.UserID == userID && prompt.Status == 0 {
+			list = append(list, prompt)
+		}
+	}
+
+	sort.SliceStable(list, func(i, j int) bool {
+		return list[i].UpdatedAt > list[j].UpdatedAt
 	})
 
 	return list
@@ -461,4 +507,12 @@ func nextPromptIDLocked() int {
 	}
 
 	return maxID + 1
+}
+
+func normalizePromptStatus(status int) int {
+	if status == 0 {
+		return 0
+	}
+
+	return 1
 }

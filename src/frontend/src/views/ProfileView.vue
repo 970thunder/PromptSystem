@@ -11,7 +11,7 @@ import type { FollowStatus, Prompt, User } from '@/types'
 import { githubAuthUrl } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 
-type LibraryTab = 'published' | 'favorites' | 'likes' | 'history' | 'following' | 'followers'
+type LibraryTab = 'published' | 'drafts' | 'favorites' | 'likes' | 'history' | 'following' | 'followers'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +24,7 @@ const loading = ref(false)
 const savingProfile = ref(false)
 const uploadingAvatar = ref(false)
 const prompts = ref<Prompt[]>([])
+const draftPrompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
 const likedPrompts = ref<Prompt[]>([])
 const historyPrompts = ref<Prompt[]>([])
@@ -86,6 +87,9 @@ const activePromptList = computed(() => {
   if (activeLibraryTab.value === 'favorites') {
     return favoritePrompts.value
   }
+  if (activeLibraryTab.value === 'drafts') {
+    return draftPrompts.value
+  }
   if (activeLibraryTab.value === 'likes') {
     return likedPrompts.value
   }
@@ -111,6 +115,7 @@ const isUserLibraryTab = computed(() => activeLibraryTab.value === 'following' |
 
 const libraryTabs = computed(() => [
   { key: 'published' as const, label: '已发布', count: prompts.value.length },
+  { key: 'drafts' as const, label: '草稿', count: draftPrompts.value.length },
   { key: 'favorites' as const, label: '收藏', count: favoritePrompts.value.length },
   { key: 'likes' as const, label: '点赞', count: likedPrompts.value.length },
   { key: 'history' as const, label: '浏览', count: historyPrompts.value.length },
@@ -246,18 +251,21 @@ const loadProfile = async () => {
     await userStore.fetchUserInfo()
     profileUser.value = userStore.userInfo
     try {
-      const [favoritesRes, likesRes, historyRes] = await Promise.all([
+      const [favoritesRes, likesRes, historyRes, draftsRes] = await Promise.all([
         userApi.getFavoritePrompts(),
         userApi.getLikedPrompts(),
-        userApi.getHistoryPrompts()
+        userApi.getHistoryPrompts(),
+        promptApi.getMyDraftPrompts()
       ])
       favoritePrompts.value = favoritesRes.data
       likedPrompts.value = likesRes.data
       historyPrompts.value = historyRes.data
+      draftPrompts.value = draftsRes.data
     } catch {
       favoritePrompts.value = []
       likedPrompts.value = []
       historyPrompts.value = []
+      draftPrompts.value = []
     }
     await loadSocialData()
     followStatus.value = null
@@ -266,6 +274,7 @@ const loadProfile = async () => {
   }
 
   favoritePrompts.value = []
+  draftPrompts.value = []
   likedPrompts.value = []
   historyPrompts.value = []
   followingUsers.value = []
@@ -289,6 +298,14 @@ const handleEditPrompt = async (promptId: number) => {
   await router.push(`/publish?edit=${promptId}`)
 }
 
+const promptDetailTarget = (prompt: Prompt) => {
+  if (prompt.status === 0) {
+    return `/publish?edit=${prompt.id}`
+  }
+
+  return `/prompt/${prompt.id}`
+}
+
 const handleDeletePrompt = (promptId: number) => {
   dialog.warning({
     title: '删除 Prompt',
@@ -299,6 +316,7 @@ const handleDeletePrompt = (promptId: number) => {
       await promptApi.deletePrompt(promptId)
       promptStore.removePrompt(promptId)
       prompts.value = prompts.value.filter((item) => item.id !== promptId)
+      draftPrompts.value = draftPrompts.value.filter((item) => item.id !== promptId)
       message.success('Prompt 已删除')
     }
   })
@@ -571,7 +589,7 @@ watch(() => route.params.userId, loadProfile)
               class="profile-prompt-card"
             >
               <RouterLink
-                :to="`/prompt/${prompt.id}`"
+                :to="promptDetailTarget(prompt)"
                 class="profile-prompt-card__cover"
               >
                 <img
@@ -585,9 +603,15 @@ watch(() => route.params.userId, loadProfile)
                   <div class="profile-prompt-card__meta">
                     <span>{{ prompt.categoryName }}</span>
                     <span>{{ prompt.model }}</span>
+                    <span
+                      v-if="prompt.status === 0"
+                      class="profile-prompt-card__badge"
+                    >
+                      草稿
+                    </span>
                   </div>
                   <div
-                    v-if="isOwnerView && activeLibraryTab === 'published'"
+                    v-if="isOwnerView && (activeLibraryTab === 'published' || activeLibraryTab === 'drafts')"
                     class="profile-prompt-card__actions"
                   >
                     <button
@@ -604,7 +628,7 @@ watch(() => route.params.userId, loadProfile)
                     </button>
                   </div>
                 </div>
-                <RouterLink :to="`/prompt/${prompt.id}`">
+                <RouterLink :to="promptDetailTarget(prompt)">
                   <h2 class="profile-prompt-card__title">
                     {{ prompt.title }}
                   </h2>
@@ -634,11 +658,11 @@ watch(() => route.params.userId, loadProfile)
               当前列表还没有内容。发布、收藏、点赞或关注创作者后会在这里形成你的记录。
             </p>
             <RouterLink
-              v-if="activeLibraryTab === 'published'"
+              v-if="activeLibraryTab === 'published' || activeLibraryTab === 'drafts'"
               to="/publish"
               class="btn-pill-primary profile-empty__cta"
             >
-              发布第一条
+              {{ activeLibraryTab === 'drafts' ? '新建草稿' : '发布第一条' }}
             </RouterLink>
           </div>
         </section>
@@ -871,6 +895,10 @@ watch(() => route.params.userId, loadProfile)
 
 .profile-prompt-card__meta {
   @apply flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-[#7c7c7c];
+}
+
+.profile-prompt-card__badge {
+  @apply rounded-full bg-black px-2 py-0.5 text-[10px] font-medium text-white;
 }
 
 .profile-prompt-card__actions {

@@ -189,4 +189,5 @@ export interface PublishPromptRequest {
   params: PromptParams
   categoryId: number
   tags: string[]
+  status: number
 }

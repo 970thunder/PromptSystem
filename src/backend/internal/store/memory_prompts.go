@@ -15,6 +15,11 @@ func (s *MemoryPromptStore) FindByID(id int) (Prompt, bool, error) {
 	return prompt, ok, nil
 }
 
+func (s *MemoryPromptStore) FindOwnedByID(id int, userID int) (Prompt, bool, error) {
+	prompt, ok := FindOwnedPromptByID(id, userID)
+	return prompt, ok, nil
+}
+
 func (s *MemoryPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 	return CreatePrompt(input)
 }
@@ -49,4 +54,8 @@ func (s *MemoryPromptStore) ListUserLikes(userID int) ([]Prompt, error) {
 
 func (s *MemoryPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
 	return ListUserHistoryPrompts(userID), nil
+}
+
+func (s *MemoryPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {
+	return ListUserDraftPrompts(userID), nil
 }

@@ -90,6 +90,20 @@ func (s *MySQLPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
 }
 
 func (s *MySQLPromptStore) FindByID(id int) (Prompt, bool, error) {
+	return s.findOne(`
+		WHERE p.id = ? AND p.status = 1
+		GROUP BY p.id
+	`, id)
+}
+
+func (s *MySQLPromptStore) FindOwnedByID(id int, userID int) (Prompt, bool, error) {
+	return s.findOne(`
+		WHERE p.id = ? AND p.user_id = ? AND p.status <> -1
+		GROUP BY p.id
+	`, id, userID)
+}
+
+func (s *MySQLPromptStore) findOne(whereClause string, args ...any) (Prompt, bool, error) {
 	row := s.db.QueryRow(`
 		SELECT
 			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
@@ -101,9 +115,7 @@ func (s *MySQLPromptStore) FindByID(id int) (Prompt, bool, error) {
 		JOIN categories c ON c.id = p.category_id
 		JOIN users u ON u.id = p.user_id
 		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
-		WHERE p.id = ? AND p.status = 1
-		GROUP BY p.id
-	`, id)
+		`+whereClause, args...)
 
 	prompt, err := scanPrompt(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -138,7 +150,7 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 			title, description, cover, content, system_prompt, model, params,
 			category_id, user_id, views, likes, favorites, status
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
 	`,
 		strings.TrimSpace(input.Title),
 		strings.TrimSpace(input.Description),
@@ -149,6 +161,7 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 		string(paramsJSON),
 		input.CategoryID,
 		input.User.ID,
+		normalizePromptStatus(input.Status),
 	)
 	if err != nil {
 		return Prompt{}, err
@@ -169,7 +182,7 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 		return Prompt{}, err
 	}
 
-	prompt, found, err := s.FindByID(int(promptID))
+	prompt, found, err := s.FindOwnedByID(int(promptID), input.User.ID)
 	if err != nil {
 		return Prompt{}, err
 	}
@@ -189,7 +202,7 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 			Tags:         sanitizeTags(input.Tags),
 			UserID:       input.User.ID,
 			User:         input.User,
-			Status:       1,
+			Status:       normalizePromptStatus(input.Status),
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}, nil
@@ -204,7 +217,7 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 		return Prompt{}, errors.New("invalid category")
 	}
 
-	current, found, err := s.FindByID(id)
+	current, found, err := s.FindOwnedByID(id, userID)
 	if err != nil {
 		return Prompt{}, err
 	}
@@ -228,8 +241,8 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 
 	if _, err := tx.Exec(`
 		UPDATE prompts
-		SET title = ?, description = ?, cover = ?, content = ?, system_prompt = ?, model = ?, params = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ? AND user_id = ? AND status = 1
+		SET title = ?, description = ?, cover = ?, content = ?, system_prompt = ?, model = ?, params = ?, category_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND user_id = ? AND status <> -1
 	`,
 		strings.TrimSpace(input.Title),
 		strings.TrimSpace(input.Description),
@@ -239,6 +252,7 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 		strings.TrimSpace(input.Model),
 		string(paramsJSON),
 		input.CategoryID,
+		normalizePromptStatus(input.Status),
 		id,
 		userID,
 	); err != nil {
@@ -259,7 +273,7 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 		return Prompt{}, err
 	}
 
-	prompt, found, err := s.FindByID(id)
+	prompt, found, err := s.FindOwnedByID(id, userID)
 	if err != nil {
 		return Prompt{}, err
 	}
@@ -282,7 +296,7 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 			Views:        current.Views,
 			Likes:        current.Likes,
 			Favorites:    current.Favorites,
-			Status:       current.Status,
+			Status:       normalizePromptStatus(input.Status),
 			CreatedAt:    current.CreatedAt,
 			UpdatedAt:    now,
 		}, nil
@@ -292,10 +306,21 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 }
 
 func (s *MySQLPromptStore) Delete(id int, userID int) error {
+	if _, found, err := s.FindOwnedByID(id, userID); err != nil {
+		return err
+	} else if !found {
+		if prompt, publicFound, lookupErr := s.FindByID(id); lookupErr != nil {
+			return lookupErr
+		} else if publicFound && prompt.UserID != userID {
+			return errors.New("forbidden")
+		}
+		return errors.New("prompt not found")
+	}
+
 	result, err := s.db.Exec(`
 		UPDATE prompts
 		SET status = -1, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ? AND user_id = ? AND status = 1
+		WHERE id = ? AND user_id = ? AND status <> -1
 	`, id, userID)
 	if err != nil {
 		return err
@@ -306,16 +331,7 @@ func (s *MySQLPromptStore) Delete(id int, userID int) error {
 		return err
 	}
 	if affected == 0 {
-		prompt, found, lookupErr := s.FindByID(id)
-		if lookupErr != nil {
-			return lookupErr
-		}
-		if !found {
-			return errors.New("prompt not found")
-		}
-		if prompt.UserID != userID {
-			return errors.New("forbidden")
-		}
+		return errors.New("prompt not found")
 	}
 
 	return nil
@@ -330,6 +346,12 @@ func (s *MySQLPromptStore) Favorite(id int, userID int) (Prompt, bool, error) {
 }
 
 func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) {
+	if _, found, err := s.FindByID(id); err != nil {
+		return Prompt{}, false, err
+	} else if !found {
+		return Prompt{}, false, errors.New("prompt not found")
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return Prompt{}, false, err
@@ -406,6 +428,30 @@ func (s *MySQLPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
 	return scanPromptRows(rows)
 }
 
+func (s *MySQLPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			p.id, p.title, p.description, p.cover, p.content, p.system_prompt, p.model, p.params,
+			p.category_id, c.name, p.user_id,
+			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
+			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
+			COALESCE(GROUP_CONCAT(pt.tag ORDER BY pt.id SEPARATOR '||'), '')
+		FROM prompts p
+		JOIN categories c ON c.id = p.category_id
+		JOIN users u ON u.id = p.user_id
+		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
+		WHERE p.user_id = ? AND p.status = 0
+		GROUP BY p.id
+		ORDER BY p.updated_at DESC, p.id DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanPromptRows(rows)
+}
+
 func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prompt, error) {
 	if table != "favorites" && table != "likes" {
 		return nil, errors.New("invalid engagement table")
@@ -453,6 +499,12 @@ func scanPromptRows(rows *sql.Rows) ([]Prompt, error) {
 }
 
 func (s *MySQLPromptStore) applyEngagement(table string, counterColumn string, id int, userID int) (Prompt, bool, error) {
+	if _, found, err := s.FindByID(id); err != nil {
+		return Prompt{}, false, err
+	} else if !found {
+		return Prompt{}, false, errors.New("prompt not found")
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return Prompt{}, false, err

@@ -27,6 +27,7 @@ const message = useMessage()
 const promptStore = usePromptStore()
 
 const submitting = ref(false)
+const savingDraft = ref(false)
 const uploading = ref(false)
 const loadingPrompt = ref(false)
 const selectedFileName = ref('')
@@ -39,6 +40,7 @@ const jsonError = ref('')
 
 const editingPromptId = computed(() => Number(route.query.edit) || 0)
 const isEditing = computed(() => editingPromptId.value > 0)
+const isEditingDraft = ref(false)
 
 const wizardSteps = [
   { title: '封面', description: '上传作品封面' },
@@ -63,7 +65,8 @@ const form = reactive<PublishPromptRequest>({
   model: 'Midjourney v6',
   params: { ...defaultParams },
   categoryId: 1,
-  tags: []
+  tags: [],
+  status: 1
 })
 
 const categoryOptions = computed(() =>
@@ -120,6 +123,18 @@ const canSubmit = computed(() =>
   )
 )
 
+const canSaveDraft = computed(() =>
+  Boolean(
+    form.title.trim()
+    || form.description.trim()
+    || form.cover.trim()
+    || form.content.trim()
+    || form.systemPrompt.trim()
+    || form.model.trim()
+    || form.tags.length > 0
+  )
+)
+
 watch(
   () => form.content,
   (value) => {
@@ -154,7 +169,7 @@ onMounted(async () => {
   if (isEditing.value) {
     loadingPrompt.value = true
     try {
-      const response = await promptApi.getPromptDetail(editingPromptId.value)
+      const response = await promptApi.getMyPromptDetail(editingPromptId.value)
       const prompt = response.data
       form.title = prompt.title
       form.description = prompt.description
@@ -165,6 +180,8 @@ onMounted(async () => {
       form.params = { ...defaultParams, ...prompt.params }
       form.categoryId = prompt.categoryId
       form.tags = [...prompt.tags]
+      form.status = prompt.status
+      isEditingDraft.value = prompt.status === 0
       tagInput.value = prompt.tags.join(', ')
       useSystemPrompt.value = Boolean(prompt.systemPrompt.trim())
       useAdvancedParams.value = Boolean(
@@ -293,7 +310,7 @@ const goBack = () => {
   }
 }
 
-const buildPayload = (): PublishPromptRequest => {
+const buildPayload = (status = 1): PublishPromptRequest => {
   syncTags()
   const payload: PublishPromptRequest = {
     title: form.title.trim(),
@@ -304,6 +321,7 @@ const buildPayload = (): PublishPromptRequest => {
     model: form.model.trim(),
     categoryId: form.categoryId,
     tags: [...form.tags],
+    status,
     params: useAdvancedParams.value
       ? {
         temperature: form.params.temperature ?? defaultParams.temperature,
@@ -330,17 +348,45 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    const payload = buildPayload()
+    const payload = buildPayload(1)
     const response = isEditing.value
       ? await promptApi.updatePrompt(editingPromptId.value, payload)
       : await promptApi.publishPrompt(payload)
 
     promptStore.upsertPrompt(response.data)
     await promptStore.loadHomeFeed()
-    message.success(isEditing.value ? '提示词已更新' : '提示词已发布')
+    message.success(isEditing.value ? '提示词已发布/更新' : '提示词已发布')
     await router.push(`/prompt/${response.data.id}`)
   } finally {
     submitting.value = false
+  }
+}
+
+const handleSaveDraft = async () => {
+  syncTags()
+
+  if (!canSaveDraft.value) {
+    message.warning('至少填写一个字段后再保存草稿')
+    return
+  }
+
+  if (tagCount.value > MAX_TAGS) {
+    message.error(`标签最多 ${MAX_TAGS} 个`)
+    return
+  }
+
+  savingDraft.value = true
+  try {
+    const payload = buildPayload(0)
+    const response = isEditing.value
+      ? await promptApi.updatePrompt(editingPromptId.value, payload)
+      : await promptApi.savePromptDraft(payload)
+
+    promptStore.removePrompt(response.data.id)
+    message.success('草稿已保存')
+    await router.push('/profile')
+  } finally {
+    savingDraft.value = false
   }
 }
 </script>
@@ -365,7 +411,7 @@ const handleSubmit = async () => {
               {{ isEditing ? '编辑' : '发布' }}
             </p>
             <h1 class="publish-cover-pane__title">
-              {{ isEditing ? '编辑提示词' : '发布图像提示词' }}
+              {{ isEditingDraft ? '编辑草稿' : isEditing ? '编辑提示词' : '发布图像提示词' }}
             </h1>
           </div>
           <RouterLink
@@ -762,6 +808,14 @@ const handleSubmit = async () => {
           <span v-else />
 
           <div class="publish-wizard__actions">
+            <NButton
+              secondary
+              :loading="savingDraft"
+              :disabled="uploading || !canSaveDraft"
+              @click="handleSaveDraft"
+            >
+              保存草稿
+            </NButton>
             <NButton
               v-if="currentStep < wizardSteps.length - 1"
               type="primary"
