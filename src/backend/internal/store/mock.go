@@ -48,16 +48,27 @@ type Category struct {
 }
 
 type Comment struct {
-	ID         int      `json:"id"`
-	TargetType string   `json:"targetType"`
-	TargetID   int      `json:"targetId"`
-	UserID     int      `json:"userId"`
-	User       User     `json:"user"`
-	Content    string   `json:"content"`
-	Likes      int      `json:"likes"`
-	ParentID   *int     `json:"parentId"`
+	ID         int       `json:"id"`
+	TargetType string    `json:"targetType"`
+	TargetID   int       `json:"targetId"`
+	UserID     int       `json:"userId"`
+	User       User      `json:"user"`
+	Content    string    `json:"content"`
+	Likes      int       `json:"likes"`
+	ParentID   *int      `json:"parentId"`
 	Replies    []Comment `json:"replies"`
-	CreatedAt  string   `json:"createdAt"`
+	CreatedAt  string    `json:"createdAt"`
+}
+
+type Report struct {
+	ID         int    `json:"id"`
+	UserID     int    `json:"userId"`
+	TargetType string `json:"targetType"`
+	TargetID   int    `json:"targetId"`
+	Reason     string `json:"reason"`
+	Detail     string `json:"detail"`
+	Status     string `json:"status"`
+	CreatedAt  string `json:"createdAt"`
 }
 
 func Categories() []Category {

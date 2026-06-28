@@ -15,7 +15,7 @@
 |------|-----|
 | 项目 | PromptOS — AI 提示词 & 技能社区平台 |
 | 当前 Phase | **Phase 1 MVP** |
-| 当前聚焦模块 | **Phase 1 — 用户资料（头像上传已完成，下一步回到评论排序/举报）** |
+| 当前聚焦模块 | **Phase 1 — 评论互动（评论排序/举报）** |
 | 设计文档 | `prompt_platform_full_ai_dev_prd_and_prompt_pack.md` §二十（MVP 优先级） |
 | 源码状态 | 前端: `src/frontend/` · 后端: `src/backend/`（Go） |
 | 任务清单 | `TODO.md`（以代码为准，完成项须同步勾选） |

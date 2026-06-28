@@ -122,6 +122,22 @@ export interface CommentActionResponse {
   applied: boolean
 }
 
+export interface Report {
+  id: number
+  userId: number
+  targetType: string
+  targetId: number
+  reason: string
+  detail: string
+  status: string
+  createdAt: string
+}
+
+export interface ReportActionResponse {
+  report: Report
+  applied: boolean
+}
+
 export interface PageResponse<T> {
   list: T[]
   total: number

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useMessage } from 'naive-ui'
+import { useDialog, useMessage } from 'naive-ui'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
@@ -10,19 +10,27 @@ import type { Comment } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
+const dialog = useDialog()
 const message = useMessage()
 const promptStore = usePromptStore()
 const userStore = useUserStore()
 const liking = ref(false)
 const favoriting = ref(false)
 const commentSubmitting = ref(false)
+const commentReporting = ref(false)
 const activeReplyId = ref<number | null>(null)
 const commentDraft = ref('')
 const replyDrafts = ref<Record<number, string>>({})
+const commentSort = ref<'latest' | 'popular' | 'oldest'>('latest')
 
 const promptId = computed(() => Number(route.params.id))
 const prompt = computed(() => promptStore.currentPrompt)
 const comments = computed(() => promptStore.comments)
+const commentSortOptions = [
+  { label: '最新', value: 'latest' },
+  { label: '热门', value: 'popular' },
+  { label: '最早', value: 'oldest' }
+] as const
 
 const relatedPrompts = computed(() => {
   if (!prompt.value) {
@@ -131,7 +139,7 @@ const handleFavorite = async () => {
 const ensureCommentInput = (value: string) => {
   const trimmed = value.trim()
   if (!trimmed) {
-    message.warning('Please enter a comment first')
+    message.warning('请先输入评论内容')
     return ''
   }
 
@@ -158,7 +166,7 @@ const submitComment = async (parentId?: number) => {
     await promptStore.createPromptComment(prompt.value.id, {
       content,
       parentId: parentId ?? null
-    })
+    }, commentSort.value)
 
     if (parentId) {
       replyDrafts.value = {
@@ -170,7 +178,7 @@ const submitComment = async (parentId?: number) => {
       commentDraft.value = ''
     }
 
-    message.success(parentId ? 'Reply posted' : 'Comment posted')
+    message.success(parentId ? '回复已发布' : '评论已发布')
   } finally {
     commentSubmitting.value = false
   }
@@ -185,12 +193,41 @@ const handleCommentLike = async (comment: Comment) => {
     return
   }
 
-  await promptStore.likeComment(prompt.value.id, comment.id)
-  message.success('Comment liked')
+  await promptStore.likeComment(prompt.value.id, comment.id, commentSort.value)
+  message.success('评论已点赞')
 }
 
 const toggleReply = (commentId: number) => {
   activeReplyId.value = activeReplyId.value === commentId ? null : commentId
+}
+
+const handleCommentReport = async (comment: Comment) => {
+  if (commentReporting.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  dialog.create({
+    title: '举报评论',
+    content: '确认举报这条评论？系统会记录为待处理状态，后续可在管理端集中审核。',
+    positiveText: '确认举报',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      commentReporting.value = true
+      try {
+        const response = await promptStore.reportComment(comment.id, {
+          reason: '不当评论',
+          detail: comment.content.slice(0, 200)
+        })
+        message.success(response.applied ? '已提交举报' : '你已经举报过这条评论')
+      } finally {
+        commentReporting.value = false
+      }
+    }
+  })
 }
 
 const formatCommentTime = (value: string) => {
@@ -211,11 +248,16 @@ const loadDetail = async () => {
   }
 
   await promptStore.loadPromptDetail(promptId.value)
-  await promptStore.loadPromptComments(promptId.value)
+  await promptStore.loadPromptComments(promptId.value, commentSort.value)
 }
 
 onMounted(loadDetail)
 watch(() => route.params.id, loadDetail)
+watch(commentSort, async () => {
+  if (!Number.isNaN(promptId.value)) {
+    await promptStore.loadPromptComments(promptId.value, commentSort.value)
+  }
+})
 </script>
 
 <template>
@@ -415,14 +457,28 @@ watch(() => route.params.id, loadDetail)
             <div class="detail-comments-head">
               <div>
                 <div class="detail-eyebrow">
-                  Comments
+                  评论
                 </div>
                 <h2 class="detail-section-title">
-                  Community feedback
+                  社区反馈
                 </h2>
               </div>
-              <div class="detail-comments-count">
-                {{ comments.length }}
+              <div class="detail-comments-tools">
+                <div class="detail-comment-sort">
+                  <button
+                    v-for="option in commentSortOptions"
+                    :key="option.value"
+                    class="detail-comment-sort__btn"
+                    :class="{ 'detail-comment-sort__btn--active': commentSort === option.value }"
+                    :disabled="promptStore.commentsLoading"
+                    @click="commentSort = option.value"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+                <div class="detail-comments-count">
+                  {{ comments.length }}
+                </div>
               </div>
             </div>
 
@@ -431,18 +487,18 @@ watch(() => route.params.id, loadDetail)
                 v-model="commentDraft"
                 class="detail-comment-textarea"
                 rows="4"
-                placeholder="Add a practical note, revision idea, or usage result"
+                placeholder="写下使用反馈、优化建议或实际效果"
               />
               <div class="detail-comment-actions">
                 <span class="detail-comment-tip">
-                  Comments stay under 1000 characters.
+                  评论最多 1000 字。
                 </span>
                 <button
                   class="detail-btn-like"
                   :disabled="commentSubmitting"
                   @click="submitComment()"
                 >
-                  {{ commentSubmitting ? 'Posting...' : 'Post comment' }}
+                  {{ commentSubmitting ? '发布中...' : '发布评论' }}
                 </button>
               </div>
             </div>
@@ -451,14 +507,14 @@ watch(() => route.params.id, loadDetail)
               v-if="promptStore.commentsLoading"
               class="detail-comments-loading"
             >
-              Loading comments...
+              评论加载中...
             </div>
 
             <div
               v-else-if="comments.length === 0"
               class="detail-comments-empty"
             >
-              No comments yet.
+              还没有评论。
             </div>
 
             <div
@@ -493,13 +549,20 @@ watch(() => route.params.id, loadDetail)
                     class="detail-comment-link"
                     @click="handleCommentLike(comment)"
                   >
-                    Like · {{ comment.likes }}
+                    赞 · {{ comment.likes }}
                   </button>
                   <button
                     class="detail-comment-link"
                     @click="toggleReply(comment.id)"
                   >
-                    Reply
+                    回复
+                  </button>
+                  <button
+                    class="detail-comment-link"
+                    :disabled="commentReporting"
+                    @click="handleCommentReport(comment)"
+                  >
+                    举报
                   </button>
                 </div>
 
@@ -511,18 +574,18 @@ watch(() => route.params.id, loadDetail)
                     v-model="replyDrafts[comment.id]"
                     class="detail-comment-textarea"
                     rows="3"
-                    placeholder="Write a direct reply"
+                    placeholder="写一条直接回复"
                   />
                   <div class="detail-comment-actions">
                     <span class="detail-comment-tip">
-                      Replying to {{ comment.user.username }}
+                      回复 {{ comment.user.username }}
                     </span>
                     <button
                       class="detail-btn-favorite"
                       :disabled="commentSubmitting"
                       @click="submitComment(comment.id)"
                     >
-                      {{ commentSubmitting ? 'Posting...' : 'Post reply' }}
+                      {{ commentSubmitting ? '发布中...' : '发布回复' }}
                     </button>
                   </div>
                 </div>
@@ -559,7 +622,14 @@ watch(() => route.params.id, loadDetail)
                         class="detail-comment-link"
                         @click="handleCommentLike(reply)"
                       >
-                        Like · {{ reply.likes }}
+                        赞 · {{ reply.likes }}
+                      </button>
+                      <button
+                        class="detail-comment-link"
+                        :disabled="commentReporting"
+                        @click="handleCommentReport(reply)"
+                      >
+                        举报
                       </button>
                     </div>
                   </article>
@@ -869,6 +939,22 @@ watch(() => route.params.id, loadDetail)
   @apply flex items-center justify-between gap-4;
 }
 
+.detail-comments-tools {
+  @apply flex flex-wrap items-center justify-end gap-2;
+}
+
+.detail-comment-sort {
+  @apply flex rounded-full border border-black/10 bg-[#f6f4ef] p-1;
+}
+
+.detail-comment-sort__btn {
+  @apply rounded-full px-3 py-1 text-xs text-[#666666] transition hover:text-black disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.detail-comment-sort__btn--active {
+  @apply bg-black text-white hover:text-white;
+}
+
 .detail-comments-count {
   @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444];
 }
@@ -934,5 +1020,9 @@ watch(() => route.params.id, loadDetail)
 
 .detail-comment-link {
   @apply text-xs text-[#555555] transition hover:text-black;
+}
+
+.detail-comment-link:disabled {
+  @apply cursor-not-allowed opacity-60;
 }
 </style>

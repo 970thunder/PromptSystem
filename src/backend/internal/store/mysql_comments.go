@@ -15,8 +15,8 @@ func NewMySQLCommentStore(db *sql.DB) *MySQLCommentStore {
 	return &MySQLCommentStore{db: db}
 }
 
-func (s *MySQLCommentStore) ListByTarget(targetType string, targetID int) ([]Comment, error) {
-	targetType = strings.TrimSpace(strings.ToLower(targetType))
+func (s *MySQLCommentStore) ListByTarget(filter CommentFilter) ([]Comment, error) {
+	targetType := strings.TrimSpace(strings.ToLower(filter.TargetType))
 	if targetType != "prompt" {
 		return []Comment{}, nil
 	}
@@ -30,7 +30,7 @@ func (s *MySQLCommentStore) ListByTarget(targetType string, targetID int) ([]Com
 		JOIN users u ON u.id = c.user_id
 		WHERE c.target_type = ? AND c.target_id = ?
 		ORDER BY c.created_at ASC, c.id ASC
-	`, targetType, targetID)
+	`, targetType, filter.TargetID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (s *MySQLCommentStore) ListByTarget(targetType string, targetID int) ([]Com
 		return nil, err
 	}
 
-	return buildCommentTree(flat), nil
+	return buildCommentTree(flat, filter.SortBy), nil
 }
 
 func (s *MySQLCommentStore) Create(input CreateCommentInput) (Comment, error) {
@@ -165,6 +165,41 @@ func (s *MySQLCommentStore) Like(id int, userID int) (Comment, bool, error) {
 	return comment, applied, nil
 }
 
+func (s *MySQLCommentStore) Report(input ReportCommentInput) (Report, bool, error) {
+	if err := validateReportCommentInput(input); err != nil {
+		return Report{}, false, err
+	}
+
+	if _, found, err := s.findCommentByID(input.CommentID); err != nil {
+		return Report{}, false, err
+	} else if !found {
+		return Report{}, false, errors.New("comment not found")
+	}
+
+	result, err := s.db.Exec(`
+		INSERT IGNORE INTO reports (user_id, target_type, target_id, reason, detail, status)
+		VALUES (?, 'comment', ?, ?, ?, 'pending')
+	`, input.UserID, input.CommentID, strings.TrimSpace(input.Reason), strings.TrimSpace(input.Detail))
+	if err != nil {
+		return Report{}, false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Report{}, false, err
+	}
+
+	report, found, err := s.findReport(input.UserID, "comment", input.CommentID)
+	if err != nil {
+		return Report{}, false, err
+	}
+	if !found {
+		return Report{}, false, errors.New("report not found")
+	}
+
+	return report, affected > 0, nil
+}
+
 func (s *MySQLCommentStore) promptExists(tx *sql.Tx, id int) bool {
 	var exists int
 	if err := tx.QueryRow(`SELECT 1 FROM prompts WHERE id = ? AND status = 1 LIMIT 1`, id).Scan(&exists); err != nil {
@@ -216,6 +251,36 @@ func (s *MySQLCommentStore) findCommentByIDTx(tx *sql.Tx, id int) (Comment, bool
 	}
 
 	return comment, true, nil
+}
+
+func (s *MySQLCommentStore) findReport(userID int, targetType string, targetID int) (Report, bool, error) {
+	row := s.db.QueryRow(`
+		SELECT id, user_id, target_type, target_id, reason, detail, status, created_at
+		FROM reports
+		WHERE user_id = ? AND target_type = ? AND target_id = ?
+	`, userID, targetType, targetID)
+
+	var (
+		report    Report
+		createdAt time.Time
+	)
+	if err := row.Scan(
+		&report.ID,
+		&report.UserID,
+		&report.TargetType,
+		&report.TargetID,
+		&report.Reason,
+		&report.Detail,
+		&report.Status,
+		&createdAt,
+	); errors.Is(err, sql.ErrNoRows) {
+		return Report{}, false, nil
+	} else if err != nil {
+		return Report{}, false, err
+	}
+
+	report.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	return report, true, nil
 }
 
 func scanComment(scan func(dest ...any) error) (Comment, error) {

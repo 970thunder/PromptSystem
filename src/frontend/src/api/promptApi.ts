@@ -9,7 +9,8 @@ import type {
   PromptActionResponse,
   Comment,
   CreateCommentRequest,
-  CommentActionResponse
+  CommentActionResponse,
+  ReportActionResponse
 } from '@/types'
 
 export const promptApi = {
@@ -67,8 +68,10 @@ export const promptApi = {
     return request.post(`/prompts/${id}/favorite`)
   },
 
-  getPromptComments(id: number): Promise<ApiResponse<Comment[]>> {
-    return request.get(`/prompts/${id}/comments`)
+  getPromptComments(id: number, sort?: string): Promise<ApiResponse<Comment[]>> {
+    return request.get(`/prompts/${id}/comments`, {
+      params: sort ? { sort } : undefined
+    })
   },
 
   createPromptComment(id: number, data: CreateCommentRequest): Promise<ApiResponse<Comment>> {
@@ -77,6 +80,13 @@ export const promptApi = {
 
   likeComment(id: number): Promise<ApiResponse<CommentActionResponse>> {
     return request.post(`/comments/${id}/like`)
+  },
+
+  reportComment(
+    id: number,
+    data: { reason: string; detail?: string }
+  ): Promise<ApiResponse<ReportActionResponse>> {
+    return request.post(`/comments/${id}/report`, data)
   },
 
   // Get categories

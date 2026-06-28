@@ -21,7 +21,8 @@ type PromptManager interface {
 }
 
 type CommentManager interface {
-	ListByTarget(targetType string, targetID int) ([]Comment, error)
+	ListByTarget(filter CommentFilter) ([]Comment, error)
 	Create(input CreateCommentInput) (Comment, error)
 	Like(id int, userID int) (Comment, bool, error)
+	Report(input ReportCommentInput) (Report, bool, error)
 }

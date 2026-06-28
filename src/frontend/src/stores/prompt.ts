@@ -149,7 +149,7 @@ export const usePromptStore = defineStore('prompt', () => {
     }
   }
 
-  const loadPromptComments = async (id: number) => {
+  const loadPromptComments = async (id: number, sort = 'latest') => {
     commentsLoading.value = true
 
     const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
@@ -161,7 +161,7 @@ export const usePromptStore = defineStore('prompt', () => {
     }
 
     try {
-      const response = await promptApi.getPromptComments(id)
+      const response = await promptApi.getPromptComments(id, sort)
       comments.value = response.data
       return response.data
     } catch {
@@ -172,15 +172,20 @@ export const usePromptStore = defineStore('prompt', () => {
     }
   }
 
-  const createPromptComment = async (id: number, payload: CreateCommentRequest) => {
+  const createPromptComment = async (id: number, payload: CreateCommentRequest, sort = 'latest') => {
     const response = await promptApi.createPromptComment(id, payload)
-    await loadPromptComments(id)
+    await loadPromptComments(id, sort)
     return response.data
   }
 
-  const likeComment = async (promptID: number, commentID: number) => {
+  const likeComment = async (promptID: number, commentID: number, sort = 'latest') => {
     const response = await promptApi.likeComment(commentID)
-    await loadPromptComments(promptID)
+    await loadPromptComments(promptID, sort)
+    return response.data
+  }
+
+  const reportComment = async (commentID: number, payload: { reason: string; detail?: string }) => {
+    const response = await promptApi.reportComment(commentID, payload)
     return response.data
   }
 
@@ -216,6 +221,7 @@ export const usePromptStore = defineStore('prompt', () => {
     loadPromptComments,
     createPromptComment,
     likeComment,
+    reportComment,
     getRelatedPrompts
   }
 })

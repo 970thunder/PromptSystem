@@ -11,6 +11,13 @@ import (
 
 var commentMu sync.RWMutex
 var commentLikes = make(map[int]map[int]struct{})
+var commentReports = make(map[string]Report)
+
+type CommentFilter struct {
+	TargetType string
+	TargetID   int
+	SortBy     string
+}
 
 type CreateCommentInput struct {
 	TargetType string
@@ -18,6 +25,22 @@ type CreateCommentInput struct {
 	User       User
 	Content    string
 	ParentID   *int
+}
+
+type ReportCommentInput struct {
+	CommentID int
+	UserID    int
+	Reason    string
+	Detail    string
+}
+
+func normalizeCommentSort(sortBy string) string {
+	switch strings.TrimSpace(strings.ToLower(sortBy)) {
+	case "popular", "oldest":
+		return strings.TrimSpace(strings.ToLower(sortBy))
+	default:
+		return "latest"
+	}
 }
 
 func validateCommentInput(input CreateCommentInput) error {
@@ -43,7 +66,29 @@ func validateCommentInput(input CreateCommentInput) error {
 	return nil
 }
 
-func buildCommentTree(source []Comment) []Comment {
+func validateReportCommentInput(input ReportCommentInput) error {
+	if input.CommentID <= 0 {
+		return errors.New("invalid comment id")
+	}
+	if input.UserID <= 0 {
+		return errors.New("invalid user")
+	}
+
+	reason := strings.TrimSpace(input.Reason)
+	if reason == "" {
+		return errors.New("report reason is required")
+	}
+	if len([]rune(reason)) > 80 {
+		return errors.New("report reason must be 80 characters or fewer")
+	}
+	if len([]rune(strings.TrimSpace(input.Detail))) > 500 {
+		return errors.New("report detail must be 500 characters or fewer")
+	}
+
+	return nil
+}
+
+func buildCommentTree(source []Comment, sortBy string) []Comment {
 	if len(source) == 0 {
 		return []Comment{}
 	}
@@ -68,15 +113,33 @@ func buildCommentTree(source []Comment) []Comment {
 		roots = append(roots, item)
 	}
 
-	sort.SliceStable(roots, func(i, j int) bool {
-		return roots[i].CreatedAt > roots[j].CreatedAt
-	})
+	sortComments(roots, sortBy)
 
 	for i := range roots {
 		sortRepliesByTime(&roots[i])
 	}
 
 	return roots
+}
+
+func sortComments(comments []Comment, sortBy string) {
+	switch normalizeCommentSort(sortBy) {
+	case "popular":
+		sort.SliceStable(comments, func(i, j int) bool {
+			if comments[i].Likes == comments[j].Likes {
+				return comments[i].CreatedAt > comments[j].CreatedAt
+			}
+			return comments[i].Likes > comments[j].Likes
+		})
+	case "oldest":
+		sort.SliceStable(comments, func(i, j int) bool {
+			return comments[i].CreatedAt < comments[j].CreatedAt
+		})
+	default:
+		sort.SliceStable(comments, func(i, j int) bool {
+			return comments[i].CreatedAt > comments[j].CreatedAt
+		})
+	}
 }
 
 func sortRepliesByTime(comment *Comment) {
@@ -89,18 +152,23 @@ func sortRepliesByTime(comment *Comment) {
 	}
 }
 
-func ListPromptComments(targetID int) ([]Comment, error) {
+func ListPromptComments(filter CommentFilter) ([]Comment, error) {
 	commentMu.RLock()
 	defer commentMu.RUnlock()
 
+	targetType := strings.TrimSpace(strings.ToLower(filter.TargetType))
+	if targetType != "prompt" {
+		return []Comment{}, nil
+	}
+
 	filtered := make([]Comment, 0)
 	for _, comment := range comments {
-		if comment.TargetType == "prompt" && comment.TargetID == targetID {
+		if comment.TargetType == targetType && comment.TargetID == filter.TargetID {
 			filtered = append(filtered, comment)
 		}
 	}
 
-	return buildCommentTree(filtered), nil
+	return buildCommentTree(filtered, filter.SortBy), nil
 }
 
 func CreateComment(input CreateCommentInput) (Comment, error) {
@@ -169,6 +237,38 @@ func LikeComment(id int, userID int) (Comment, bool, error) {
 	return Comment{}, false, fmt.Errorf("comment not found")
 }
 
+func ReportComment(input ReportCommentInput) (Report, bool, error) {
+	if err := validateReportCommentInput(input); err != nil {
+		return Report{}, false, err
+	}
+
+	commentMu.Lock()
+	defer commentMu.Unlock()
+
+	if _, found := findCommentByIDLocked(input.CommentID); !found {
+		return Report{}, false, errors.New("comment not found")
+	}
+
+	key := fmt.Sprintf("%d:%d", input.UserID, input.CommentID)
+	if report, exists := commentReports[key]; exists {
+		return report, false, nil
+	}
+
+	report := Report{
+		ID:         nextReportIDLocked(),
+		UserID:     input.UserID,
+		TargetType: "comment",
+		TargetID:   input.CommentID,
+		Reason:     strings.TrimSpace(input.Reason),
+		Detail:     strings.TrimSpace(input.Detail),
+		Status:     "pending",
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
+	commentReports[key] = report
+
+	return report, true, nil
+}
+
 func findCommentByIDLocked(id int) (Comment, bool) {
 	for _, comment := range comments {
 		if comment.ID == id {
@@ -184,6 +284,17 @@ func nextCommentIDLocked() int {
 	for _, comment := range comments {
 		if comment.ID > maxID {
 			maxID = comment.ID
+		}
+	}
+
+	return maxID + 1
+}
+
+func nextReportIDLocked() int {
+	maxID := 0
+	for _, report := range commentReports {
+		if report.ID > maxID {
+			maxID = report.ID
 		}
 	}
 
