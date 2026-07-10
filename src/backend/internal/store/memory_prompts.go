@@ -44,6 +44,10 @@ func (s *MemoryPromptStore) RecordView(id int, userID int) (Prompt, bool, error)
 	return RecordPromptView(id, userID)
 }
 
+func (s *MemoryPromptStore) Report(id int, userID int, reason string, detail string) (Report, bool, error) {
+	return ReportPrompt(id, userID, reason, detail)
+}
+
 func (s *MemoryPromptStore) ListUserFavorites(userID int) ([]Prompt, error) {
 	return ListUserFavoritePrompts(userID), nil
 }

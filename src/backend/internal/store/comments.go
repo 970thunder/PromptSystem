@@ -59,6 +59,9 @@ func validateCommentInput(input CreateCommentInput) error {
 	if len([]rune(content)) > 1000 {
 		return errors.New("comment content must be 1000 characters or fewer")
 	}
+	if err := ValidateCommentModeration(content); err != nil {
+		return err
+	}
 	if input.User.ID <= 0 {
 		return errors.New("invalid user")
 	}

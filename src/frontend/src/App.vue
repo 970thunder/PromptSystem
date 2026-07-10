@@ -1,3 +1,4 @@
+<!-- 文件作用：挂载全局 Provider，并统一配置 PromptOS 的 Naive UI 主题。 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NConfigProvider, NDialogProvider, NMessageProvider, NNotificationProvider } from 'naive-ui'
@@ -16,10 +17,18 @@ const themeOverrides = computed(() => ({
     actionColor: '#f6f4ef',
     borderColor: 'rgba(0,0,0,0.1)',
     dividerColor: 'rgba(0,0,0,0.08)',
+    borderRadius: '16px',
+    borderRadiusSmall: '12px',
+    boxShadow1: '0 16px 40px rgba(15, 23, 42, 0.06)',
+    boxShadow2: '0 20px 48px rgba(15, 23, 42, 0.1)',
     textColorBase: '#111111',
     textColor1: '#111111',
     textColor2: '#555555',
-    textColor3: '#777777'
+    textColor3: '#777777',
+    successColor: '#22a06b',
+    warningColor: '#b7791f',
+    errorColor: '#c0392b',
+    infoColor: '#2563eb'
   }
 }))
 </script>

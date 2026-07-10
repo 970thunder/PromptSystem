@@ -15,7 +15,7 @@
 |------|-----|
 | 项目 | PromptOS — AI 提示词 & 技能社区平台 |
 | 当前 Phase | **Phase 1 MVP** |
-| 当前聚焦模块 | **Phase 1 — Prompt 详情页图片轮播** |
+| 当前聚焦模块 | **Phase 1 — TODO 闭环：工程准入、设计系统、安全审核、详情展示** |
 | 设计文档 | `prompt_platform_full_ai_dev_prd_and_prompt_pack.md` §二十（MVP 优先级） |
 | 源码状态 | 前端: `src/frontend/` · 后端: `src/backend/`（Go） |
 | 任务清单 | `TODO.md`（以代码为准，完成项须同步勾选） |

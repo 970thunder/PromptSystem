@@ -1,3 +1,4 @@
+<!-- 文件作用：展示 PromptOS 首页瀑布流、分类筛选和 Phase 2 Skill 入口占位。 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
@@ -22,6 +23,13 @@ const navItems = [
   { label: '工作流', to: '/search?tab=workflow' },
   { label: '智能体', to: '/search?tab=agent' }
 ]
+
+const skillCategoryPlaceholders = [
+  { name: '内容创作', desc: 'Prompt 编排与发布流程', icon: 'Content' },
+  { name: '电商运营', desc: '商品文案、客服与活动 SOP', icon: 'Ops' },
+  { name: '数据分析', desc: '分析任务拆解与报告模板', icon: 'Data' },
+  { name: '研发自动化', desc: '代码审查、测试与发布清单', icon: 'Dev' }
+] as const
 
 const fallbackCoverMap: Record<number, string> = {
   101: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
@@ -360,6 +368,37 @@ const loadMore = async () => {
           </button>
         </div>
       </div>
+
+      <section class="skill-entry">
+        <div class="skill-entry__head">
+          <div>
+            <div class="gallery-header__label">
+              Skill
+            </div>
+            <h2 class="skill-entry__title">
+              技能分类即将开放
+            </h2>
+          </div>
+          <span class="skill-entry__badge">Phase 2</span>
+        </div>
+        <div class="skill-entry__grid">
+          <article
+            v-for="item in skillCategoryPlaceholders"
+            :key="item.name"
+            class="skill-entry__card"
+          >
+            <div class="skill-entry__icon">
+              {{ item.icon }}
+            </div>
+            <div class="skill-entry__name">
+              {{ item.name }}
+            </div>
+            <p class="skill-entry__desc">
+              {{ item.desc }}
+            </p>
+          </article>
+        </div>
+      </section>
 
       <section
         v-if="promptStore.hotTags.length > 0"
@@ -795,6 +834,43 @@ const loadMore = async () => {
 .tag-filter {
   @apply mb-6 rounded-[20px] border border-black/10 bg-white px-4 py-3;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.skill-entry {
+  @apply mb-6 rounded-[20px] border border-black/10 bg-white px-4 py-4;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.skill-entry__head {
+  @apply mb-4 flex items-end justify-between gap-3;
+}
+
+.skill-entry__title {
+  @apply mt-1 text-lg font-semibold text-black;
+}
+
+.skill-entry__badge {
+  @apply shrink-0 rounded-full border border-black/10 bg-[#111111] px-3 py-1 text-xs font-medium text-white;
+}
+
+.skill-entry__grid {
+  @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-4;
+}
+
+.skill-entry__card {
+  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4 transition hover:border-black/20 hover:bg-white;
+}
+
+.skill-entry__icon {
+  @apply inline-flex rounded-full bg-black px-3 py-1 text-xs font-medium text-white;
+}
+
+.skill-entry__name {
+  @apply mt-3 text-sm font-semibold text-black;
+}
+
+.skill-entry__desc {
+  @apply mt-2 text-sm leading-5 text-[#666666];
 }
 
 .tag-filter__head {

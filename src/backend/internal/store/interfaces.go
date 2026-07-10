@@ -24,6 +24,7 @@ type PromptManager interface {
 	Like(id int, userID int) (Prompt, bool, error)
 	Favorite(id int, userID int) (Prompt, bool, error)
 	RecordView(id int, userID int) (Prompt, bool, error)
+	Report(id int, userID int, reason string, detail string) (Report, bool, error)
 	ListUserFavorites(userID int) ([]Prompt, error)
 	ListUserLikes(userID int) ([]Prompt, error)
 	ListUserHistory(userID int) ([]Prompt, error)

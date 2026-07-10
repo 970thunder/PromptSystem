@@ -1,3 +1,4 @@
+// 文件作用：将发布页输入的 Markdown 安全转换为受控预览 HTML。
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -5,6 +6,100 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+const allowedLinkProtocols = ['http:', 'https:', 'mailto:']
+
+export interface MarkdownPreviewBlock {
+  type: 'paragraph' | 'heading' | 'code'
+  text: string
+  level?: 1 | 2 | 3
+}
+
+function sanitizeLinkUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim()
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed
+  }
+
+  try {
+    const url = new URL(trimmed)
+    return allowedLinkProtocols.includes(url.protocol) ? url.href : '#'
+  } catch {
+    return '#'
+  }
+}
+
+export function renderMarkdownPreviewBlocks(source: string): MarkdownPreviewBlock[] {
+  const blocks: MarkdownPreviewBlock[] = []
+  const lines = source.split(/\r?\n/)
+  let inCodeBlock = false
+  let codeLines: string[] = []
+
+  for (const line of lines) {
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        blocks.push({ type: 'code', text: codeLines.join('\n').trim() })
+        codeLines = []
+        inCodeBlock = false
+      } else {
+        inCodeBlock = true
+      }
+      continue
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line)
+      continue
+    }
+
+    const heading = parseHeading(line)
+    if (heading) {
+      blocks.push(heading)
+      continue
+    }
+
+    const text = renderInlinePreviewText(line).trim()
+    if (text) {
+      blocks.push({ type: 'paragraph', text })
+    }
+  }
+
+  if (codeLines.length > 0) {
+    blocks.push({ type: 'code', text: codeLines.join('\n').trim() })
+  }
+
+  return blocks
+}
+
+function parseHeading(line: string): MarkdownPreviewBlock | null {
+  const matched = line.match(/^(#{1,3})\s+(.+)$/)
+  if (!matched) {
+    return null
+  }
+
+  return {
+    type: 'heading',
+    level: matched[1].length as 1 | 2 | 3,
+    text: renderInlinePreviewText(matched[2]).trim()
+  }
+}
+
+function renderInlinePreviewText(value: string): string {
+  return value
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, rawUrl: string) => {
+      const safeUrl = sanitizeLinkUrl(rawUrl)
+      return safeUrl === '#' ? label : `${label} (${safeUrl})`
+    })
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+}
+
+function renderSafeLink(label: string, rawUrl: string): string {
+  const safeLabel = escapeHtml(label)
+  const safeUrl = escapeHtml(sanitizeLinkUrl(rawUrl))
+  return `<a href="${safeUrl}" class="underline" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`
 }
 
 /** Lightweight Markdown preview for publish step (not a full spec implementation). */
@@ -24,7 +119,7 @@ export function renderMarkdownPreview(source: string): string {
   const withItalic = withBold.replace(/\*(.+?)\*/g, '<em>$1</em>')
   const withLinks = withItalic.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" class="underline" target="_blank" rel="noopener noreferrer">$1</a>'
+    (_match, label: string, rawUrl: string) => renderSafeLink(label, rawUrl)
   )
   const withBreaks = withLinks.replace(/\n/g, '<br>')
 

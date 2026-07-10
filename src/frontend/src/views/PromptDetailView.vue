@@ -1,3 +1,4 @@
+<!-- 文件作用：展示 Prompt 详情、互动操作、结构化示例和社区评论。 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
@@ -6,6 +7,7 @@ import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
+import { extractPromptExamples, extractPromptWorkflow } from '@/utils/promptStructure'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 import type { Comment, FollowStatus } from '@/types'
 
@@ -20,6 +22,7 @@ const favoriting = ref(false)
 const followingCreator = ref(false)
 const commentSubmitting = ref(false)
 const commentReporting = ref(false)
+const promptReporting = ref(false)
 const activeReplyId = ref<number | null>(null)
 const commentDraft = ref('')
 const replyDrafts = ref<Record<number, string>>({})
@@ -43,6 +46,9 @@ const relatedPrompts = computed(() => {
 
   return promptStore.getRelatedPrompts(prompt.value.id, prompt.value.categoryId)
 })
+
+const promptExamples = computed(() => prompt.value ? extractPromptExamples(prompt.value.content) : [])
+const promptWorkflow = computed(() => prompt.value ? extractPromptWorkflow(prompt.value.content) : [])
 
 const promptMeta = computed(() => {
   if (!prompt.value) {
@@ -337,6 +343,36 @@ const handleCommentReport = async (comment: Comment) => {
   })
 }
 
+const handlePromptReport = async () => {
+  const current = prompt.value
+  if (!current || promptReporting.value) {
+    return
+  }
+
+  if (!(await ensureAuthenticated())) {
+    return
+  }
+
+  dialog.create({
+    title: '举报提示词',
+    content: '确认举报这条提示词？系统会记录为待处理状态，后续可集中审核。',
+    positiveText: '确认举报',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      promptReporting.value = true
+      try {
+        const response = await promptStore.reportPrompt(current.id, {
+          reason: '不当提示词',
+          detail: current.title.slice(0, 200)
+        })
+        message.success(response.applied ? '已提交举报' : '你已经举报过这条提示词')
+      } finally {
+        promptReporting.value = false
+      }
+    }
+  })
+}
+
 const formatCommentTime = (value: string) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -556,6 +592,13 @@ watch(commentSort, async () => {
                   >
                     分享
                   </button>
+                  <button
+                    class="detail-btn-share"
+                    :disabled="promptReporting"
+                    @click="handlePromptReport"
+                  >
+                    {{ promptReporting ? '提交中...' : '举报' }}
+                  </button>
                 </div>
 
                 <div class="detail-stat-grid">
@@ -614,6 +657,93 @@ watch(commentSort, async () => {
                 </button>
               </div>
               <pre class="detail-pre">{{ prompt.systemPrompt }}</pre>
+            </article>
+          </section>
+
+          <section class="detail-content-grid">
+            <article class="detail-content-card">
+              <div>
+                <div class="detail-eyebrow">
+                  Few-shot
+                </div>
+                <h2 class="detail-section-title">
+                  示例输入与输出
+                </h2>
+              </div>
+
+              <div
+                v-if="promptExamples.length > 0"
+                class="detail-structure-list"
+              >
+                <article
+                  v-for="example in promptExamples"
+                  :key="example.title"
+                  class="detail-structure-card"
+                >
+                  <div class="detail-structure-card__title">
+                    {{ example.title }}
+                  </div>
+                  <div class="detail-structure-columns">
+                    <div>
+                      <div class="detail-structure-label">
+                        输入
+                      </div>
+                      <p class="detail-structure-text">
+                        {{ example.input || '未提供输入内容' }}
+                      </p>
+                    </div>
+                    <div>
+                      <div class="detail-structure-label">
+                        输出
+                      </div>
+                      <p class="detail-structure-text">
+                        {{ example.output || '未提供输出内容' }}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <p
+                v-else
+                class="detail-structure-empty"
+              >
+                当前提示词未提供结构化示例。
+              </p>
+            </article>
+
+            <article class="detail-content-card">
+              <div>
+                <div class="detail-eyebrow">
+                  Workflow
+                </div>
+                <h2 class="detail-section-title">
+                  只读流程说明
+                </h2>
+              </div>
+
+              <div
+                v-if="promptWorkflow.length > 0"
+                class="detail-workflow-list"
+              >
+                <div
+                  v-for="step in promptWorkflow"
+                  :key="`${step.title}-${step.detail}`"
+                  class="detail-workflow-step"
+                >
+                  <div class="detail-workflow-step__index">
+                    {{ step.title }}
+                  </div>
+                  <p class="detail-workflow-step__detail">
+                    {{ step.detail }}
+                  </p>
+                </div>
+              </div>
+              <p
+                v-else
+                class="detail-structure-empty"
+              >
+                当前提示词未提供结构化流程说明。
+              </p>
             </article>
           </section>
 
@@ -1136,6 +1266,39 @@ watch(commentSort, async () => {
 
 .detail-pre {
   @apply mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444];
+}
+
+.detail-structure-list,
+.detail-workflow-list {
+  @apply mt-5 space-y-4;
+}
+
+.detail-structure-card,
+.detail-workflow-step {
+  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+}
+
+.detail-structure-card__title,
+.detail-workflow-step__index {
+  @apply text-sm font-semibold text-black;
+}
+
+.detail-structure-columns {
+  @apply mt-3 grid gap-3 md:grid-cols-2;
+}
+
+.detail-structure-label {
+  @apply text-xs uppercase tracking-[0.16em] text-[#777777];
+}
+
+.detail-structure-text,
+.detail-workflow-step__detail,
+.detail-structure-empty {
+  @apply mt-2 whitespace-pre-wrap text-sm leading-6 text-[#555555];
+}
+
+.detail-structure-empty {
+  @apply rounded-[18px] border border-dashed border-black/10 bg-[#faf8f4] px-4 py-5;
 }
 
 .detail-related-grid {

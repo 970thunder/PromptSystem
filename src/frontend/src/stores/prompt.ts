@@ -274,6 +274,11 @@ export const usePromptStore = defineStore('prompt', () => {
     return response.data
   }
 
+  const reportPrompt = async (promptID: number, payload: { reason: string; detail?: string }) => {
+    const response = await promptApi.reportPrompt(promptID, payload)
+    return response.data
+  }
+
   const getRelatedPrompts = (promptId: number, categoryId: number) => {
     return prompts.value
       .filter((item) => item.id !== promptId && item.categoryId === categoryId)
@@ -315,6 +320,7 @@ export const usePromptStore = defineStore('prompt', () => {
     createPromptComment,
     likeComment,
     reportComment,
+    reportPrompt,
     getRelatedPrompts
   }
 })
