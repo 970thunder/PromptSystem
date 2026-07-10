@@ -106,6 +106,13 @@ export const promptApi = {
     return request.post(`/comments/${id}/report`, data)
   },
 
+  reportPrompt(
+    id: number,
+    data: { reason: string; detail?: string }
+  ): Promise<ApiResponse<ReportActionResponse>> {
+    return request.post(`/prompts/${id}/report`, data)
+  },
+
   // Get categories
   getCategories(): Promise<ApiResponse<Category[]>> {
     return request.get('/categories')

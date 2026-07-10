@@ -52,3 +52,29 @@ func TestMemoryPromptDraftLifecycle(t *testing.T) {
 		t.Fatal("published draft should be visible through public detail lookup")
 	}
 }
+
+func TestMemoryPromptReportIsIdempotent(t *testing.T) {
+	promptStore := NewMemoryPromptStore()
+
+	first, applied, err := promptStore.Report(101, 9201, "不当提示词", "标题疑似误导")
+	if err != nil {
+		t.Fatalf("Report() first error = %v", err)
+	}
+	if !applied {
+		t.Fatal("expected first report to be applied")
+	}
+	if first.TargetType != "prompt" || first.TargetID != 101 || first.UserID != 9201 {
+		t.Fatalf("unexpected first report: %+v", first)
+	}
+
+	second, applied, err := promptStore.Report(101, 9201, "不当提示词", "重复提交")
+	if err != nil {
+		t.Fatalf("Report() second error = %v", err)
+	}
+	if applied {
+		t.Fatal("expected duplicate report to be idempotent")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("expected duplicate report to reuse id %d, got %d", first.ID, second.ID)
+	}
+}

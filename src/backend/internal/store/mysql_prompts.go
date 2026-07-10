@@ -135,6 +135,10 @@ func (s *MySQLPromptStore) findOne(whereClause string, args ...any) (Prompt, boo
 }
 
 func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
+	if err := ValidatePromptModeration(input); err != nil {
+		return Prompt{}, err
+	}
+
 	category, ok := categoryByID(input.CategoryID)
 	if !ok {
 		return Prompt{}, errors.New("invalid category")
@@ -220,6 +224,10 @@ func (s *MySQLPromptStore) Create(input CreatePromptInput) (Prompt, error) {
 }
 
 func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (Prompt, error) {
+	if err := ValidatePromptModeration(input); err != nil {
+		return Prompt{}, err
+	}
+
 	category, ok := categoryByID(input.CategoryID)
 	if !ok {
 		return Prompt{}, errors.New("invalid category")
@@ -405,6 +413,47 @@ func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) 
 	return prompt, applied, nil
 }
 
+func (s *MySQLPromptStore) Report(id int, userID int, reason string, detail string) (Report, bool, error) {
+	input := ReportPromptInput{
+		PromptID: id,
+		UserID:   userID,
+		Reason:   reason,
+		Detail:   detail,
+	}
+	if err := validateReportPromptInput(input); err != nil {
+		return Report{}, false, err
+	}
+
+	if _, found, err := s.FindByID(id); err != nil {
+		return Report{}, false, err
+	} else if !found {
+		return Report{}, false, errors.New("prompt not found")
+	}
+
+	result, err := s.db.Exec(`
+		INSERT IGNORE INTO reports (user_id, target_type, target_id, reason, detail, status)
+		VALUES (?, 'prompt', ?, ?, ?, 'pending')
+	`, userID, id, strings.TrimSpace(reason), strings.TrimSpace(detail))
+	if err != nil {
+		return Report{}, false, err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Report{}, false, err
+	}
+
+	report, found, err := s.findPromptReport(userID, "prompt", id)
+	if err != nil {
+		return Report{}, false, err
+	}
+	if !found {
+		return Report{}, false, errors.New("report not found")
+	}
+
+	return report, affected > 0, nil
+}
+
 func (s *MySQLPromptStore) ListUserFavorites(userID int) ([]Prompt, error) {
 	return s.listUserEngagements("favorites", userID)
 }
@@ -558,6 +607,36 @@ func (s *MySQLPromptStore) applyEngagement(table string, counterColumn string, i
 	}
 
 	return prompt, applied, nil
+}
+
+func (s *MySQLPromptStore) findPromptReport(userID int, targetType string, targetID int) (Report, bool, error) {
+	row := s.db.QueryRow(`
+		SELECT id, user_id, target_type, target_id, reason, detail, status, created_at
+		FROM reports
+		WHERE user_id = ? AND target_type = ? AND target_id = ?
+	`, userID, targetType, targetID)
+
+	var (
+		report    Report
+		createdAt time.Time
+	)
+	if err := row.Scan(
+		&report.ID,
+		&report.UserID,
+		&report.TargetType,
+		&report.TargetID,
+		&report.Reason,
+		&report.Detail,
+		&report.Status,
+		&createdAt,
+	); errors.Is(err, sql.ErrNoRows) {
+		return Report{}, false, nil
+	} else if err != nil {
+		return Report{}, false, err
+	}
+
+	report.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	return report, true, nil
 }
 
 func scanPrompt(scan func(dest ...any) error) (Prompt, error) {

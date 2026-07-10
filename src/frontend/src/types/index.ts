@@ -1,3 +1,4 @@
+// 文件作用：集中维护前后端共享的前端业务类型定义。
 // User types
 export interface User {
   id: number
@@ -53,6 +54,17 @@ export interface PromptParams {
   topP?: number
   maxTokens?: number
   system?: string
+}
+
+export interface PromptExample {
+  title: string
+  input: string
+  output: string
+}
+
+export interface PromptWorkflowStep {
+  title: string
+  detail: string
 }
 
 // Category types

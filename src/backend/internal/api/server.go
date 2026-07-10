@@ -400,6 +400,15 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 				s.handlePromptView(w, r, id)
 			}).ServeHTTP(w, r)
 			return
+		case "report":
+			if r.Method != http.MethodPost {
+				writeMethodNotAllowed(w)
+				return
+			}
+			s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+				s.handlePromptReport(w, r, id)
+			}).ServeHTTP(w, r)
+			return
 		case "comments":
 			switch r.Method {
 			case http.MethodGet:
@@ -743,6 +752,40 @@ func (s *server) handlePromptView(w http.ResponseWriter, r *http.Request, id int
 	})
 }
 
+func (s *server) handlePromptReport(w http.ResponseWriter, r *http.Request, id int) {
+	var payload reportCommentPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+		return
+	}
+
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+
+	report, applied, err := s.promptStore.Report(id, userID, payload.Reason, payload.Detail)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "prompt not found" {
+			status = http.StatusNotFound
+		}
+
+		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[reportActionResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: reportActionResponse{
+			Report:  report,
+			Applied: applied,
+		},
+	})
+}
+
 func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id int) {
 	var payload promptPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -969,7 +1012,7 @@ func promptPayloadStatus(payload promptPayload) int {
 type apiResponse[T any] struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
-	Data    T      `json:"data,omitempty"`
+	Data    T      `json:"data"`
 }
 
 type promptActionResponse struct {

@@ -12,6 +12,7 @@ var promptMu sync.RWMutex
 var promptLikes = make(map[int]map[int]struct{})
 var promptFavorites = make(map[int]map[int]struct{})
 var promptViewHistory = make(map[int]map[int]time.Time)
+var promptReports = make(map[string]Report)
 
 type CreatePromptInput struct {
 	Title        string
@@ -35,6 +36,13 @@ type PromptFilter struct {
 	Keyword    string
 	Model      string
 	Tag        string
+}
+
+type ReportPromptInput struct {
+	PromptID int
+	UserID   int
+	Reason   string
+	Detail   string
 }
 
 func FilterPrompts(categoryID int, sortBy string) []Prompt {
@@ -190,6 +198,10 @@ func FindOwnedPromptByID(id int, userID int) (Prompt, bool) {
 }
 
 func CreatePrompt(input CreatePromptInput) (Prompt, error) {
+	if err := ValidatePromptModeration(input); err != nil {
+		return Prompt{}, err
+	}
+
 	promptMu.Lock()
 	defer promptMu.Unlock()
 
@@ -231,6 +243,10 @@ func CreatePrompt(input CreatePromptInput) (Prompt, error) {
 }
 
 func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
+	if err := ValidatePromptModeration(input); err != nil {
+		return Prompt{}, err
+	}
+
 	promptMu.Lock()
 	defer promptMu.Unlock()
 
@@ -373,6 +389,51 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 	return Prompt{}, false, fmt.Errorf("prompt not found")
 }
 
+func ReportPrompt(id int, userID int, reason string, detail string) (Report, bool, error) {
+	input := ReportPromptInput{
+		PromptID: id,
+		UserID:   userID,
+		Reason:   reason,
+		Detail:   detail,
+	}
+	if err := validateReportPromptInput(input); err != nil {
+		return Report{}, false, err
+	}
+
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	found := false
+	for _, prompt := range prompts {
+		if prompt.ID == id && prompt.Status == 1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return Report{}, false, fmt.Errorf("prompt not found")
+	}
+
+	key := fmt.Sprintf("prompt:%d:%d", userID, id)
+	if report, exists := promptReports[key]; exists {
+		return report, false, nil
+	}
+
+	report := Report{
+		ID:         nextPromptReportIDLocked(),
+		UserID:     userID,
+		TargetType: "prompt",
+		TargetID:   id,
+		Reason:     strings.TrimSpace(reason),
+		Detail:     strings.TrimSpace(detail),
+		Status:     "pending",
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
+	promptReports[key] = report
+
+	return report, true, nil
+}
+
 func ListUserFavoritePrompts(userID int) []Prompt {
 	promptMu.RLock()
 	defer promptMu.RUnlock()
@@ -423,6 +484,39 @@ func ListUserDraftPrompts(userID int) []Prompt {
 	})
 
 	return list
+}
+
+func validateReportPromptInput(input ReportPromptInput) error {
+	if input.PromptID <= 0 {
+		return fmt.Errorf("invalid prompt id")
+	}
+	if input.UserID <= 0 {
+		return fmt.Errorf("invalid user")
+	}
+
+	reason := strings.TrimSpace(input.Reason)
+	if reason == "" {
+		return fmt.Errorf("report reason is required")
+	}
+	if len([]rune(reason)) > 80 {
+		return fmt.Errorf("report reason must be 80 characters or fewer")
+	}
+	if len([]rune(strings.TrimSpace(input.Detail))) > 500 {
+		return fmt.Errorf("report detail must be 500 characters or fewer")
+	}
+
+	return nil
+}
+
+func nextPromptReportIDLocked() int {
+	maxID := 0
+	for _, report := range promptReports {
+		if report.ID > maxID {
+			maxID = report.ID
+		}
+	}
+
+	return maxID + 1
 }
 
 func promptFavoritesByUserLocked(userID int) []int {

@@ -16,7 +16,7 @@ import {
 import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
 import type { PublishPromptRequest, PromptParams } from '@/types'
-import { renderMarkdownPreview } from '@/utils/markdownPreview'
+import { renderMarkdownPreviewBlocks } from '@/utils/markdownPreview'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const MAX_TAGS = 30
@@ -81,7 +81,7 @@ const categoryOptions = computed(() =>
 
 const tagCount = computed(() => form.tags.length)
 
-const markdownPreviewHtml = computed(() => renderMarkdownPreview(form.content))
+const markdownPreviewBlocks = computed(() => renderMarkdownPreviewBlocks(form.content))
 
 const selectedCategoryName = computed(() =>
   promptStore.categories.find((item) => item.id === form.categoryId)?.name ?? '未选择'
@@ -725,10 +725,49 @@ const handleSaveDraft = async () => {
                   class="publish-field publish-field--fill"
                 >
                   <span class="publish-field__label">Markdown 预览</span>
-                  <div
-                    class="publish-preview-box"
-                    v-html="markdownPreviewHtml"
-                  />
+                  <div class="publish-preview-box">
+                    <template v-if="markdownPreviewBlocks.length > 0">
+                      <template
+                        v-for="(block, index) in markdownPreviewBlocks"
+                        :key="`${block.type}-${index}`"
+                      >
+                        <h1
+                          v-if="block.type === 'heading' && block.level === 1"
+                          class="publish-preview-heading publish-preview-heading--one"
+                        >
+                          {{ block.text }}
+                        </h1>
+                        <h2
+                          v-else-if="block.type === 'heading' && block.level === 2"
+                          class="publish-preview-heading publish-preview-heading--two"
+                        >
+                          {{ block.text }}
+                        </h2>
+                        <h3
+                          v-else-if="block.type === 'heading'"
+                          class="publish-preview-heading publish-preview-heading--three"
+                        >
+                          {{ block.text }}
+                        </h3>
+                        <pre
+                          v-else-if="block.type === 'code'"
+                          class="publish-preview-code"
+                        >{{ block.text }}</pre>
+                        <p
+                          v-else
+                          class="publish-preview-paragraph"
+                        >
+                          {{ block.text }}
+                        </p>
+                      </template>
+                    </template>
+                    <p
+                      v-else
+                      class="publish-preview-empty"
+                    >
+                      输入 Markdown 后将在此预览
+                    </p>
+                  </div>
                 </div>
 
                 <div
@@ -1139,6 +1178,34 @@ const handleSaveDraft = async () => {
 
 .publish-preview-box--code {
   @apply overflow-auto text-xs leading-5 text-[#444444];
+}
+
+.publish-preview-heading {
+  @apply font-semibold text-black;
+}
+
+.publish-preview-heading--one {
+  @apply text-xl;
+}
+
+.publish-preview-heading--two {
+  @apply text-lg;
+}
+
+.publish-preview-heading--three {
+  @apply text-base;
+}
+
+.publish-preview-paragraph {
+  @apply text-sm leading-6 text-[#333333];
+}
+
+.publish-preview-code {
+  @apply overflow-x-auto rounded-[12px] bg-black/5 p-3 text-xs leading-5 text-[#444444];
+}
+
+.publish-preview-empty {
+  @apply text-sm text-[#888888];
 }
 
 .publish-panel {
