@@ -2,13 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@import './tokens.css';
+@import './transitions.css';
+
 /* Base styles */
 html {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
-  @apply bg-[#f5f3ee] text-[#111111] antialiased;
+  background-color: var(--prompt-bg);
+  color: var(--prompt-text);
+  @apply antialiased;
   min-height: 100vh;
 }
 

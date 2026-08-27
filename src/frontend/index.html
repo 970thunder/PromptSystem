@@ -1,13 +1,29 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="PromptOS - AI 提示词 & 技能社区平台" />
     <title>PromptOS</title>
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('promptos-theme-mode')
+          var mode = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system'
+          var resolved = mode === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : mode
+          document.documentElement.dataset.mode = resolved
+          document.documentElement.dataset.themeReady = 'true'
+        } catch (e) {
+          document.documentElement.dataset.mode = 'light'
+          document.documentElement.dataset.themeReady = 'true'
+        }
+      })()
+    </script>
   </head>
-  <body class="bg-dark-900 text-neutral-100">
+  <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -1,0 +1,103 @@
+/* PromptOS shared transition classes. Uses the --prompt-ease-* and
+   --prompt-duration-* tokens so every enter/leave animation feels consistent. */
+
+/* Theme view transition: new root on top, default fade disabled. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* Menu / panel expand-collapse (push-down mega menu). */
+.prompt-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--prompt-duration-base) var(--prompt-ease-out);
+}
+
+.prompt-collapse--open {
+  grid-template-rows: 1fr;
+}
+
+.prompt-collapse__inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Route transition wrappers. */
+.route-fade-enter-active,
+.route-fade-leave-active {
+  transition: opacity var(--prompt-duration-base) var(--prompt-ease-out),
+    transform var(--prompt-duration-base) var(--prompt-ease-out);
+}
+
+.route-fade-enter-from {
+  opacity: 0;
+  transform: translate3d(34px, 0, 0) rotate(0.6deg);
+}
+
+.route-fade-leave-to {
+  opacity: 0;
+  transform: translate3d(-26px, 0, 0) rotate(-0.4deg);
+}
+
+/* Back direction: reverse the slide. */
+.route-fade--back .route-fade-enter-from {
+  transform: translate3d(-34px, 0, 0) rotate(-0.6deg);
+}
+
+.route-fade--back .route-fade-leave-to {
+  transform: translate3d(26px, 0, 0) rotate(0.4deg);
+}
+
+/* Generic list add/remove. */
+.list-move {
+  transition: transform var(--prompt-duration-base) var(--prompt-ease-out);
+}
+
+.list-enter-active,
+.list-leave-active {
+  transition: opacity var(--prompt-duration-fast) var(--prompt-ease-out),
+    transform var(--prompt-duration-fast) var(--prompt-ease-out);
+}
+
+.list-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.list-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* Color / border / shadow micro-transitions. */
+.prompt-color-transition {
+  transition: background-color var(--prompt-duration-fast) var(--prompt-ease-out),
+    color var(--prompt-duration-fast) var(--prompt-ease-out),
+    border-color var(--prompt-duration-fast) var(--prompt-ease-out),
+    box-shadow var(--prompt-duration-fast) var(--prompt-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-collapse,
+  .route-fade-enter-active,
+  .route-fade-leave-active,
+  .list-move,
+  .list-enter-active,
+  .list-leave-active,
+  .prompt-color-transition {
+    transition-duration: 1ms;
+    transition-delay: 0ms;
+    transform: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

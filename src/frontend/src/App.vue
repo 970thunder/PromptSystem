@@ -1,40 +1,47 @@
 <!-- 文件作用：挂载全局 Provider，并统一配置 PromptOS 的 Naive UI 主题。 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NConfigProvider, NDialogProvider, NMessageProvider, NNotificationProvider } from 'naive-ui'
+import { darkTheme, NConfigProvider, NDialogProvider, NMessageProvider, NNotificationProvider } from 'naive-ui'
 import GitHubBindReminder from '@/components/GitHubBindReminder.vue'
+import { useSiteTheme } from '@/composables/useSiteTheme'
+
+const { resolvedMode } = useSiteTheme()
 
 const themeOverrides = computed(() => ({
   common: {
-    primaryColor: '#111111',
-    primaryColorHover: '#333333',
-    primaryColorPressed: '#000000',
-    bodyColor: '#f5f3ee',
-    cardColor: '#ffffff',
-    modalColor: '#ffffff',
-    popoverColor: '#ffffff',
-    inputColor: '#faf8f4',
-    actionColor: '#f6f4ef',
-    borderColor: 'rgba(0,0,0,0.1)',
-    dividerColor: 'rgba(0,0,0,0.08)',
+    primaryColor: 'var(--prompt-primary)',
+    primaryColorHover: 'var(--prompt-primary-hover)',
+    bodyColor: 'var(--prompt-bg)',
+    cardColor: 'var(--prompt-surface)',
+    modalColor: 'var(--prompt-surface)',
+    popoverColor: 'var(--prompt-surface)',
+    inputColor: 'var(--prompt-surface-muted)',
+    actionColor: 'var(--prompt-surface-muted)',
+    borderColor: 'var(--prompt-border)',
+    dividerColor: 'var(--prompt-border)',
     borderRadius: '16px',
     borderRadiusSmall: '12px',
-    boxShadow1: '0 16px 40px rgba(15, 23, 42, 0.06)',
-    boxShadow2: '0 20px 48px rgba(15, 23, 42, 0.1)',
-    textColorBase: '#111111',
-    textColor1: '#111111',
-    textColor2: '#555555',
-    textColor3: '#777777',
-    successColor: '#22a06b',
-    warningColor: '#b7791f',
-    errorColor: '#c0392b',
-    infoColor: '#2563eb'
+    boxShadow1: 'var(--prompt-shadow-1)',
+    boxShadow2: 'var(--prompt-shadow-2)',
+    textColorBase: 'var(--prompt-text)',
+    textColor1: 'var(--prompt-text)',
+    textColor2: 'var(--prompt-text-muted)',
+    textColor3: 'var(--prompt-text-faint)',
+    successColor: 'var(--prompt-success)',
+    warningColor: 'var(--prompt-warning)',
+    errorColor: 'var(--prompt-error)',
+    infoColor: 'var(--prompt-focus)'
   }
 }))
+
+const activeTheme = computed(() => (resolvedMode.value === 'dark' ? darkTheme : null))
 </script>
 
 <template>
-  <NConfigProvider :theme-overrides="themeOverrides">
+  <NConfigProvider
+    :theme="activeTheme"
+    :theme-overrides="themeOverrides"
+  >
     <NMessageProvider>
       <NDialogProvider>
         <NNotificationProvider>
