@@ -162,8 +162,11 @@ func (s *server) handlePrompts(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	page := parseInt(query.Get("page"), 1)
-	pageSize := parseInt(query.Get("pageSize"), 12)
+	page, pageSize, err := parsePageParams(stringPageParams{Page: query.Get("page"), PageSize: query.Get("pageSize")})
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
 	categoryID := parseInt(query.Get("categoryId"), 0)
 	userID := parseInt(query.Get("userId"), 0)
 	sortBy := query.Get("sort")
@@ -171,34 +174,25 @@ func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 	model := query.Get("model")
 	tag := query.Get("tag")
 
-	list, err := s.promptStore.Query(store.PromptFilter{
+	list, total, err := s.promptStore.QueryPage(store.PromptFilter{
 		CategoryID: categoryID,
 		SortBy:     sortBy,
 		UserID:     userID,
 		Keyword:    keyword,
 		Model:      model,
 		Tag:        tag,
-	})
+	}, page, pageSize)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load prompts"})
 		return
-	}
-	start := (page - 1) * pageSize
-	if start > len(list) {
-		start = len(list)
-	}
-
-	end := start + pageSize
-	if end > len(list) {
-		end = len(list)
 	}
 
 	writeJSON(w, http.StatusOK, apiResponse[pageResponse[store.Prompt]]{
 		Code:    200,
 		Message: "Success",
 		Data: pageResponse[store.Prompt]{
-			List:     list[start:end],
-			Total:    len(list),
+			List:     list,
+			Total:    total,
 			Page:     page,
 			PageSize: pageSize,
 		},
@@ -212,8 +206,11 @@ func (s *server) handlePromptSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	page := parseInt(query.Get("page"), 1)
-	pageSize := parseInt(query.Get("pageSize"), 12)
+	page, pageSize, err := parsePageParams(stringPageParams{Page: query.Get("page"), PageSize: query.Get("pageSize")})
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
 	categoryID := parseInt(query.Get("categoryId"), 0)
 	userID := parseInt(query.Get("userId"), 0)
 	sortBy := query.Get("sort")
@@ -221,35 +218,25 @@ func (s *server) handlePromptSearch(w http.ResponseWriter, r *http.Request) {
 	model := query.Get("model")
 	tag := query.Get("tag")
 
-	list, err := s.promptStore.Query(store.PromptFilter{
+	list, total, err := s.promptStore.QueryPage(store.PromptFilter{
 		CategoryID: categoryID,
 		SortBy:     sortBy,
 		UserID:     userID,
 		Keyword:    keyword,
 		Model:      model,
 		Tag:        tag,
-	})
+	}, page, pageSize)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to search prompts"})
 		return
-	}
-
-	start := (page - 1) * pageSize
-	if start > len(list) {
-		start = len(list)
-	}
-
-	end := start + pageSize
-	if end > len(list) {
-		end = len(list)
 	}
 
 	writeJSON(w, http.StatusOK, apiResponse[pageResponse[store.Prompt]]{
 		Code:    200,
 		Message: "Success",
 		Data: pageResponse[store.Prompt]{
-			List:     list[start:end],
-			Total:    len(list),
+			List:     list,
+			Total:    total,
 			Page:     page,
 			PageSize: pageSize,
 		},

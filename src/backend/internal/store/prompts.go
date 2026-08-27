@@ -582,6 +582,28 @@ func normalizeTags(tags []string) []string {
 	return result
 }
 
+// QueryPagePrompts applies the same filtering as QueryPrompts but returns one
+// page plus the total, mirroring the MySQL store semantics.
+func QueryPagePrompts(filter PromptFilter, page, pageSize int) ([]Prompt, int) {
+	all := QueryPrompts(filter)
+	total := len(all)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 100
+	}
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return all[start:end], total
+}
+
 func sanitizeImages(images []string) []string {
 	seen := make(map[string]struct{}, len(images))
 	cleaned := make([]string, 0, len(images))

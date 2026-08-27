@@ -17,6 +17,22 @@ func NewMySQLPromptStore(db *sql.DB) *MySQLPromptStore {
 }
 
 func (s *MySQLPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
+	prompts, _, err := s.queryPage(filter, 1, 100)
+	return prompts, err
+}
+
+func (s *MySQLPromptStore) QueryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error) {
+	return s.queryPage(filter, page, pageSize)
+}
+
+func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 100
+	}
+
 	baseQuery := `
 		SELECT
 			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
@@ -73,9 +89,30 @@ func (s *MySQLPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
 		baseQuery += " ORDER BY p.created_at DESC, p.id DESC"
 	}
 
+	countQuery := `
+		SELECT COUNT(DISTINCT p.id)
+		FROM prompts p
+		JOIN categories c ON c.id = p.category_id
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1
+	`
+	var countArgs []any
+	if len(conditions) > 0 {
+		countQuery += " AND " + strings.Join(conditions, " AND ")
+		countArgs = args
+	}
+
+	var total int
+	if err := s.db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	baseQuery += " LIMIT ? OFFSET ?"
+	args = append(args, pageSize, (page-1)*pageSize)
+
 	rows, err := s.db.Query(baseQuery, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -83,16 +120,16 @@ func (s *MySQLPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
 	for rows.Next() {
 		prompt, err := scanPrompt(rows.Scan)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		prompts = append(prompts, prompt)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return prompts, nil
+	return prompts, total, nil
 }
 
 func (s *MySQLPromptStore) FindByID(id int) (Prompt, bool, error) {

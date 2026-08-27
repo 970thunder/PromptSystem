@@ -10,6 +10,11 @@ func (s *MemoryPromptStore) Query(filter PromptFilter) ([]Prompt, error) {
 	return QueryPrompts(filter), nil
 }
 
+func (s *MemoryPromptStore) QueryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error) {
+	prompts, total := QueryPagePrompts(filter, page, pageSize)
+	return prompts, total, nil
+}
+
 func (s *MemoryPromptStore) FindByID(id int) (Prompt, bool, error) {
 	prompt, ok := FindPromptByID(id)
 	return prompt, ok, nil

@@ -16,6 +16,9 @@ type UserManager interface {
 
 type PromptManager interface {
 	Query(filter PromptFilter) ([]Prompt, error)
+	// QueryPage returns one page of results and the total count, pushing
+	// pagination down to the database layer.
+	QueryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error)
 	FindByID(id int) (Prompt, bool, error)
 	FindOwnedByID(id int, userID int) (Prompt, bool, error)
 	Create(input CreatePromptInput) (Prompt, error)
