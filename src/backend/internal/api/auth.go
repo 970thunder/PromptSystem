@@ -18,6 +18,16 @@ type contextKey string
 
 const userContextKey contextKey = "userID"
 
+// maxPasswordBytes is the maximum password length accepted by the API. bcrypt
+// silently ignores input beyond its first 72 bytes, so we reject longer
+// passwords up front to avoid account enumeration via timing and to keep the
+// rule consistent between the API boundary and the store.
+const maxPasswordBytes = 72
+
+// resetGenericMessage is returned whether or not the target account exists so
+// the password-reset endpoint cannot be used to enumerate registered emails.
+const resetGenericMessage = "If the account exists, the password has been reset"
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -68,8 +78,14 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload captchaRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+	if !s.enforceRateLimits(r.Context(), w, "captcha", rateLimitRule{bucket: rateLimitIP(r), limit: 5, window: 10 * time.Minute}) {
+		return
+	}
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if store.IsValidEmail(payload.Email) && !s.enforceRateLimits(r.Context(), w, "captcha", rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 1, window: captchaCooldown}) {
 		return
 	}
 
@@ -112,8 +128,17 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "login",
+		rateLimitRule{bucket: rateLimitIP(r), limit: 10, window: time.Minute},
+		rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 5, window: 15 * time.Minute}) {
+		return
+	}
+	if len(payload.Password) > maxPasswordBytes {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password is too long", ErrorCode: "INVALID_PASSWORD"})
 		return
 	}
 
@@ -123,7 +148,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Email)
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Token generation failed"})
 		return
@@ -146,8 +171,17 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload resetPasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "password_reset",
+		rateLimitRule{bucket: rateLimitIP(r), limit: 5, window: 10 * time.Minute},
+		rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 5, window: 15 * time.Minute}) {
+		return
+	}
+	if len(payload.Password) > maxPasswordBytes {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password is too long", ErrorCode: "INVALID_PASSWORD"})
 		return
 	}
 
@@ -169,18 +203,23 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	if err := s.userStore.ResetPassword(payload.Email, payload.Password); err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserNotFound):
-			writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "User not found"})
+			// Deliberately return the same non-revealing success whether the
+			// account exists or not so the endpoint cannot be used to enumerate
+			// registered emails via the reset flow.
+			writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: resetGenericMessage})
 		case errors.Is(err, store.ErrInvalidEmail):
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
 		case errors.Is(err, store.ErrWeakPassword):
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be at least 8 characters"})
+		case errors.Is(err, store.ErrPasswordTooLong):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be 72 bytes or fewer"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Reset password failed"})
 		}
 		return
 	}
 
-	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
+	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: resetGenericMessage})
 }
 
 func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -190,8 +229,17 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "register",
+		rateLimitRule{bucket: rateLimitIP(r), limit: 5, window: 10 * time.Minute},
+		rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 3, window: time.Hour}) {
+		return
+	}
+	if len(payload.Password) > maxPasswordBytes {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password is too long", ErrorCode: "INVALID_PASSWORD"})
 		return
 	}
 
@@ -219,13 +267,15 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
 		case errors.Is(err, store.ErrWeakPassword):
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be at least 8 characters"})
+		case errors.Is(err, store.ErrPasswordTooLong):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be 72 bytes or fewer"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Register failed"})
 		}
 		return
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Email)
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Token generation failed"})
 		return
@@ -545,7 +595,11 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+				Code:      401,
+				Message:   "Unauthorized",
+				ErrorCode: "AUTH_TOKEN_MISSING",
+			})
 			return
 		}
 
@@ -554,11 +608,17 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			status := http.StatusUnauthorized
 			message := "Unauthorized"
+			errorCode := "AUTH_INVALID_TOKEN"
 			if errors.Is(err, auth.ErrExpiredToken) {
 				message = "Token expired"
+				errorCode = "AUTH_TOKEN_EXPIRED"
 			}
 
-			writeJSON(w, status, apiResponse[any]{Code: 401, Message: message})
+			writeJSON(w, status, apiResponse[any]{
+				Code:      status,
+				Message:   message,
+				ErrorCode: errorCode,
+			})
 			return
 		}
 
@@ -588,6 +648,17 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 				Code:      401,
 				Message:   "Unauthorized",
 				ErrorCode: "AUTH_USER_DISABLED",
+			})
+			return
+		}
+
+		// Reject tokens issued before the user's last password reset: the
+		// session version is incremented on reset to revoke every old token.
+		if claims.SessionVersion != userRecord.SessionVer {
+			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+				Code:      401,
+				Message:   "Token has been revoked",
+				ErrorCode: "AUTH_TOKEN_REVOKED",
 			})
 			return
 		}
