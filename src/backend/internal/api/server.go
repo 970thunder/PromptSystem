@@ -143,10 +143,24 @@ func (s *server) handleCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	categories, err := s.promptStore.ListCategories()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
+			Code:      500,
+			Message:   "Failed to load categories",
+			ErrorCode: "CATEGORIES_LOAD_FAILED",
+			Data:      nil,
+		})
+		return
+	}
+	if len(categories) == 0 {
+		categories = store.Categories()
+	}
+
 	writeJSON(w, http.StatusOK, apiResponse[[]store.Category]{
 		Code:    200,
 		Message: "Success",
-		Data:    store.Categories(),
+		Data:    categories,
 	})
 }
 
@@ -820,6 +834,17 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 	}
 	if message := validatePromptPayload(payload); message != "" {
 		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: message})
+		return
+	}
+
+	categoryOK, categoryErr := s.promptStore.CategoryExists(payload.CategoryID)
+	if categoryErr == nil && !categoryOK {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:      400,
+			Message:   "Category does not exist",
+			ErrorCode: "INVALID_CATEGORY",
+			Data:      nil,
+		})
 		return
 	}
 

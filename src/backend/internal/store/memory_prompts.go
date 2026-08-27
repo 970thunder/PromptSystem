@@ -35,6 +35,29 @@ func (s *MemoryPromptStore) HomeSummary() (HomeSummary, error) {
 	return summary, nil
 }
 
+func (s *MemoryPromptStore) ListCategories() ([]Category, error) {
+	all := QueryPrompts(PromptFilter{})
+	counts := map[int]int{}
+	for _, p := range all {
+		counts[p.CategoryID]++
+	}
+	result := make([]Category, 0, len(categories))
+	for _, c := range categories {
+		c.Count = counts[c.ID]
+		result = append(result, c)
+	}
+	return result, nil
+}
+
+func (s *MemoryPromptStore) CategoryExists(id int) (bool, error) {
+	for _, c := range categories {
+		if c.ID == id {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func topKeys(m map[string]int, limit int) []string {
 	type kv struct {
 		k string

@@ -75,6 +75,43 @@ func (s *MySQLPromptStore) HomeSummary() (HomeSummary, error) {
 	return summary, nil
 }
 
+// ListCategories returns categories from the database (prompt type first).
+func (s *MySQLPromptStore) ListCategories() ([]Category, error) {
+	rows, err := s.db.Query(`
+		SELECT c.id, c.name, c.icon,
+			(SELECT COUNT(*) FROM prompts p WHERE p.category_id = c.id AND p.status = 1) AS cnt
+		FROM categories c
+		WHERE c.type = 1
+		ORDER BY c.sort ASC, c.id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []Category
+	for rows.Next() {
+		var cat Category
+		if err := rows.Scan(&cat.ID, &cat.Name, &cat.Icon, &cat.Count); err != nil {
+			return nil, err
+		}
+		categories = append(categories, cat)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return categories, nil
+}
+
+// CategoryExists reports whether a prompt-type category exists.
+func (s *MySQLPromptStore) CategoryExists(id int) (bool, error) {
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM categories WHERE id = ? AND type = 1`, id).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error) {
 	if page < 1 {
 		page = 1

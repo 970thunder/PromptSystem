@@ -21,6 +21,10 @@ type PromptManager interface {
 	QueryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error)
 	// HomeSummary returns real aggregates for the home page.
 	HomeSummary() (HomeSummary, error)
+	// ListCategories returns categories from the database.
+	ListCategories() ([]Category, error)
+	// CategoryExists reports whether a prompt-type category exists.
+	CategoryExists(id int) (bool, error)
 	FindByID(id int) (Prompt, bool, error)
 	FindOwnedByID(id int, userID int) (Prompt, bool, error)
 	Create(input CreatePromptInput) (Prompt, error)
