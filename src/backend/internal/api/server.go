@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +22,7 @@ type server struct {
 	config       config.Config
 	tokenManager *auth.TokenManager
 	captcha      *captchaManager
+	githubClient *http.Client
 	userStore    store.UserManager
 	promptStore  store.PromptManager
 	commentStore store.CommentManager
@@ -59,6 +62,7 @@ func NewServer(cfg config.Config) http.Handler {
 		config:       cfg,
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
 		captcha:      newCaptchaManager(),
+		githubClient: newGitHubClient(),
 		userStore:    userStore,
 		promptStore:  promptStore,
 		commentStore: commentStore,
@@ -67,6 +71,8 @@ func NewServer(cfg config.Config) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
+	mux.HandleFunc("/api/v1/health/live", s.handleHealthLive)
+	mux.HandleFunc("/api/v1/health/ready", s.handleHealthReady)
 	mux.HandleFunc("/api/v1/categories", s.handleCategories)
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
 	mux.HandleFunc("/api/v1/prompts/search", s.handlePromptSearch)
@@ -98,7 +104,14 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/users/", s.handleUserAction)
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir))))
 
-	return s.withCORS(mux)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	return chain(mux,
+		func(next http.Handler) http.Handler { return withRecovery(logger, next) },
+		withRequestID,
+		func(next http.Handler) http.Handler { return withAccessLog(logger, next) },
+		withSecurityHeaders,
+		s.withCORS,
+	)
 }
 
 func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -895,21 +908,6 @@ func (s *server) handlePromptDelete(w http.ResponseWriter, r *http.Request, id i
 	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success", Data: nil})
 }
 
-func (s *server) withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", s.config.AllowedOrigin)
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
 func parseInt(value string, fallback int) int {
 	if value == "" {
 		return fallback
@@ -1010,9 +1008,10 @@ func promptPayloadStatus(payload promptPayload) int {
 }
 
 type apiResponse[T any] struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    T      `json:"data"`
+	Code      int    `json:"code"`
+	Message   string `json:"message"`
+	ErrorCode string `json:"errorCode,omitempty"`
+	Data      T      `json:"data"`
 }
 
 type promptActionResponse struct {

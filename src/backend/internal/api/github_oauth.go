@@ -197,7 +197,7 @@ func (s *server) exchangeGitHubCode(ctx context.Context, code string) (string, e
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.githubClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -206,6 +206,9 @@ func (s *server) exchangeGitHubCode(ctx context.Context, code string) (string, e
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("github access token request failed with status %d", resp.StatusCode)
 	}
 
 	var parsed struct {
@@ -241,7 +244,7 @@ func (s *server) fetchGitHubProfile(ctx context.Context, accessToken string) (gi
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.githubClient.Do(req)
 	if err != nil {
 		return githubProfile{}, err
 	}
@@ -250,6 +253,9 @@ func (s *server) fetchGitHubProfile(ctx context.Context, accessToken string) (gi
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return githubProfile{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return githubProfile{}, fmt.Errorf("github profile request failed with status %d", resp.StatusCode)
 	}
 
 	var profile githubProfile
@@ -272,7 +278,7 @@ func (s *server) fetchGitHubPrimaryEmail(ctx context.Context, accessToken string
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.githubClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -281,6 +287,9 @@ func (s *server) fetchGitHubPrimaryEmail(ctx context.Context, accessToken string
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("github email request failed with status %d", resp.StatusCode)
 	}
 
 	var emails []struct {
