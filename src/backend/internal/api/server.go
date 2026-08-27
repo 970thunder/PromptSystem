@@ -543,11 +543,17 @@ func (s *server) handleUserPromptDetail(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *server) handlePromptComments(w http.ResponseWriter, r *http.Request, id int) {
-	comments, err := s.commentStore.ListByTarget(store.CommentFilter{
+	query := r.URL.Query()
+	page, pageSize, err := parsePageParams(stringPageParams{Page: query.Get("page"), PageSize: query.Get("pageSize")})
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	comments, total, err := s.commentStore.ListByTargetPage(store.CommentFilter{
 		TargetType: "prompt",
 		TargetID:   id,
 		SortBy:     r.URL.Query().Get("sort"),
-	})
+	}, page, pageSize)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
 			Code:    500,
@@ -556,10 +562,15 @@ func (s *server) handlePromptComments(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 
-	writeJSON(w, http.StatusOK, apiResponse[[]store.Comment]{
+	writeJSON(w, http.StatusOK, apiResponse[pageResponse[store.Comment]]{
 		Code:    200,
 		Message: "Success",
-		Data:    comments,
+		Data: pageResponse[store.Comment]{
+			List:     comments,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		},
 	})
 }
 

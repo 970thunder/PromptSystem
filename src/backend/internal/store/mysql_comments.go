@@ -16,9 +16,30 @@ func NewMySQLCommentStore(db *sql.DB) *MySQLCommentStore {
 }
 
 func (s *MySQLCommentStore) ListByTarget(filter CommentFilter) ([]Comment, error) {
+	comments, _, err := s.listByTargetPage(filter, 1, 100)
+	return comments, err
+}
+
+func (s *MySQLCommentStore) ListByTargetPage(filter CommentFilter, page, pageSize int) ([]Comment, int, error) {
+	return s.listByTargetPage(filter, page, pageSize)
+}
+
+func (s *MySQLCommentStore) listByTargetPage(filter CommentFilter, page, pageSize int) ([]Comment, int, error) {
 	targetType := strings.TrimSpace(strings.ToLower(filter.TargetType))
 	if targetType != "prompt" {
-		return []Comment{}, nil
+		return []Comment{}, 0, nil
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 100
+	}
+
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM comments WHERE target_type = ? AND target_id = ? AND parent_id IS NULL`,
+		targetType, filter.TargetID).Scan(&total); err != nil {
+		return nil, 0, err
 	}
 
 	rows, err := s.db.Query(`
@@ -28,11 +49,12 @@ func (s *MySQLCommentStore) ListByTarget(filter CommentFilter) ([]Comment, error
 			c.content, c.likes, c.parent_id, c.created_at
 		FROM comments c
 		JOIN users u ON u.id = c.user_id
-		WHERE c.target_type = ? AND c.target_id = ?
+		WHERE c.target_type = ? AND c.target_id = ? AND c.parent_id IS NULL
 		ORDER BY c.created_at ASC, c.id ASC
-	`, targetType, filter.TargetID)
+		LIMIT ? OFFSET ?
+	`, targetType, filter.TargetID, pageSize, (page-1)*pageSize)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -40,16 +62,16 @@ func (s *MySQLCommentStore) ListByTarget(filter CommentFilter) ([]Comment, error
 	for rows.Next() {
 		comment, err := scanComment(rows.Scan)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		flat = append(flat, comment)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return buildCommentTree(flat, filter.SortBy), nil
+	return buildCommentTree(flat, filter.SortBy), total, nil
 }
 
 func (s *MySQLCommentStore) Create(input CreateCommentInput) (Comment, error) {

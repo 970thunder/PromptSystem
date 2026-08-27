@@ -51,6 +51,8 @@ type HomeSummary struct {
 
 type CommentManager interface {
 	ListByTarget(filter CommentFilter) ([]Comment, error)
+	// ListByTargetPage returns one page of root comments plus the total.
+	ListByTargetPage(filter CommentFilter, page, pageSize int) ([]Comment, int, error)
 	Create(input CreateCommentInput) (Comment, error)
 	Like(id int, userID int) (Comment, bool, error)
 	Report(input ReportCommentInput) (Report, bool, error)
