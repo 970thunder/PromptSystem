@@ -35,3 +35,8 @@ var categories = []Category{
 }
 
 const MaxPromptTags = 30
+
+// MaxPromptTagLength is the maximum length (in runes) of a single tag. It must
+// match the prompt_tags.tag column width (VARCHAR(50)) so persisted tags never
+// exceed the column and never collide with the semantics of the unique index.
+const MaxPromptTagLength = 50

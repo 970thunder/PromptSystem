@@ -18,6 +18,12 @@ type Cache interface {
 	Get(ctx context.Context, key string) (string, error)
 	// Exists reports whether key exists.
 	Exists(ctx context.Context, key string) (bool, error)
+	// GetAndDelete atomically returns the value and removes the key in one
+	// operation, guaranteeing single consumption of one-time codes.
+	GetAndDelete(ctx context.Context, key string) (string, error)
+	// Increment atomically increments a counter and gives it a TTL on its first
+	// use. retryAfter is the remaining TTL for the counter.
+	Increment(ctx context.Context, key string, window time.Duration) (count int64, retryAfter time.Duration, err error)
 	// Delete removes key.
 	Delete(ctx context.Context, key string) error
 	// Ping verifies connectivity.
@@ -68,6 +74,54 @@ func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 	}
 	n, err := c.client.Exists(ctx, key).Result()
 	return n > 0, err
+}
+
+func (c *redisCache) GetAndDelete(ctx context.Context, key string) (string, error) {
+	if c == nil || c.client == nil {
+		return "", errors.New("cache not available")
+	}
+	value, err := c.client.GetDel(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return value, err
+}
+
+func (c *redisCache) Increment(ctx context.Context, key string, window time.Duration) (int64, time.Duration, error) {
+	if c == nil || c.client == nil {
+		return 0, 0, errors.New("cache not available")
+	}
+	if window <= 0 {
+		return 0, 0, errors.New("cache counter window must be positive")
+	}
+
+	// INCR and EXPIRE must be one operation: separate commands allow concurrent
+	// requests to create a counter without a TTL or to race while setting it.
+	result, err := c.client.Eval(ctx, `
+		local count = redis.call('INCR', KEYS[1])
+		if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+		local ttl = redis.call('TTL', KEYS[1])
+		return {count, ttl}
+	`, []string{key}, int64(window/time.Second)).Result()
+	if err != nil {
+		return 0, 0, err
+	}
+	values, ok := result.([]interface{})
+	if !ok || len(values) != 2 {
+		return 0, 0, errors.New("invalid rate limit response")
+	}
+	count, ok := values[0].(int64)
+	if !ok {
+		return 0, 0, errors.New("invalid rate limit count")
+	}
+	ttlSeconds, ok := values[1].(int64)
+	if !ok {
+		return 0, 0, errors.New("invalid rate limit ttl")
+	}
+	if ttlSeconds < 0 {
+		ttlSeconds = 0
+	}
+	return count, time.Duration(ttlSeconds) * time.Second, nil
 }
 
 func (c *redisCache) Delete(ctx context.Context, key string) error {

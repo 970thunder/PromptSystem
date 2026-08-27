@@ -16,6 +16,7 @@ CREATE TABLE users (
     bio VARCHAR(500) NULL DEFAULT NULL,
     level INT DEFAULT 1,
     experience INT DEFAULT 0,
+    session_version INT NOT NULL DEFAULT 0 COMMENT 'Incremented to revoke all JWT sessions',
     status INT DEFAULT 1 COMMENT '1:active, 0:disabled',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -57,6 +58,9 @@ CREATE TABLE prompts (
     INDEX idx_user (user_id),
     INDEX idx_status (status),
     INDEX idx_created (created_at),
+    INDEX idx_status_category_created (status, category_id, created_at),
+    INDEX idx_user_created (user_id, created_at),
+    INDEX idx_status_popular (status, likes),
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -87,7 +91,9 @@ CREATE TABLE prompt_tags (
     prompt_id BIGINT NOT NULL,
     tag VARCHAR(50) NOT NULL,
     FOREIGN KEY (prompt_id) REFERENCES prompts(id) ON DELETE CASCADE,
+    UNIQUE INDEX uk_prompt_tag (prompt_id, tag),
     INDEX idx_prompt (prompt_id),
+    INDEX idx_prompt_tag (prompt_id, tag),
     INDEX idx_tag (tag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -175,6 +181,26 @@ CREATE TABLE follows (
     FOREIGN KEY (following_id) REFERENCES users(id),
     INDEX idx_follower (follower_id),
     INDEX idx_following (following_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Uploads table tracks every stored object so the backend can prove ownership of
+-- a private temporary upload and garbage-collect unreferenced objects. Object
+-- keys are derived from (userID, purpose, random), never the raw client name.
+CREATE TABLE uploads (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    owner_id BIGINT NOT NULL,
+    provider VARCHAR(32) NOT NULL DEFAULT 'local',
+    purpose VARCHAR(32) NOT NULL DEFAULT 'prompt_image',
+    object_key VARCHAR(512) NOT NULL,
+    content_type VARCHAR(128) NOT NULL DEFAULT '',
+    size BIGINT NOT NULL DEFAULT 0,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'pending, referenced, trashed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_object_key (object_key),
+    INDEX idx_owner (owner_id),
+    INDEX idx_status_created (status, created_at),
+    INDEX idx_purpose (purpose)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Default categories (prompt: image-focused Chinese labels)

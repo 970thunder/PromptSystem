@@ -14,9 +14,15 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrWeakPassword       = errors.New("password must be at least 8 characters")
+	ErrPasswordTooLong    = errors.New("password must be 72 bytes or fewer")
 	ErrInvalidEmail       = errors.New("invalid email address")
 	ErrInvalidGitHubUser  = errors.New("invalid github user")
 )
+
+// maxPasswordBytes mirrors the bcrypt 72-byte input limit. Keep this in sync
+// with the API boundary constant so both layers reject overlong passwords
+// before expensive hashing.
+const maxPasswordBytes = 72
 
 type UserStore struct {
 	mu            sync.RWMutex
@@ -37,6 +43,7 @@ type AuthUser struct {
 	Bio          string
 	Level        int
 	Experience   int
+	SessionVer   int
 	Status       int
 	CreatedAt    string
 }
@@ -116,6 +123,9 @@ func (s *UserStore) Register(username, email, password string) (AuthUser, error)
 	if len(password) < 8 {
 		return AuthUser{}, ErrWeakPassword
 	}
+	if len(password) > maxPasswordBytes {
+		return AuthUser{}, ErrPasswordTooLong
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -182,6 +192,9 @@ func (s *UserStore) ResetPassword(email, password string) error {
 	if len(password) < 8 {
 		return ErrWeakPassword
 	}
+	if len(password) > maxPasswordBytes {
+		return ErrPasswordTooLong
+	}
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -198,6 +211,26 @@ func (s *UserStore) ResetPassword(email, password string) error {
 
 	user := s.users[userID]
 	user.PasswordHash = string(passwordHash)
+	user.SessionVer++
+	s.users[userID] = user
+	return nil
+}
+
+// BumpSessionVersion invalidates every previously issued token for the user by
+// incrementing the per-user session version.
+func (s *UserStore) BumpSessionVersion(email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	userID, exists := s.emailIndex[email]
+	if !exists {
+		return ErrUserNotFound
+	}
+
+	user := s.users[userID]
+	user.SessionVer++
 	s.users[userID] = user
 	return nil
 }

@@ -8,7 +8,7 @@ import (
 func TestTokenManagerGenerateAndVerify(t *testing.T) {
 	manager := NewTokenManager("test-secret", time.Hour)
 
-	token, err := manager.Generate(9, "user@example.com")
+	token, err := manager.Generate(9, "user@example.com", 0)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}

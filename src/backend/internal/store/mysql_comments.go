@@ -168,7 +168,7 @@ func (s *MySQLCommentStore) Like(id int, userID int) (Comment, bool, error) {
 			return Comment{}, false, err
 		}
 		if updatedRows == 0 {
-			return Comment{}, false, errors.New("comment not found")
+			return Comment{}, false, ErrCommentNotFound
 		}
 	}
 
@@ -181,7 +181,7 @@ func (s *MySQLCommentStore) Like(id int, userID int) (Comment, bool, error) {
 		return Comment{}, false, err
 	}
 	if !found {
-		return Comment{}, false, errors.New("comment not found")
+		return Comment{}, false, ErrCommentNotFound
 	}
 
 	return comment, applied, nil
@@ -195,7 +195,7 @@ func (s *MySQLCommentStore) Report(input ReportCommentInput) (Report, bool, erro
 	if _, found, err := s.findCommentByID(input.CommentID); err != nil {
 		return Report{}, false, err
 	} else if !found {
-		return Report{}, false, errors.New("comment not found")
+		return Report{}, false, ErrCommentNotFound
 	}
 
 	result, err := s.db.Exec(`

@@ -19,12 +19,12 @@ func NewMySQLUserStore(db *sql.DB) *MySQLUserStore {
 }
 
 const userSelectColumns = `
-	id, username, avatar, email, github_id, password, bio, level, experience, status, created_at
+	id, username, avatar, email, github_id, password, bio, level, experience, session_version, status, created_at
 `
 
 const qualifiedUserSelectColumns = `
 	users.id, users.username, users.avatar, users.email, users.github_id, users.password, users.bio,
-	users.level, users.experience, users.status, users.created_at
+	users.level, users.experience, users.session_version, users.status, users.created_at
 `
 
 func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, error) {
@@ -37,6 +37,9 @@ func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, e
 
 	if len(password) < 8 {
 		return AuthUser{}, ErrWeakPassword
+	}
+	if len(password) > maxPasswordBytes {
+		return AuthUser{}, ErrPasswordTooLong
 	}
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -100,6 +103,9 @@ func (s *MySQLUserStore) ResetPassword(email, password string) error {
 	if len(password) < 8 {
 		return ErrWeakPassword
 	}
+	if len(password) > maxPasswordBytes {
+		return ErrPasswordTooLong
+	}
 
 	if _, found, err := s.findByEmail(email); err != nil {
 		return err
@@ -114,7 +120,7 @@ func (s *MySQLUserStore) ResetPassword(email, password string) error {
 
 	result, err := s.db.Exec(`
 		UPDATE users
-		SET password = ?
+		SET password = ?, session_version = session_version + 1
 		WHERE email = ?
 	`, string(passwordHash), email)
 	if err != nil {
@@ -129,6 +135,26 @@ func (s *MySQLUserStore) ResetPassword(email, password string) error {
 		return ErrUserNotFound
 	}
 
+	return nil
+}
+
+// BumpSessionVersion increments the user's session version so all previously
+// issued tokens are rejected after a password reset.
+func (s *MySQLUserStore) BumpSessionVersion(email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	result, err := s.db.Exec(`
+		UPDATE users SET session_version = session_version + 1 WHERE email = ?
+	`, email)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrUserNotFound
+	}
 	return nil
 }
 
@@ -496,6 +522,7 @@ func scanAuthUser(scan func(dest ...any) error) (AuthUser, bool, error) {
 		&bio,
 		&user.Level,
 		&user.Experience,
+		&user.SessionVer,
 		&user.Status,
 		&createdAt,
 	)

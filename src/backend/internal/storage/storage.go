@@ -3,9 +3,12 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +73,10 @@ func newR2Storage(cfg config.Config) (*R2Storage, error) {
 	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
 		options.BaseEndpoint = stringPtr(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.R2AccountID))
 		options.UsePathStyle = true
+		// Bound every R2 request so a stalled network cannot hang a request
+		// handler indefinitely. The storage interface takes a context that can
+		// additionally cancel a request.
+		options.HTTPClient = &http.Client{Timeout: 30 * time.Second}
 	})
 
 	return &R2Storage{
@@ -108,7 +115,12 @@ func (s *R2Storage) Save(ctx context.Context, objectKey, contentType string, bod
 	return fmt.Sprintf("%s/%s", s.publicURL, strings.TrimLeft(objectKey, "/")), nil
 }
 
-func BuildObjectKey(originalName, contentType string) string {
+// BuildObjectKey derives a stable, collision-proof object key from the owning
+// user, the upload purpose and a random component -- never from the raw client
+// filename. This prevents one user from guessing or overwriting another user's
+// uploads and makes key collisions impossible. The random suffix is
+// hex-encoded crypto/rand output.
+func BuildObjectKey(userID int, purpose, originalName, contentType string) string {
 	ext := strings.ToLower(filepath.Ext(originalName))
 	if ext == "" {
 		ext = extensionFromMimeType(contentType)
@@ -117,7 +129,18 @@ func BuildObjectKey(originalName, contentType string) string {
 		ext = ".bin"
 	}
 
-	return fmt.Sprintf("prompts/%s%s", time.Now().UTC().Format("20060102/150405.000000000"), ext)
+	random := randomHex(16)
+	return fmt.Sprintf("%s/%d/%s_%s%s", purpose, userID, time.Now().UTC().Format("20060102/150405.000000000"), random, ext)
+}
+
+func randomHex(n int) string {
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		// rand.Read only fails on a broken system; fall back to a timestamp so an
+		// upload can still proceed without a panic.
+		return fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	}
+	return hex.EncodeToString(buf)
 }
 
 func extensionFromMimeType(contentType string) string {

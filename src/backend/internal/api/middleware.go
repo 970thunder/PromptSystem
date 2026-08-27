@@ -11,6 +11,9 @@ import (
 
 const requestIDKey = "requestID"
 
+// envContextKey carries the deployment environment into request-scoped logs.
+const envContextKey = "env"
+
 // chain builds a middleware stack that runs in the given order.
 func chain(handler http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
@@ -53,20 +56,44 @@ func withRequestID(next http.Handler) http.Handler {
 	})
 }
 
-// withAccessLog logs requestId, method, path, status and duration.
+// withAccessLog logs requestId, method, route, status, duration and errorCode
+// using structured slog JSON. It deliberately omits request bodies, tokens,
+// passwords, captcha values, OAuth codes, and any secret material.
 func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
-		logger.Info("request",
+		attrs := []any{
+			slog.String("service", "promptos-backend"),
+			slog.String("env", AppEnvFromRequest(r)),
 			slog.String("requestId", requestIDFrom(r)),
 			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
+			slog.String("route", r.URL.Path),
 			slog.Int("status", recorder.status),
 			slog.Duration("duration", time.Since(start)),
-		)
+		}
+		if recorder.errorCode != "" {
+			attrs = append(attrs, slog.String("errorCode", recorder.errorCode))
+		}
+		logger.Info("request", attrs...)
 	})
+}
+
+// errorCodeRecorder is implemented by statusRecorder so handlers can attach the
+// stable errorCode to the access log without leaking it to clients beyond the
+// response body.
+type errorCodeRecorder interface {
+	setErrorCode(code string)
+}
+
+func AppEnvFromRequest(r *http.Request) string {
+	// The environment is injected by the server via context to avoid importing
+	// config here. Fall back to a static value if unavailable.
+	if env, ok := r.Context().Value(envContextKey).(string); ok {
+		return env
+	}
+	return "unknown"
 }
 
 // withSecurityHeaders sets basic API response security headers.
@@ -121,12 +148,17 @@ func (s *server) withCORS(next http.Handler) http.Handler {
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status    int
+	errorCode string
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) setErrorCode(code string) {
+	r.errorCode = code
 }
 
 func containsOrigin(list []string, target string) bool {

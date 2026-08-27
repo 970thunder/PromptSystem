@@ -109,6 +109,18 @@ func (s *MemoryPromptStore) Favorite(id int, userID int) (Prompt, bool, error) {
 	return FavoritePrompt(id, userID)
 }
 
+func (s *MemoryPromptStore) Unlike(id int, userID int) (Prompt, bool, error) {
+	return UnlikePrompt(id, userID)
+}
+
+func (s *MemoryPromptStore) Unfavorite(id int, userID int) (Prompt, bool, error) {
+	return UnfavoritePrompt(id, userID)
+}
+
+func (s *MemoryPromptStore) GetInteractionStatus(id int, userID int) (InteractionStatus, error) {
+	return GetPromptInteractionStatus(id, userID)
+}
+
 func (s *MemoryPromptStore) RecordView(id int, userID int) (Prompt, bool, error) {
 	return RecordPromptView(id, userID)
 }
@@ -127,6 +139,11 @@ func (s *MemoryPromptStore) ListUserLikes(userID int) ([]Prompt, error) {
 
 func (s *MemoryPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
 	return ListUserHistoryPrompts(userID), nil
+}
+
+func (s *MemoryPromptStore) ListUserHistoryPage(userID, page, pageSize int) ([]Prompt, int, error) {
+	list, total := ListUserHistoryPagePrompts(userID, page, pageSize)
+	return list, total, nil
 }
 
 func (s *MemoryPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {

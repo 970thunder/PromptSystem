@@ -1,6 +1,37 @@
 package store
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestUserStorePasswordTooLong(t *testing.T) {
+	userStore := NewUserStore()
+	longPassword := strings.Repeat("a", maxPasswordBytes+1)
+
+	if _, err := userStore.Register("TooLong", "long@example.com", longPassword); err != ErrPasswordTooLong {
+		t.Fatalf("Register() error = %v, want ErrPasswordTooLong", err)
+	}
+}
+
+func TestUserStoreBumpSessionVersionInvalidatesTokens(t *testing.T) {
+	userStore := NewUserStore()
+
+	user, err := userStore.Register("SessionUser", "session@example.com", "StrongPass123!")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	before := user.SessionVer
+
+	if err := userStore.BumpSessionVersion("session@example.com"); err != nil {
+		t.Fatalf("BumpSessionVersion() error = %v", err)
+	}
+
+	after, _ := userStore.FindByID(user.ID)
+	if after.SessionVer <= before {
+		t.Fatalf("expected session version to increase, got before=%d after=%d", before, after.SessionVer)
+	}
+}
 
 func TestUserStoreRegisterAndAuthenticate(t *testing.T) {
 	userStore := NewUserStore()

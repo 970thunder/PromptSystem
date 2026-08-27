@@ -9,32 +9,34 @@ import (
 )
 
 type Config struct {
-	AppEnv             string
-	Port               string
-	JWTSecret          string
-	JWTExpireHours     int
-	UploadProvider     string
-	UploadDir          string
-	UploadBaseURL      string
-	UploadMaxMB        int
-	R2AccountID        string
-	R2AccessKeyID      string
-	R2SecretKey        string
-	R2Bucket           string
-	R2PublicURL        string
-	MySQLHost          string
-	MySQLPort          string
-	MySQLUser          string
-	MySQLPass          string
-	MySQLDB            string
-	RedisHost          string
-	RedisPort          string
-	RedisPass          string
-	AllowedOrigin      string
-	GitHubClientID     string
-	GitHubClientSecret string
-	GitHubRedirectURI  string
-	FrontendURL        string
+	AppEnv              string
+	Port                string
+	JWTSecret           string
+	JWTExpireHours      int
+	UploadProvider      string
+	UploadDir           string
+	UploadBaseURL       string
+	UploadMaxMB         int
+	AllowGif            bool
+	R2AccountID         string
+	R2AccessKeyID       string
+	R2SecretKey         string
+	R2Bucket            string
+	R2PublicURL         string
+	AllowedImageDomains []string
+	MySQLHost           string
+	MySQLPort           string
+	MySQLUser           string
+	MySQLPass           string
+	MySQLDB             string
+	RedisHost           string
+	RedisPort           string
+	RedisPass           string
+	AllowedOrigin       string
+	GitHubClientID      string
+	GitHubClientSecret  string
+	GitHubRedirectURI   string
+	FrontendURL         string
 }
 
 // DefaultAllowedOrigins is the comma-separated origin list used in development.
@@ -44,32 +46,34 @@ const DefaultAllowedOrigins = "*"
 // to check that the resulting config is safe to run.
 func Load() Config {
 	return Config{
-		AppEnv:             getEnv("APP_ENV", "development"),
-		Port:               getEnv("PORT", "8080"),
-		JWTSecret:          getEnv("JWT_SECRET", "promptos-dev-secret-change-me"),
-		JWTExpireHours:     getEnvAsInt("JWT_EXPIRE_HOURS", 72),
-		UploadProvider:     getEnv("UPLOAD_PROVIDER", "local"),
-		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
-		UploadBaseURL:      getEnv("UPLOAD_BASE_URL", "http://localhost:8080"),
-		UploadMaxMB:        getEnvAsInt("UPLOAD_MAX_MB", 10),
-		R2AccountID:        getEnv("R2_ACCOUNT_ID", ""),
-		R2AccessKeyID:      getEnv("R2_ACCESS_KEY_ID", ""),
-		R2SecretKey:        getEnv("R2_SECRET_ACCESS_KEY", ""),
-		R2Bucket:           getEnv("R2_BUCKET", ""),
-		R2PublicURL:        getEnv("R2_PUBLIC_URL", ""),
-		MySQLHost:          getEnv("MYSQL_HOST", "localhost"),
-		MySQLPort:          getEnv("MYSQL_PORT", "3306"),
-		MySQLUser:          getEnv("MYSQL_USER", "root"),
-		MySQLPass:          getEnv("MYSQL_PASSWORD", "root"),
-		MySQLDB:            getEnv("MYSQL_DATABASE", "promptos"),
-		RedisHost:          getEnv("REDIS_HOST", "localhost"),
-		RedisPort:          getEnv("REDIS_PORT", "6379"),
-		RedisPass:          getEnv("REDIS_PASSWORD", ""),
-		AllowedOrigin:      getEnv("ALLOWED_ORIGIN", "*"),
-		GitHubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
-		GitHubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
-		GitHubRedirectURI:  getEnv("GITHUB_REDIRECT_URI", ""),
-		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
+		AppEnv:              getEnv("APP_ENV", "development"),
+		Port:                getEnv("PORT", "8080"),
+		JWTSecret:           getEnv("JWT_SECRET", "promptos-dev-secret-change-me"),
+		JWTExpireHours:      getEnvAsInt("JWT_EXPIRE_HOURS", 72),
+		UploadProvider:      getEnv("UPLOAD_PROVIDER", "local"),
+		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
+		UploadBaseURL:       getEnv("UPLOAD_BASE_URL", "http://localhost:8080"),
+		UploadMaxMB:         getEnvAsInt("UPLOAD_MAX_MB", 10),
+		AllowGif:            getEnvAsBool("UPLOAD_ALLOW_GIF", false),
+		R2AccountID:         getEnv("R2_ACCOUNT_ID", ""),
+		R2AccessKeyID:       getEnv("R2_ACCESS_KEY_ID", ""),
+		R2SecretKey:         getEnv("R2_SECRET_ACCESS_KEY", ""),
+		R2Bucket:            getEnv("R2_BUCKET", ""),
+		R2PublicURL:         getEnv("R2_PUBLIC_URL", ""),
+		AllowedImageDomains: splitDomains(getEnv("ALLOWED_IMAGE_DOMAINS", ""), getEnv("R2_PUBLIC_URL", "")),
+		MySQLHost:           getEnv("MYSQL_HOST", "localhost"),
+		MySQLPort:           getEnv("MYSQL_PORT", "3306"),
+		MySQLUser:           getEnv("MYSQL_USER", "root"),
+		MySQLPass:           getEnv("MYSQL_PASSWORD", "root"),
+		MySQLDB:             getEnv("MYSQL_DATABASE", "promptos"),
+		RedisHost:           getEnv("REDIS_HOST", "localhost"),
+		RedisPort:           getEnv("REDIS_PORT", "6379"),
+		RedisPass:           getEnv("REDIS_PASSWORD", ""),
+		AllowedOrigin:       getEnv("ALLOWED_ORIGIN", "*"),
+		GitHubClientID:      getEnv("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret:  getEnv("GITHUB_CLIENT_SECRET", ""),
+		GitHubRedirectURI:   getEnv("GITHUB_REDIRECT_URI", ""),
+		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),
 	}
 }
 
@@ -178,4 +182,39 @@ func getEnvAsInt(key string, fallback int) int {
 	}
 
 	return parsed
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes")
+}
+
+// splitDomains merges an explicit comma-separated domain allowlist with an
+// optional fallback (the R2 public host), normalizing each to a bare hostname.
+func splitDomains(domainList, fallback string) []string {
+	raw := []string{}
+	for _, part := range strings.Split(domainList, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			raw = append(raw, part)
+		}
+	}
+	if len(raw) == 0 && fallback != "" {
+		raw = append(raw, fallback)
+	}
+
+	domains := make([]string, 0, len(raw))
+	for _, d := range raw {
+		d = strings.TrimSpace(d)
+		d = strings.TrimPrefix(d, "http://")
+		d = strings.TrimPrefix(d, "https://")
+		d = strings.Trim(d, "/")
+		if d != "" {
+			domains = append(domains, d)
+		}
+	}
+	return domains
 }

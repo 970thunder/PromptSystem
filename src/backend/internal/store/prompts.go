@@ -57,7 +57,7 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 	defer promptMu.RUnlock()
 
 	list := make([]Prompt, 0, len(prompts))
-	keyword := strings.ToLower(strings.TrimSpace(filter.Keyword))
+	keyword := strings.ToLower(capKeywordLength(strings.TrimSpace(filter.Keyword)))
 	model := strings.ToLower(strings.TrimSpace(filter.Model))
 	tag := strings.ToLower(strings.TrimSpace(filter.Tag))
 
@@ -87,11 +87,17 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 	switch filter.SortBy {
 	case "popular":
 		sort.SliceStable(list, func(i, j int) bool {
-			return list[i].Likes > list[j].Likes
+			if list[i].Likes != list[j].Likes {
+				return list[i].Likes > list[j].Likes
+			}
+			return list[i].ID > list[j].ID
 		})
 	default:
 		sort.SliceStable(list, func(i, j int) bool {
-			return list[i].CreatedAt > list[j].CreatedAt
+			if list[i].CreatedAt != list[j].CreatedAt {
+				return list[i].CreatedAt > list[j].CreatedAt
+			}
+			return list[i].ID > list[j].ID
 		})
 	}
 
@@ -106,27 +112,6 @@ func hasPromptTag(prompt Prompt, tag string) bool {
 	}
 
 	return false
-}
-
-func sanitizeTags(tags []string) []string {
-	seen := make(map[string]struct{}, len(tags))
-	cleaned := make([]string, 0, len(tags))
-	for _, raw := range tags {
-		tag := strings.TrimSpace(raw)
-		if tag == "" {
-			continue
-		}
-		if _, exists := seen[tag]; exists {
-			continue
-		}
-		seen[tag] = struct{}{}
-		cleaned = append(cleaned, tag)
-		if len(cleaned) >= MaxPromptTags {
-			break
-		}
-	}
-
-	return cleaned
 }
 
 func categoryByID(id int) (Category, bool) {
@@ -207,7 +192,12 @@ func CreatePrompt(input CreatePromptInput) (Prompt, error) {
 
 	category, ok := findCategoryByID(input.CategoryID)
 	if !ok {
-		return Prompt{}, fmt.Errorf("invalid category")
+		return Prompt{}, ErrInvalidCategory
+	}
+
+	tags, err := NormalizePromptTags(input.Tags)
+	if err != nil {
+		return Prompt{}, err
 	}
 
 	now := time.Now().UTC().Format(time.DateOnly)
@@ -223,7 +213,7 @@ func CreatePrompt(input CreatePromptInput) (Prompt, error) {
 		Params:       input.Params,
 		CategoryID:   input.CategoryID,
 		CategoryName: category.Name,
-		Tags:         normalizeTags(input.Tags),
+		Tags:         tags,
 		UserID:       input.User.ID,
 		User:         input.User,
 		Views:        0,
@@ -252,7 +242,12 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 
 	category, ok := findCategoryByID(input.CategoryID)
 	if !ok {
-		return Prompt{}, fmt.Errorf("invalid category")
+		return Prompt{}, ErrInvalidCategory
+	}
+
+	tags, err := NormalizePromptTags(input.Tags)
+	if err != nil {
+		return Prompt{}, err
 	}
 
 	for index := range prompts {
@@ -260,7 +255,7 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 			continue
 		}
 		if prompts[index].UserID != userID {
-			return Prompt{}, fmt.Errorf("forbidden")
+			return Prompt{}, ErrPromptForbidden
 		}
 
 		previousCategoryID := prompts[index].CategoryID
@@ -275,7 +270,7 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 		prompts[index].Params = input.Params
 		prompts[index].CategoryID = input.CategoryID
 		prompts[index].CategoryName = category.Name
-		prompts[index].Tags = normalizeTags(input.Tags)
+		prompts[index].Tags = tags
 		prompts[index].Status = normalizePromptStatus(input.Status)
 		prompts[index].UpdatedAt = time.Now().UTC().Format(time.DateOnly)
 
@@ -291,7 +286,7 @@ func UpdatePrompt(id int, userID int, input CreatePromptInput) (Prompt, error) {
 		return prompts[index], nil
 	}
 
-	return Prompt{}, fmt.Errorf("prompt not found")
+	return Prompt{}, ErrPromptNotFound
 }
 
 func DeletePrompt(id int, userID int) error {
@@ -303,7 +298,7 @@ func DeletePrompt(id int, userID int) error {
 			continue
 		}
 		if prompts[index].UserID != userID {
-			return fmt.Errorf("forbidden")
+			return ErrPromptForbidden
 		}
 
 		if prompts[index].Status == 1 {
@@ -314,7 +309,7 @@ func DeletePrompt(id int, userID int) error {
 		return nil
 	}
 
-	return fmt.Errorf("prompt not found")
+	return ErrPromptNotFound
 }
 
 func LikePrompt(id int, userID int) (Prompt, bool, error) {
@@ -338,7 +333,7 @@ func LikePrompt(id int, userID int) (Prompt, bool, error) {
 		return prompts[index], true, nil
 	}
 
-	return Prompt{}, false, fmt.Errorf("prompt not found")
+	return Prompt{}, false, ErrPromptNotFound
 }
 
 func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
@@ -362,7 +357,84 @@ func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
 		return prompts[index], true, nil
 	}
 
-	return Prompt{}, false, fmt.Errorf("prompt not found")
+	return Prompt{}, false, ErrPromptNotFound
+}
+
+// UnlikePrompt removes a like and decrements the counter in one critical
+// section. Repeating the undo is a no-op (applied=false).
+func UnlikePrompt(id int, userID int) (Prompt, bool, error) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	for index := range prompts {
+		if prompts[index].ID != id || prompts[index].Status != 1 {
+			continue
+		}
+		if promptLikes[id] == nil || !mapHasUser(promptLikes[id], userID) {
+			return prompts[index], false, nil
+		}
+		delete(promptLikes[id], userID)
+		if prompts[index].Likes > 0 {
+			prompts[index].Likes--
+		}
+		return prompts[index], true, nil
+	}
+
+	return Prompt{}, false, ErrPromptNotFound
+}
+
+// UnfavoritePrompt mirrors UnlikePrompt for favorites.
+func UnfavoritePrompt(id int, userID int) (Prompt, bool, error) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+
+	for index := range prompts {
+		if prompts[index].ID != id || prompts[index].Status != 1 {
+			continue
+		}
+		if promptFavorites[id] == nil || !mapHasUser(promptFavorites[id], userID) {
+			return prompts[index], false, nil
+		}
+		delete(promptFavorites[id], userID)
+		if prompts[index].Favorites > 0 {
+			prompts[index].Favorites--
+		}
+		return prompts[index], true, nil
+	}
+
+	return Prompt{}, false, ErrPromptNotFound
+}
+
+func mapHasUser(m map[int]struct{}, userID int) bool {
+	_, ok := m[userID]
+	return ok
+}
+
+// GetPromptInteractionStatus returns the per-user like/favorite state of a
+// prompt. A missing or soft-deleted prompt yields ErrPromptNotFound.
+func GetPromptInteractionStatus(id int, userID int) (InteractionStatus, error) {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	found := false
+	for _, prompt := range prompts {
+		if prompt.ID == id && prompt.Status == 1 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return InteractionStatus{}, ErrPromptNotFound
+	}
+
+	status := InteractionStatus{}
+	if promptLikes[id] != nil {
+		status.Liked = mapHasUser(promptLikes[id], userID)
+	}
+	if promptFavorites[id] != nil {
+		status.Favorited = mapHasUser(promptFavorites[id], userID)
+	}
+	return status, nil
 }
 
 func RecordPromptView(id int, userID int) (Prompt, bool, error) {
@@ -374,11 +446,22 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 			continue
 		}
 
+		// Anonymous views (userID <= 0) count toward the total views counter but
+		// are deliberately NOT written to the browsing history, because they
+		// cannot be attributed to a user. Each anonymous view is an independent
+		// counter increment.
+		if userID <= 0 {
+			prompts[index].Views++
+			return prompts[index], true, nil
+		}
+
 		if _, ok := promptViewHistory[userID]; !ok {
 			promptViewHistory[userID] = make(map[int]time.Time)
 		}
 		_, existed := promptViewHistory[userID][id]
 		promptViewHistory[userID][id] = time.Now().UTC()
+		// One history row per (user, prompt): repeat views bump viewed_at but
+		// never create a new row or a second counter increment.
 		if !existed {
 			prompts[index].Views++
 		}
@@ -386,7 +469,7 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 		return prompts[index], !existed, nil
 	}
 
-	return Prompt{}, false, fmt.Errorf("prompt not found")
+	return Prompt{}, false, ErrPromptNotFound
 }
 
 func ReportPrompt(id int, userID int, reason string, detail string) (Report, bool, error) {
@@ -411,7 +494,7 @@ func ReportPrompt(id int, userID int, reason string, detail string) (Report, boo
 		}
 	}
 	if !found {
-		return Report{}, false, fmt.Errorf("prompt not found")
+		return Report{}, false, ErrPromptNotFound
 	}
 
 	key := fmt.Sprintf("prompt:%d:%d", userID, id)
@@ -454,18 +537,56 @@ func ListUserHistoryPrompts(userID int) []Prompt {
 	promptMu.RLock()
 	defer promptMu.RUnlock()
 
+	return listUserHistoryPromptsLocked(userID)
+}
+
+// listUserHistoryPromptsLocked returns the requesting user's browsing history,
+// newest view first, restricted to published (status == 1) prompts so soft
+// deleted prompts never leak into a history response. Caller must hold
+// promptMu read lock.
+func listUserHistoryPromptsLocked(userID int) []Prompt {
 	visitedAt := promptViewHistory[userID]
-	ids := make([]int, 0, len(visitedAt))
-	for promptID := range visitedAt {
-		ids = append(ids, promptID)
+	list := make([]Prompt, 0, len(visitedAt))
+	for _, prompt := range prompts {
+		if prompt.Status != 1 {
+			continue
+		}
+		if _, ok := visitedAt[prompt.ID]; ok {
+			list = append(list, prompt)
+		}
 	}
 
-	list := promptsByIDLocked(ids)
 	sort.SliceStable(list, func(i, j int) bool {
 		return visitedAt[list[i].ID].After(visitedAt[list[j].ID])
 	})
 
 	return list
+}
+
+// ListUserHistoryPagePrompts returns a page of the user's browsing history plus
+// the total, filtering out soft-deleted prompts, mirroring the MySQL store's
+// pagination semantics.
+func ListUserHistoryPagePrompts(userID, page, pageSize int) ([]Prompt, int) {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	all := listUserHistoryPromptsLocked(userID)
+	total := len(all)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 100
+	}
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return all[start:end], total
 }
 
 func ListUserDraftPrompts(userID int) []Prompt {
@@ -488,21 +609,18 @@ func ListUserDraftPrompts(userID int) []Prompt {
 
 func validateReportPromptInput(input ReportPromptInput) error {
 	if input.PromptID <= 0 {
-		return fmt.Errorf("invalid prompt id")
+		return ErrPromptNotFound
 	}
 	if input.UserID <= 0 {
 		return fmt.Errorf("invalid user")
 	}
 
 	reason := strings.TrimSpace(input.Reason)
-	if reason == "" {
-		return fmt.Errorf("report reason is required")
+	if !ValidReportReason(reason) {
+		return ErrInvalidReportReason
 	}
-	if len([]rune(reason)) > 80 {
-		return fmt.Errorf("report reason must be 80 characters or fewer")
-	}
-	if len([]rune(strings.TrimSpace(input.Detail))) > 500 {
-		return fmt.Errorf("report detail must be 500 characters or fewer")
+	if len([]rune(strings.TrimSpace(input.Detail))) > MaxReportDetailRunes {
+		return fmt.Errorf("report detail must be %d characters or fewer", MaxReportDetailRunes)
 	}
 
 	return nil
@@ -561,25 +679,60 @@ func promptsByIDLocked(ids []int) []Prompt {
 	return list
 }
 
-func normalizeTags(tags []string) []string {
+// normalizeTagValue trims surrounding whitespace and collapses any run of
+// internal whitespace to a single space, so tags like "  摄影  大师  " become the
+// canonical "摄影 大师". This keeps persisted tags consistent and prevents
+// duplicates that differ only in spacing.
+// MaxSearchKeywordLen bounds the length of a LIKE keyword. Boundless LIKE terms
+// degrade index usage and can be abused for expensive scans; MySQL ingestion of
+// overly long patterns is also wasted work. Cap it (in runes) since CJK keywords
+// are common and rune-based is exact.
+const MaxSearchKeywordLen = 64
+
+// capKeywordLength truncates a search keyword to MaxSearchKeywordLen runes. It
+// preserves multi-byte characters (e.g. Chinese) by slicing on rune boundaries.
+func capKeywordLength(keyword string) string {
+	runes := []rune(keyword)
+	if len(runes) <= MaxSearchKeywordLen {
+		return keyword
+	}
+	return string(runes[:MaxSearchKeywordLen])
+}
+
+func normalizeTagValue(tag string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(tag)), " ")
+}
+
+// NormalizePromptTags normalizes a prompt's tag list for persistence: each tag
+// is trimmed and whitespace-collapsed, tags are deduplicated (case-preserving),
+// the count is capped at MaxPromptTags, and every individual tag is capped at
+// MaxPromptTagLength. It returns ErrInvalidTag if a tag is entirely whitespace
+// or longer than MaxPromptTagLength after normalization.
+func NormalizePromptTags(tags []string) ([]string, error) {
+	if len(tags) > MaxPromptTags {
+		tags = tags[:MaxPromptTags]
+	}
 	result := make([]string, 0, len(tags))
 	seen := make(map[string]struct{}, len(tags))
 	for _, tag := range tags {
-		trimmed := strings.TrimSpace(tag)
-		if trimmed == "" {
+		tagValue := normalizeTagValue(tag)
+		if tagValue == "" {
+			return nil, ErrInvalidTag
+		}
+		if len([]rune(tagValue)) > MaxPromptTagLength {
+			return nil, ErrInvalidTag
+		}
+		if _, exists := seen[tagValue]; exists {
 			continue
 		}
-		if _, exists := seen[trimmed]; exists {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		result = append(result, trimmed)
+		seen[tagValue] = struct{}{}
+		result = append(result, tagValue)
 		if len(result) >= MaxPromptTags {
 			break
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 // QueryPagePrompts applies the same filtering as QueryPrompts but returns one

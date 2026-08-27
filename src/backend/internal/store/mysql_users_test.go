@@ -19,8 +19,9 @@ func TestScanAuthUserHandlesNullAvatarAndBio(t *testing.T) {
 		*(dest[6].(*sql.NullString)) = sql.NullString{}
 		*(dest[7].(*int)) = 1
 		*(dest[8].(*int)) = 0
-		*(dest[9].(*int)) = 1
-		*(dest[10].(*time.Time)) = createdAt
+		*(dest[9].(*int)) = 3
+		*(dest[10].(*int)) = 1
+		*(dest[11].(*time.Time)) = createdAt
 		return nil
 	})
 	if err != nil {
@@ -37,5 +38,8 @@ func TestScanAuthUserHandlesNullAvatarAndBio(t *testing.T) {
 	}
 	if user.GitHubID != 99 {
 		t.Fatalf("expected github id 99, got %d", user.GitHubID)
+	}
+	if user.SessionVer != 3 {
+		t.Fatalf("expected session version 3, got %d", user.SessionVer)
 	}
 }

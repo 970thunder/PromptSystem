@@ -23,14 +23,15 @@ type TokenManager struct {
 }
 
 type Claims struct {
-	Subject   string `json:"sub"`
-	Email     string `json:"email"`
-	Issued    int64  `json:"iat"`
-	Expiry    int64  `json:"exp"`
-	NotBefore int64  `json:"nbf"`
-	Issuer    string `json:"iss"`
-	Audience  string `json:"aud"`
-	JTI       string `json:"jti"`
+	Subject        string `json:"sub"`
+	Email          string `json:"email"`
+	SessionVersion int    `json:"sv,omitempty"`
+	Issued         int64  `json:"iat"`
+	Expiry         int64  `json:"exp"`
+	NotBefore      int64  `json:"nbf"`
+	Issuer         string `json:"iss"`
+	Audience       string `json:"aud"`
+	JTI            string `json:"jti"`
 }
 
 const (
@@ -47,7 +48,7 @@ func NewTokenManager(secret string, ttl time.Duration) *TokenManager {
 	}
 }
 
-func (tm *TokenManager) Generate(userID int, email string) (string, error) {
+func (tm *TokenManager) Generate(userID int, email string, sessionVersion int) (string, error) {
 	header := map[string]string{
 		"alg": "HS256",
 		"typ": "JWT",
@@ -59,14 +60,15 @@ func (tm *TokenManager) Generate(userID int, email string) (string, error) {
 		return "", err
 	}
 	claims := Claims{
-		Subject:   fmt.Sprintf("%d", userID),
-		Email:     email,
-		Issued:    now.Unix(),
-		Expiry:    now.Add(tm.ttl).Unix(),
-		NotBefore: now.Unix(),
-		Issuer:    TokenIssuer,
-		Audience:  TokenAudience,
-		JTI:       jti,
+		Subject:        fmt.Sprintf("%d", userID),
+		Email:          email,
+		SessionVersion: sessionVersion,
+		Issued:         now.Unix(),
+		Expiry:         now.Add(tm.ttl).Unix(),
+		NotBefore:      now.Unix(),
+		Issuer:         TokenIssuer,
+		Audience:       TokenAudience,
+		JTI:            jti,
 	}
 
 	headerPayload, err := encodeSegment(header)

@@ -11,11 +11,16 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"promptos-backend/internal/store"
 )
 
+// oauthStateEntry is the in-memory fallback record used only when Redis is not
+// available (development/test). In production the state lives in Redis.
 type oauthStateEntry struct {
 	expiresAt time.Time
 }
@@ -25,6 +30,23 @@ type githubOAuth struct {
 }
 
 var githubOAuthState = &githubOAuth{}
+
+// oauthStateKey prefixes OAuth state stored in Redis.
+const oauthStateKey = "promptos:oauth:state:"
+
+// oauthExchangeKey prefixes the one-time code that frontends exchange for a
+// JWT, so the JWT never appears in a URL query.
+const oauthExchangeKey = "promptos:oauth:exchange:"
+
+// oauthStateTTL bounds how long a login attempt may remain in progress.
+const oauthStateTTL = 10 * time.Minute
+
+// exchangeCodeTTL is the lifetime of a one-time exchange code.
+const exchangeCodeTTL = 60 * time.Second
+
+func (s *server) oauthCookieSecure() bool {
+	return s.config.AppEnv == "production"
+}
 
 func (s *server) githubRedirectURI() string {
 	if strings.TrimSpace(s.config.GitHubRedirectURI) != "" {
@@ -42,6 +64,43 @@ func (s *server) githubRedirectURI() string {
 func (s *server) githubConfigured() bool {
 	return strings.TrimSpace(s.config.GitHubClientID) != "" &&
 		strings.TrimSpace(s.config.GitHubClientSecret) != ""
+}
+
+// storeOAuthState records the state for single consumption, preferring Redis
+// when available and falling back to in-memory storage (development/test).
+func (s *server) storeOAuthState(ctx context.Context, state string) error {
+	if s.cache != nil {
+		if err := s.cache.Set(ctx, oauthStateKey+state, "1", oauthStateTTL); err != nil {
+			log.Printf("oauth: redis store state failed, using memory fallback: %v", err)
+		} else {
+			return nil
+		}
+	}
+	githubOAuthState.states.Store(state, oauthStateEntry{expiresAt: time.Now().Add(oauthStateTTL)})
+	return nil
+}
+
+// consumeOAuthState removes the state exactly once, enforcing TTL. It returns
+// false when the state is unknown, already used, or expired.
+func (s *server) consumeOAuthState(ctx context.Context, state string) bool {
+	if s.cache != nil {
+		value, err := s.cache.GetAndDelete(ctx, oauthStateKey+state)
+		if err != nil {
+			log.Printf("oauth: redis consume state failed: %v", err)
+		} else if value != "" {
+			return true
+		}
+	}
+
+	entry, ok := githubOAuthState.states.LoadAndDelete(state)
+	if !ok {
+		return false
+	}
+	stateEntry, ok := entry.(oauthStateEntry)
+	if !ok || time.Now().After(stateEntry.expiresAt) {
+		return false
+	}
+	return true
 }
 
 func (s *server) handleGitHubAuthStart(w http.ResponseWriter, r *http.Request) {
@@ -67,13 +126,21 @@ func (s *server) handleGitHubAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	githubOAuthState.states.Store(state, oauthStateEntry{expiresAt: time.Now().Add(10 * time.Minute)})
+	if err := s.storeOAuthState(r.Context(), state); err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
+			Code:    500,
+			Message: "Failed to start GitHub OAuth",
+		})
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "github_oauth_state",
 		Value:    state,
 		Path:     "/",
-		MaxAge:   600,
+		MaxAge:   int(oauthStateTTL / time.Second),
 		HttpOnly: true,
+		Secure:   s.oauthCookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -104,26 +171,12 @@ func (s *server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	entry, ok := githubOAuthState.states.LoadAndDelete(queryState)
-	if !ok {
+	if !s.consumeOAuthState(r.Context(), queryState) {
 		s.redirectOAuthError(w, r, "OAuth state expired")
 		return
 	}
 
-	stateEntry, ok := entry.(oauthStateEntry)
-	if !ok || time.Now().After(stateEntry.expiresAt) {
-		s.redirectOAuthError(w, r, "OAuth state expired")
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "github_oauth_state",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	clearOAuthStateCookie(w, s.oauthCookieSecure())
 
 	if oauthErr := strings.TrimSpace(r.URL.Query().Get("error")); oauthErr != "" {
 		s.redirectOAuthError(w, r, oauthErr)
@@ -165,21 +218,156 @@ func (s *server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	token, err := s.tokenManager.Generate(user.ID, user.Email)
+	// Issue a short-lived one-time code instead of placing the JWT in the URL.
+	// The frontend calls POST /api/v1/auth/exchange to trade it for a JWT.
+	exchangeCode, err := randomOAuthState()
 	if err != nil {
 		s.redirectOAuthError(w, r, "Token generation failed")
 		return
 	}
 
+	codeValue := fmt.Sprintf("%d:%d", user.ID, user.SessionVer)
+	if s.cache == nil {
+		githubExchangeCodes.Store(exchangeCode, exchangeEntry{value: codeValue, expiresAt: time.Now().Add(exchangeCodeTTL)})
+	} else if err := s.cache.Set(ctx, oauthExchangeKey+exchangeCode, codeValue, exchangeCodeTTL); err != nil {
+		log.Printf("github oauth store exchange code failed: %v", err)
+		s.redirectOAuthError(w, r, "Token generation failed")
+		return
+	}
+
 	frontend := strings.TrimRight(s.config.FrontendURL, "/")
-	redirectURL := fmt.Sprintf("%s/auth/callback?token=%s", frontend, url.QueryEscape(token))
+	redirectURL := fmt.Sprintf("%s/auth/callback?code=%s", frontend, url.QueryEscape(exchangeCode))
 	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
+// exchangeEntry is the in-memory fallback for a one-time exchange code, used
+// only when Redis is unavailable (development/test).
+type exchangeEntry struct {
+	value     string
+	expiresAt time.Time
+}
+
+// githubExchangeCodes holds one-time exchange codes when Redis is not present.
+var githubExchangeCodes sync.Map
+
+func (s *server) handleAuthExchange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	exchangeCode := strings.TrimSpace(payload.Code)
+	if exchangeCode == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:      400,
+			Message:   "Missing code",
+			ErrorCode: "INVALID_EXCHANGE_CODE",
+		})
+		return
+	}
+
+	value := ""
+	if s.cache != nil {
+		v, err := s.cache.GetAndDelete(r.Context(), oauthExchangeKey+exchangeCode)
+		if err != nil {
+			log.Printf("github oauth exchange read failed: %v", err)
+		}
+		value = v
+	}
+	if value == "" {
+		if entry, ok := githubExchangeCodes.LoadAndDelete(exchangeCode); ok {
+			if codeEntry, valid := entry.(exchangeEntry); valid && time.Now().Before(codeEntry.expiresAt) {
+				value = codeEntry.value
+			}
+		}
+	}
+	if value == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:      400,
+			Message:   "Code is invalid or has expired",
+			ErrorCode: "INVALID_EXCHANGE_CODE",
+		})
+		return
+	}
+
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:      400,
+			Message:   "Code is invalid or has expired",
+			ErrorCode: "INVALID_EXCHANGE_CODE",
+		})
+		return
+	}
+	userID, err := strconv.Atoi(parts[0])
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
+			Code:      400,
+			Message:   "Code is invalid or has expired",
+			ErrorCode: "INVALID_EXCHANGE_CODE",
+		})
+		return
+	}
+	sessionVersion := 0
+	if len(parts) == 2 {
+		if parsed, err := strconv.Atoi(parts[1]); err == nil {
+			sessionVersion = parsed
+		}
+	}
+
+	user, found := s.userStore.FindByID(userID)
+	if !found || user.Status != 1 || user.SessionVer != sessionVersion {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+			Code:      401,
+			Message:   "Unauthorized",
+			ErrorCode: "AUTH_TOKEN_REVOKED",
+		})
+		return
+	}
+
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
+			Code:    500,
+			Message: "Token generation failed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[authResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: authResponse{
+			Token: token,
+			User:  store.ToPublicUser(user),
+		},
+	})
 }
 
 func (s *server) redirectOAuthError(w http.ResponseWriter, r *http.Request, message string) {
 	frontend := strings.TrimRight(s.config.FrontendURL, "/")
 	redirectURL := fmt.Sprintf("%s/auth/callback?error=%s", frontend, url.QueryEscape(message))
 	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
+func clearOAuthStateCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "github_oauth_state",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (s *server) exchangeGitHubCode(ctx context.Context, code string) (string, error) {

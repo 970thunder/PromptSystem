@@ -78,14 +78,11 @@ func validateReportCommentInput(input ReportCommentInput) error {
 	}
 
 	reason := strings.TrimSpace(input.Reason)
-	if reason == "" {
-		return errors.New("report reason is required")
+	if !ValidReportReason(reason) {
+		return ErrInvalidReportReason
 	}
-	if len([]rune(reason)) > 80 {
-		return errors.New("report reason must be 80 characters or fewer")
-	}
-	if len([]rune(strings.TrimSpace(input.Detail))) > 500 {
-		return errors.New("report detail must be 500 characters or fewer")
+	if len([]rune(strings.TrimSpace(input.Detail))) > MaxReportDetailRunes {
+		return fmt.Errorf("report detail must be %d characters or fewer", MaxReportDetailRunes)
 	}
 
 	return nil
@@ -237,7 +234,7 @@ func LikeComment(id int, userID int) (Comment, bool, error) {
 		return comments[index], true, nil
 	}
 
-	return Comment{}, false, fmt.Errorf("comment not found")
+	return Comment{}, false, ErrCommentNotFound
 }
 
 func ReportComment(input ReportCommentInput) (Report, bool, error) {
@@ -249,7 +246,7 @@ func ReportComment(input ReportCommentInput) (Report, bool, error) {
 	defer commentMu.Unlock()
 
 	if _, found := findCommentByIDLocked(input.CommentID); !found {
-		return Report{}, false, errors.New("comment not found")
+		return Report{}, false, ErrCommentNotFound
 	}
 
 	key := fmt.Sprintf("%d:%d", input.UserID, input.CommentID)
