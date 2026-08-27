@@ -10,6 +10,9 @@ import { useUserStore } from '@/stores/user'
 import type { FollowStatus, Prompt, User } from '@/types'
 import { githubAuthUrl } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
+import BackButton from '@/components/navigation/BackButton.vue'
+import AppShell from '@/components/layout/AppShell.vue'
+import PageLoading from '@/components/feedback/PageLoading.vue'
 
 type LibraryTab = 'published' | 'drafts' | 'favorites' | 'likes' | 'history' | 'following' | 'followers'
 
@@ -326,349 +329,364 @@ const handleBindGitHub = () => {
   window.location.href = githubAuthUrl()
 }
 
+const handlePublishClick = async () => {
+  if (!userStore.isLoggedIn) {
+    await router.push('/login?redirect=/publish')
+    return
+  }
+  await router.push('/publish')
+}
+
 onMounted(loadProfile)
 watch(() => route.params.userId, loadProfile)
 </script>
 
 <template>
-  <div class="profile-page">
-    <div class="profile-container">
-      <header class="profile-header">
-        <div>
-          <div class="section-eyebrow">
-            个人主页
+  <AppShell>
+    <div class="profile-page">
+      <div class="profile-container">
+        <header class="profile-header">
+          <div>
+            <div class="section-eyebrow">
+              个人主页
+            </div>
+            <h1 class="profile-header__title">
+              创作者工作台
+            </h1>
           </div>
-          <h1 class="profile-header__title">
-            创作者工作台
-          </h1>
-        </div>
-        <div class="profile-header__actions">
-          <RouterLink
-            to="/"
-            class="btn-pill-secondary bg-white"
-          >
-            返回首页
-          </RouterLink>
-          <RouterLink
-            to="/publish"
-            class="btn-pill-primary"
-          >
-            发布 Prompt
-          </RouterLink>
-        </div>
-      </header>
-
-      <section class="profile-layout">
-        <aside class="profile-sidebar">
-          <section class="profile-card">
-            <div class="profile-card__user">
-              <button
-                class="profile-avatar"
-                :class="{ 'profile-avatar--clickable': isOwnerView }"
-                type="button"
-                :disabled="!isOwnerView || uploadingAvatar"
-                @click="handleAvatarClick"
-              >
-                <img
-                  v-if="resolvedAvatar"
-                  :src="resolvedAvatar"
-                  :alt="profileUser?.username || 'avatar'"
-                  class="profile-avatar__image"
-                >
-                <span v-else>{{ profileUser?.username?.slice(0, 1) || '?' }}</span>
-                <span
-                  v-if="isOwnerView"
-                  class="profile-avatar__hint"
-                >
-                  {{ uploadingAvatar ? '上传中' : '更换' }}
-                </span>
-              </button>
-              <input
-                ref="avatarInput"
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                class="profile-avatar-input"
-                @change="handleAvatarUpload"
-              >
-              <div class="profile-card__info">
-                <div class="profile-card__name">
-                  {{ profileUser?.username || '创作者' }}
-                </div>
-                <div class="profile-card__email">
-                  {{ profileUser?.email || '暂无邮箱' }}
-                </div>
-                <p class="profile-card__bio">
-                  {{ profileUser?.bio || '还没有简介。发布几条 Prompt 后，这里会更像真正的创作者主页。' }}
-                </p>
-              </div>
-            </div>
-
-            <div class="profile-stats">
-              <div
-                v-for="stat in stats"
-                :key="stat.label"
-                class="profile-stat"
-              >
-                <div class="profile-stat__label">
-                  {{ stat.label }}
-                </div>
-                <div class="profile-stat__value">
-                  {{ formatCount(stat.value) }}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section
-            v-if="isOwnerView"
-            class="profile-card"
-          >
-            <div class="profile-card__title">
-              GitHub 账号
-            </div>
-            <div class="profile-bind-status">
-              <span
-                class="profile-bind-dot"
-                :class="{ 'profile-bind-dot--active': profileUser?.hasGitHubBound }"
-              />
-              <span>{{ profileUser?.hasGitHubBound ? '已绑定 GitHub' : '未绑定 GitHub' }}</span>
-            </div>
-            <p class="profile-bind-desc">
-              绑定后可以使用 GitHub 一键登录；如果邮箱一致，也会自动关联当前账号。
-            </p>
-            <button
-              v-if="!profileUser?.hasGitHubBound"
-              class="btn-pill-primary profile-bind-action"
-              @click="handleBindGitHub"
-            >
-              绑定 GitHub
-            </button>
-          </section>
-
-          <section
-            v-if="isOwnerView"
-            class="profile-card"
-          >
-            <div class="profile-card__title">
-              编辑资料
-            </div>
-            <div class="profile-form">
-              <label class="profile-field">
-                展示名称
-                <input
-                  v-model="profileForm.username"
-                  type="text"
-                  maxlength="20"
-                  class="profile-input"
-                >
-              </label>
-              <label class="profile-field">
-                简介
-                <textarea
-                  v-model="profileForm.bio"
-                  rows="3"
-                  maxlength="500"
-                  class="profile-input"
-                />
-              </label>
-              <label class="profile-field">
-                头像地址
-                <input
-                  v-model="profileForm.avatar"
-                  type="text"
-                  class="profile-input"
-                  placeholder="上传头像后自动填充"
-                >
-              </label>
-              <button
-                class="btn-pill-primary profile-save"
-                :disabled="savingProfile"
-                @click="handleSaveProfile"
-              >
-                {{ savingProfile ? '保存中...' : '保存资料' }}
-              </button>
-            </div>
-          </section>
-
-          <section class="profile-card">
-            <div class="profile-card__title">
-              发布概况
-            </div>
-            <div class="profile-summary">
-              <div>加入时间：{{ profileUser?.createdAt || '-' }}</div>
-              <div>等级：{{ profileUser?.level ?? '-' }}</div>
-              <div>经验值：{{ profileUser?.experience ?? '-' }}</div>
-              <div>常用模型：{{ favoriteModels.map(([name]) => name).join('、') || '暂无使用记录' }}</div>
-            </div>
-          </section>
-        </aside>
-
-        <section class="profile-card profile-prompts">
-          <div class="profile-prompts__head">
-            <div>
-              <div class="text-muted-sm">
-                内容库
-              </div>
-              <div class="profile-prompts__count">
-                {{ isUserLibraryTab ? activeUserList.length : activePromptList.length }} 条
-              </div>
-            </div>
-            <div
-              v-if="isOwnerView"
-              class="profile-library-tabs"
-            >
-              <button
-                v-for="tab in libraryTabs"
-                :key="tab.key"
-                class="profile-library-tab"
-                :class="{ 'profile-library-tab--active': activeLibraryTab === tab.key }"
-                @click="activeLibraryTab = tab.key"
-              >
-                {{ tab.label }} · {{ tab.count }}
-              </button>
-            </div>
-            <div
-              v-else
-              class="profile-prompts__sort"
-            >
-              按最新排序
-            </div>
-          </div>
-
-          <div
-            v-if="loading"
-            class="profile-prompts__grid"
-          >
-            <div
-              v-for="index in 4"
-              :key="index"
-              class="profile-skeleton"
+          <div class="profile-header__actions">
+            <BackButton
+              fallback="/"
+              label="返回"
+              aria-label="返回上一页或首页"
             />
-          </div>
-
-          <div
-            v-else-if="isUserLibraryTab && activeUserList.length > 0"
-            class="profile-users-list"
-          >
-            <RouterLink
-              v-for="user in activeUserList"
-              :key="user.id"
-              :to="`/profile/${user.id}`"
-              class="profile-user-row"
+            <button
+              type="button"
+              class="btn-pill-primary"
+              @click="handlePublishClick"
             >
-              <div class="profile-user-row__avatar">
-                <img
-                  v-if="user.avatar"
-                  :src="resolveMediaUrl(user.avatar)"
-                  :alt="user.username"
-                  class="profile-user-row__image"
-                >
-                <span v-else>{{ user.username.slice(0, 1) }}</span>
-              </div>
-              <div class="profile-user-row__body">
-                <div class="profile-user-row__name">
-                  {{ user.username }}
-                </div>
-                <p class="profile-user-row__bio">
-                  {{ user.bio || '这个创作者还没有填写简介。' }}
-                </p>
-              </div>
-              <div class="profile-user-row__meta">
-                Lv.{{ user.level }}
-              </div>
-            </RouterLink>
+              发布 Prompt
+            </button>
           </div>
+        </header>
 
-          <div
-            v-else-if="!isUserLibraryTab && activePromptList.length > 0"
-            class="profile-prompts__grid"
-          >
-            <article
-              v-for="(prompt, index) in activePromptList"
-              :key="prompt.id"
-              class="profile-prompt-card"
+        <section class="profile-layout">
+          <aside class="profile-sidebar">
+            <section class="profile-card">
+              <div class="profile-card__user">
+                <button
+                  class="profile-avatar"
+                  :class="{ 'profile-avatar--clickable': isOwnerView }"
+                  type="button"
+                  aria-label="更换头像"
+                  :disabled="!isOwnerView || uploadingAvatar"
+                  @click="handleAvatarClick"
+                >
+                  <img
+                    v-if="resolvedAvatar"
+                    :src="resolvedAvatar"
+                    :alt="profileUser?.username || 'avatar'"
+                    class="profile-avatar__image"
+                  >
+                  <span v-else>{{ profileUser?.username?.slice(0, 1) || '?' }}</span>
+                  <span
+                    v-if="isOwnerView"
+                    class="profile-avatar__hint"
+                  >
+                    {{ uploadingAvatar ? '上传中' : '更换' }}
+                  </span>
+                </button>
+                <input
+                  ref="avatarInput"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="profile-avatar-input"
+                  @change="handleAvatarUpload"
+                >
+                <div class="profile-card__info">
+                  <div class="profile-card__name">
+                    {{ profileUser?.username || '创作者' }}
+                  </div>
+                  <div class="profile-card__email">
+                    {{ profileUser?.email || '暂无邮箱' }}
+                  </div>
+                  <p class="profile-card__bio">
+                    {{ profileUser?.bio || '还没有简介。发布几条 Prompt 后，这里会更像真正的创作者主页。' }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="profile-stats">
+                <div
+                  v-for="stat in stats"
+                  :key="stat.label"
+                  class="profile-stat"
+                >
+                  <div class="profile-stat__label">
+                    {{ stat.label }}
+                  </div>
+                  <div class="profile-stat__value">
+                    {{ formatCount(stat.value) }}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section
+              v-if="isOwnerView"
+              class="profile-card"
+            >
+              <div class="profile-card__title">
+                GitHub 账号
+              </div>
+              <div class="profile-bind-status">
+                <span
+                  class="profile-bind-dot"
+                  :class="{ 'profile-bind-dot--active': profileUser?.hasGitHubBound }"
+                />
+                <span>{{ profileUser?.hasGitHubBound ? '已绑定 GitHub' : '未绑定 GitHub' }}</span>
+              </div>
+              <p class="profile-bind-desc">
+                绑定后可以使用 GitHub 一键登录；如果邮箱一致，也会自动关联当前账号。
+              </p>
+              <button
+                v-if="!profileUser?.hasGitHubBound"
+                class="btn-pill-primary profile-bind-action"
+                @click="handleBindGitHub"
+              >
+                绑定 GitHub
+              </button>
+            </section>
+
+            <section
+              v-if="isOwnerView"
+              class="profile-card"
+            >
+              <div class="profile-card__title">
+                编辑资料
+              </div>
+              <div class="profile-form">
+                <label class="profile-field">
+                  展示名称
+                  <input
+                    v-model="profileForm.username"
+                    type="text"
+                    maxlength="20"
+                    class="profile-input"
+                  >
+                </label>
+                <label class="profile-field">
+                  简介
+                  <textarea
+                    v-model="profileForm.bio"
+                    rows="3"
+                    maxlength="500"
+                    class="profile-input"
+                  />
+                </label>
+                <label class="profile-field">
+                  头像地址
+                  <input
+                    v-model="profileForm.avatar"
+                    type="text"
+                    class="profile-input"
+                    placeholder="上传头像后自动填充"
+                  >
+                </label>
+                <button
+                  class="btn-pill-primary profile-save"
+                  :disabled="savingProfile"
+                  @click="handleSaveProfile"
+                >
+                  {{ savingProfile ? '保存中...' : '保存资料' }}
+                </button>
+              </div>
+            </section>
+
+            <section class="profile-card">
+              <div class="profile-card__title">
+                发布概况
+              </div>
+              <div class="profile-summary">
+                <div>加入时间：{{ profileUser?.createdAt || '-' }}</div>
+                <div>等级：{{ profileUser?.level ?? '-' }}</div>
+                <div>经验值：{{ profileUser?.experience ?? '-' }}</div>
+                <div>常用模型：{{ favoriteModels.map(([name]) => name).join('、') || '暂无使用记录' }}</div>
+              </div>
+            </section>
+          </aside>
+
+          <section class="profile-card profile-prompts">
+            <div class="profile-prompts__head">
+              <div>
+                <div class="text-muted-sm">
+                  内容库
+                </div>
+                <div class="profile-prompts__count">
+                  {{ isUserLibraryTab ? activeUserList.length : activePromptList.length }} 条
+                </div>
+              </div>
+              <div
+                v-if="isOwnerView"
+                class="profile-library-tabs"
+              >
+                <button
+                  v-for="tab in libraryTabs"
+                  :key="tab.key"
+                  class="profile-library-tab"
+                  :class="{ 'profile-library-tab--active': activeLibraryTab === tab.key }"
+                  @click="activeLibraryTab = tab.key"
+                >
+                  {{ tab.label }} · {{ tab.count }}
+                </button>
+              </div>
+              <div
+                v-else
+                class="profile-prompts__sort"
+              >
+                按最新排序
+              </div>
+            </div>
+
+            <PageLoading
+              v-if="loading"
+              variant="grid"
+              :rows="4"
+              label="正在加载个人内容"
+            />
+
+            <div
+              v-else-if="isUserLibraryTab && activeUserList.length > 0"
+              class="profile-users-list"
             >
               <RouterLink
-                :to="promptDetailTarget(prompt)"
-                class="profile-prompt-card__cover"
+                v-for="user in activeUserList"
+                :key="user.id"
+                :to="`/profile/${user.id}`"
+                class="profile-user-row"
               >
-                <img
-                  :src="resolveCover(prompt, index)"
-                  :alt="prompt.title"
-                  class="profile-prompt-card__image"
-                >
-              </RouterLink>
-              <div class="profile-prompt-card__body">
-                <div class="profile-prompt-card__head">
-                  <div class="profile-prompt-card__meta">
-                    <span>{{ prompt.categoryName }}</span>
-                    <span>{{ prompt.model }}</span>
-                    <span
-                      v-if="prompt.status === 0"
-                      class="profile-prompt-card__badge"
-                    >
-                      草稿
-                    </span>
-                  </div>
-                  <div
-                    v-if="isOwnerView && (activeLibraryTab === 'published' || activeLibraryTab === 'drafts')"
-                    class="profile-prompt-card__actions"
+                <div class="profile-user-row__avatar">
+                  <img
+                    v-if="user.avatar"
+                    :src="resolveMediaUrl(user.avatar)"
+                    :alt="user.username"
+                    class="profile-user-row__image"
+                    width="48"
+                    height="48"
+                    loading="lazy"
+                    decoding="async"
                   >
-                    <button
-                      class="profile-action-btn"
-                      @click="handleEditPrompt(prompt.id)"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      class="profile-action-btn profile-action-btn--danger"
-                      @click="handleDeletePrompt(prompt.id)"
-                    >
-                      删除
-                    </button>
-                  </div>
+                  <span v-else>{{ user.username.slice(0, 1) }}</span>
                 </div>
-                <RouterLink :to="promptDetailTarget(prompt)">
-                  <h2 class="profile-prompt-card__title">
-                    {{ prompt.title }}
-                  </h2>
-                </RouterLink>
-                <p class="profile-prompt-card__desc">
-                  {{ prompt.description }}
-                </p>
-                <div class="profile-prompt-card__footer">
-                  <span>{{ prompt.createdAt }}</span>
-                  <div class="profile-prompt-card__stats">
-                    <span>{{ formatCount(prompt.likes) }} 赞</span>
-                    <span>{{ formatCount(prompt.views) }} 浏览</span>
+                <div class="profile-user-row__body">
+                  <div class="profile-user-row__name">
+                    {{ user.username }}
                   </div>
+                  <p class="profile-user-row__bio">
+                    {{ user.bio || '这个创作者还没有填写简介。' }}
+                  </p>
                 </div>
-              </div>
-            </article>
-          </div>
-
-          <div
-            v-else
-            class="profile-empty"
-          >
-            <div class="profile-empty__title">
-              暂无内容
+                <div class="profile-user-row__meta">
+                  Lv.{{ user.level }}
+                </div>
+              </RouterLink>
             </div>
-            <p class="profile-empty__desc">
-              当前列表还没有内容。发布、收藏、点赞或关注创作者后会在这里形成你的记录。
-            </p>
-            <RouterLink
-              v-if="activeLibraryTab === 'published' || activeLibraryTab === 'drafts'"
-              to="/publish"
-              class="btn-pill-primary profile-empty__cta"
+
+            <div
+              v-else-if="!isUserLibraryTab && activePromptList.length > 0"
+              class="profile-prompts__grid"
             >
-              {{ activeLibraryTab === 'drafts' ? '新建草稿' : '发布第一条' }}
-            </RouterLink>
-          </div>
+              <article
+                v-for="(prompt, index) in activePromptList"
+                :key="prompt.id"
+                class="profile-prompt-card"
+              >
+                <RouterLink
+                  :to="promptDetailTarget(prompt)"
+                  class="profile-prompt-card__cover"
+                >
+                  <img
+                    :src="resolveCover(prompt, index)"
+                    :alt="prompt.title"
+                    class="profile-prompt-card__image"
+                    width="1200"
+                    height="675"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                </RouterLink>
+                <div class="profile-prompt-card__body">
+                  <div class="profile-prompt-card__head">
+                    <div class="profile-prompt-card__meta">
+                      <span>{{ prompt.categoryName }}</span>
+                      <span>{{ prompt.model }}</span>
+                      <span
+                        v-if="prompt.status === 0"
+                        class="profile-prompt-card__badge"
+                      >
+                        草稿
+                      </span>
+                    </div>
+                    <div
+                      v-if="isOwnerView && (activeLibraryTab === 'published' || activeLibraryTab === 'drafts')"
+                      class="profile-prompt-card__actions"
+                    >
+                      <button
+                        class="profile-action-btn"
+                        @click="handleEditPrompt(prompt.id)"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        class="profile-action-btn profile-action-btn--danger"
+                        @click="handleDeletePrompt(prompt.id)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                  <RouterLink :to="promptDetailTarget(prompt)">
+                    <h2 class="profile-prompt-card__title">
+                      {{ prompt.title }}
+                    </h2>
+                  </RouterLink>
+                  <p class="profile-prompt-card__desc">
+                    {{ prompt.description }}
+                  </p>
+                  <div class="profile-prompt-card__footer">
+                    <span>{{ prompt.createdAt }}</span>
+                    <div class="profile-prompt-card__stats">
+                      <span>{{ formatCount(prompt.likes) }} 赞</span>
+                      <span>{{ formatCount(prompt.views) }} 浏览</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div
+              v-else
+              class="profile-empty"
+            >
+              <div class="profile-empty__title">
+                暂无内容
+              </div>
+              <p class="profile-empty__desc">
+                当前列表还没有内容。发布、收藏、点赞或关注创作者后会在这里形成你的记录。
+              </p>
+              <RouterLink
+                v-if="activeLibraryTab === 'published' || activeLibraryTab === 'drafts'"
+                to="/publish"
+                class="btn-pill-primary profile-empty__cta"
+              >
+                {{ activeLibraryTab === 'drafts' ? '新建草稿' : '发布第一条' }}
+              </RouterLink>
+            </div>
+          </section>
         </section>
-      </section>
+      </div>
     </div>
-  </div>
+  </AppShell>
 </template>
 
 <style scoped>
@@ -701,7 +719,7 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-card {
-  @apply rounded-[28px] border border-black/10 bg-white p-6;
+  @apply rounded-[28px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)] p-6;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
 }
 
@@ -710,7 +728,7 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-avatar {
-  @apply relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-xl font-semibold text-white transition disabled:cursor-default;
+  @apply relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--prompt-primary)] text-xl font-semibold text-[var(--prompt-primary-contrast)] transition disabled:cursor-default;
 }
 
 .profile-avatar--clickable {
@@ -734,15 +752,15 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-card__name {
-  @apply text-2xl font-semibold text-black;
+  @apply text-2xl font-semibold text-[var(--prompt-text)];
 }
 
 .profile-card__email {
-  @apply mt-1 text-sm text-[#666666];
+  @apply mt-1 text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-card__bio {
-  @apply mt-3 text-sm leading-6 text-[#5f5f5f];
+  @apply mt-3 text-sm leading-6 text-[var(--prompt-text-faint)];
 }
 
 .profile-stats {
@@ -750,19 +768,19 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-stat {
-  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+  @apply rounded-[18px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4;
 }
 
 .profile-stat__label {
-  @apply text-sm text-[#777777];
+  @apply text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-stat__value {
-  @apply mt-2 text-2xl font-semibold text-black;
+  @apply mt-2 text-2xl font-semibold text-[var(--prompt-text)];
 }
 
 .profile-card__title {
-  @apply text-lg font-semibold text-black;
+  @apply text-lg font-semibold text-[var(--prompt-text)];
 }
 
 .profile-form {
@@ -770,11 +788,11 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-field {
-  @apply grid gap-1 text-sm text-[#555555];
+  @apply grid gap-1 text-sm text-[var(--prompt-text-muted)];
 }
 
 .profile-input {
-  @apply rounded-[14px] border border-black/10 bg-[#faf8f4] px-3 py-2 text-sm text-black outline-none focus:border-black/30;
+  @apply rounded-[14px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3 py-2 text-sm text-[var(--prompt-text)] focus:border-[var(--prompt-border-strong)];
 }
 
 .profile-save {
@@ -782,23 +800,23 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-summary {
-  @apply mt-4 space-y-3 text-sm text-[#4f4f4f];
+  @apply mt-4 space-y-3 text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-bind-status {
-  @apply mt-4 flex items-center gap-2 text-sm font-medium text-black;
+  @apply mt-4 flex items-center gap-2 text-sm font-medium text-[var(--prompt-text)];
 }
 
 .profile-bind-dot {
-  @apply h-2.5 w-2.5 rounded-full bg-amber-500;
+  @apply h-2.5 w-2.5 rounded-full bg-[var(--prompt-warning)];
 }
 
 .profile-bind-dot--active {
-  @apply bg-emerald-500;
+  @apply bg-[var(--prompt-success)];
 }
 
 .profile-bind-desc {
-  @apply mt-3 text-sm leading-6 text-[#666666];
+  @apply mt-3 text-sm leading-6 text-[var(--prompt-text-faint)];
 }
 
 .profile-bind-action {
@@ -814,11 +832,11 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-prompts__count {
-  @apply mt-1 text-2xl font-semibold text-black;
+  @apply mt-1 text-2xl font-semibold text-[var(--prompt-text)];
 }
 
 .profile-prompts__sort {
-  @apply text-sm text-[#666666];
+  @apply text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-library-tabs {
@@ -826,11 +844,11 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-library-tab {
-  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#555555] transition hover:border-black/20 hover:text-black;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3 py-1.5 text-xs text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
 }
 
 .profile-library-tab--active {
-  @apply border-black bg-black text-white hover:text-white;
+  @apply border-[var(--prompt-border)] bg-[var(--prompt-primary)] text-[var(--prompt-primary-contrast)] hover:text-[var(--prompt-primary-contrast)];
 }
 
 .profile-prompts__grid {
@@ -842,11 +860,11 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-user-row {
-  @apply flex items-center gap-4 rounded-[20px] border border-black/10 bg-[#faf8f4] p-4 transition hover:-translate-y-0.5 hover:border-black/20 hover:bg-white;
+  @apply flex items-center gap-4 rounded-[20px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--prompt-border-strong)] hover:bg-[var(--prompt-surface)];
 }
 
 .profile-user-row__avatar {
-  @apply flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-sm font-semibold text-white;
+  @apply flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--prompt-primary)] text-sm font-semibold text-[var(--prompt-primary-contrast)];
 }
 
 .profile-user-row__image {
@@ -858,27 +876,27 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-user-row__name {
-  @apply text-sm font-semibold text-black;
+  @apply text-sm font-semibold text-[var(--prompt-text)];
 }
 
 .profile-user-row__bio {
-  @apply mt-1 line-clamp-1 text-sm text-[#666666];
+  @apply mt-1 line-clamp-1 text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-user-row__meta {
-  @apply rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#555555];
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-3 py-1 text-xs text-[var(--prompt-text-muted)];
 }
 
 .profile-skeleton {
-  @apply h-[280px] animate-pulse rounded-[24px] bg-black/5;
+  @apply h-[280px] animate-pulse rounded-[24px] bg-[var(--prompt-surface-muted)];
 }
 
 .profile-prompt-card {
-  @apply overflow-hidden rounded-[24px] border border-black/10 bg-[#faf8f4] transition hover:-translate-y-1;
+  @apply overflow-hidden rounded-[24px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] transition hover:-translate-y-1;
 }
 
 .profile-prompt-card__cover {
-  @apply block h-[180px] overflow-hidden bg-[#ebe8e1];
+  @apply block h-[180px] overflow-hidden bg-[var(--prompt-surface-muted)];
 }
 
 .profile-prompt-card__image {
@@ -894,11 +912,11 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-prompt-card__meta {
-  @apply flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-[#7c7c7c];
+  @apply flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-[var(--prompt-text-faint)];
 }
 
 .profile-prompt-card__badge {
-  @apply rounded-full bg-black px-2 py-0.5 text-[10px] font-medium text-white;
+  @apply rounded-full bg-[var(--prompt-primary)] px-2 py-0.5 text-[10px] font-medium text-[var(--prompt-primary-contrast)];
 }
 
 .profile-prompt-card__actions {
@@ -906,23 +924,23 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-action-btn {
-  @apply rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs text-[#555555] transition hover:border-black/20 hover:text-black;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-3 py-1.5 text-xs text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
 }
 
 .profile-action-btn--danger {
-  @apply border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50;
+  @apply border-[var(--prompt-error)] text-[var(--prompt-error)] hover:border-[var(--prompt-error)] hover:bg-[var(--prompt-error-bg)];
 }
 
 .profile-prompt-card__title {
-  @apply mt-3 line-clamp-2 text-xl font-semibold text-black;
+  @apply mt-3 line-clamp-2 text-xl font-semibold text-[var(--prompt-text)];
 }
 
 .profile-prompt-card__desc {
-  @apply mt-2 line-clamp-2 text-sm leading-6 text-[#5f5f5f];
+  @apply mt-2 line-clamp-2 text-sm leading-6 text-[var(--prompt-text-faint)];
 }
 
 .profile-prompt-card__footer {
-  @apply mt-4 flex items-center justify-between gap-3 text-sm text-[#666666];
+  @apply mt-4 flex items-center justify-between gap-3 text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-prompt-card__stats {
@@ -930,15 +948,15 @@ watch(() => route.params.userId, loadProfile)
 }
 
 .profile-empty {
-  @apply mt-6 rounded-[24px] border border-dashed border-black/10 bg-[#faf8f4] px-6 py-16 text-center;
+  @apply mt-6 rounded-[24px] border border-dashed border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-6 py-16 text-center;
 }
 
 .profile-empty__title {
-  @apply text-xl font-semibold text-black;
+  @apply text-xl font-semibold text-[var(--prompt-text)];
 }
 
 .profile-empty__desc {
-  @apply mt-3 text-sm text-[#777777];
+  @apply mt-3 text-sm text-[var(--prompt-text-faint)];
 }
 
 .profile-empty__cta {

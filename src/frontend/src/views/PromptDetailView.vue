@@ -7,6 +7,10 @@ import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
+import BackButton from '@/components/navigation/BackButton.vue'
+import AppShell from '@/components/layout/AppShell.vue'
+import PageLoading from '@/components/feedback/PageLoading.vue'
+import PageError from '@/components/feedback/PageError.vue'
 import { extractPromptExamples, extractPromptWorkflow } from '@/utils/promptStructure'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 import type { Comment, FollowStatus } from '@/types'
@@ -404,6 +408,10 @@ const loadDetail = async () => {
   setActiveImage(0)
 }
 
+const retryDetail = async () => {
+  await loadDetail()
+}
+
 watch(galleryImages, () => setActiveImage(0))
 
 onMounted(loadDetail)
@@ -416,641 +424,649 @@ watch(commentSort, async () => {
 </script>
 
 <template>
-  <div class="detail-page">
-    <div class="detail-container">
-      <header class="detail-breadcrumb">
-        <RouterLink
-          to="/"
-          class="btn-pill-secondary bg-white"
-        >
-          返回首页
-        </RouterLink>
-        <span>/</span>
-        <span v-if="prompt">{{ prompt.categoryName }}</span>
-        <span v-else>提示词详情</span>
-        <span
-          v-if="promptStore.usingMockData"
-          class="detail-badge"
-        >
-          演示详情
-        </span>
-      </header>
-
-      <section
-        v-if="promptStore.detailLoading"
-        class="detail-loading"
-      >
-        <div class="detail-loading__block" />
-        <div class="detail-loading__block" />
-      </section>
-
-      <section
-        v-else-if="prompt"
-        class="detail-layout"
-      >
-        <div class="detail-main">
-          <section class="panel-card detail-hero">
-            <div
-              v-if="showCoverImage"
-              class="detail-cover-wrap"
-            >
-              <div class="detail-cover-inner">
-                <img
-                  :src="activeGalleryImage"
-                  :alt="prompt.title"
-                  class="detail-cover-image"
-                >
-                <button
-                  v-if="galleryImages.length > 1"
-                  class="detail-gallery-nav detail-gallery-nav--prev"
-                  type="button"
-                  @click="goImage(-1)"
-                >
-                  上一张
-                </button>
-                <button
-                  v-if="galleryImages.length > 1"
-                  class="detail-gallery-nav detail-gallery-nav--next"
-                  type="button"
-                  @click="goImage(1)"
-                >
-                  下一张
-                </button>
-                <div
-                  v-if="galleryImages.length > 1"
-                  class="detail-gallery-counter"
-                >
-                  {{ activeImageIndex + 1 }} / {{ galleryImages.length }}
-                </div>
-              </div>
-
-              <div
-                v-if="galleryImages.length > 1"
-                class="detail-gallery-thumbs"
-              >
-                <button
-                  v-for="(image, index) in galleryImages"
-                  :key="image"
-                  class="detail-gallery-thumb"
-                  :class="{ 'detail-gallery-thumb--active': activeImageIndex === index }"
-                  type="button"
-                  @click="setActiveImage(index)"
-                >
-                  <img
-                    :src="image"
-                    :alt="`${prompt.title} ${index + 1}`"
-                    class="detail-gallery-thumb__image"
-                  >
-                </button>
-              </div>
-            </div>
-
-            <div class="detail-hero__grid">
-              <div class="detail-preview">
-                <div class="detail-preview__badge">
-                  AI 效果预览
-                </div>
-                <h1 class="detail-preview__title">
-                  {{ prompt.title }}
-                </h1>
-                <p class="detail-preview__desc">
-                  {{ prompt.description }}
-                </p>
-
-                <div class="detail-preview__tags">
-                  <span
-                    v-for="tag in prompt.tags"
-                    :key="tag"
-                    class="detail-tag"
-                  >
-                    {{ tag }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="detail-sidebar-panel">
-                <div>
-                  <div class="detail-eyebrow">
-                    创作者
-                  </div>
-                  <div class="detail-creator-name">
-                    {{ prompt.user.username }}
-                  </div>
-                  <p class="detail-creator-bio">
-                    {{ prompt.user.bio }}
-                  </p>
-                  <div class="detail-creator-follow">
-                    <RouterLink
-                      :to="`/profile/${prompt.userId}`"
-                      class="detail-creator-link"
-                    >
-                      查看主页
-                    </RouterLink>
-                    <button
-                      v-if="canFollowCreator"
-                      class="detail-btn-follow"
-                      :class="{ 'detail-btn-follow--active': followStatus?.following }"
-                      :disabled="followingCreator"
-                      @click="handleFollowCreator"
-                    >
-                      {{
-                        followingCreator
-                          ? '处理中...'
-                          : followStatus?.following
-                            ? '已关注'
-                            : '关注创作者'
-                      }}
-                    </button>
-                  </div>
-                  <div
-                    v-if="followStatus"
-                    class="detail-creator-stats"
-                  >
-                    <span>{{ followStatus.followerCount }} 粉丝</span>
-                    <span>{{ followStatus.followingCount }} 关注</span>
-                  </div>
-                </div>
-
-                <div class="detail-actions">
-                  <button
-                    class="detail-btn-like"
-                    :disabled="liking"
-                    @click="handleLike"
-                  >
-                    {{ liking ? '点赞中...' : `点赞 · ${prompt.likes.toLocaleString()}` }}
-                  </button>
-                  <button
-                    class="detail-btn-favorite"
-                    :disabled="favoriting"
-                    @click="handleFavorite"
-                  >
-                    {{ favoriting ? '收藏中...' : `收藏 · ${prompt.favorites.toLocaleString()}` }}
-                  </button>
-                  <button
-                    class="detail-btn-share"
-                    @click="handleShare"
-                  >
-                    分享
-                  </button>
-                  <button
-                    class="detail-btn-share"
-                    :disabled="promptReporting"
-                    @click="handlePromptReport"
-                  >
-                    {{ promptReporting ? '提交中...' : '举报' }}
-                  </button>
-                </div>
-
-                <div class="detail-stat-grid">
-                  <div
-                    v-for="stat in statCards"
-                    :key="stat.label"
-                    class="detail-stat"
-                  >
-                    <div class="detail-stat__value">
-                      {{ stat.value }}
-                    </div>
-                    <div class="detail-stat__label">
-                      {{ stat.label }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="detail-output">
-                  <div class="detail-output__label">
-                    预期输出
-                  </div>
-                  <p class="detail-output__text">
-                    适合作为可直接落地的起点。上线前请替换为你的业务场景、品牌信息与约束条件。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="detail-content-grid">
-            <article class="detail-content-card">
-              <div class="detail-content-head">
-                <div class="detail-eyebrow">
-                  提示词正文
-                </div>
-                <button
-                  class="detail-copy-btn"
-                  @click="copyText('提示词', prompt.content)"
-                >
-                  复制提示词
-                </button>
-              </div>
-              <pre class="detail-pre">{{ prompt.content }}</pre>
-            </article>
-
-            <article class="detail-content-card">
-              <div class="detail-content-head">
-                <div class="detail-eyebrow">
-                  系统提示词
-                </div>
-                <button
-                  class="detail-copy-btn"
-                  @click="copyText('系统提示词', prompt.systemPrompt)"
-                >
-                  复制系统提示词
-                </button>
-              </div>
-              <pre class="detail-pre">{{ prompt.systemPrompt }}</pre>
-            </article>
-          </section>
-
-          <section class="detail-content-grid">
-            <article class="detail-content-card">
-              <div>
-                <div class="detail-eyebrow">
-                  Few-shot
-                </div>
-                <h2 class="detail-section-title">
-                  示例输入与输出
-                </h2>
-              </div>
-
-              <div
-                v-if="promptExamples.length > 0"
-                class="detail-structure-list"
-              >
-                <article
-                  v-for="example in promptExamples"
-                  :key="example.title"
-                  class="detail-structure-card"
-                >
-                  <div class="detail-structure-card__title">
-                    {{ example.title }}
-                  </div>
-                  <div class="detail-structure-columns">
-                    <div>
-                      <div class="detail-structure-label">
-                        输入
-                      </div>
-                      <p class="detail-structure-text">
-                        {{ example.input || '未提供输入内容' }}
-                      </p>
-                    </div>
-                    <div>
-                      <div class="detail-structure-label">
-                        输出
-                      </div>
-                      <p class="detail-structure-text">
-                        {{ example.output || '未提供输出内容' }}
-                      </p>
-                    </div>
-                  </div>
-                </article>
-              </div>
-              <p
-                v-else
-                class="detail-structure-empty"
-              >
-                当前提示词未提供结构化示例。
-              </p>
-            </article>
-
-            <article class="detail-content-card">
-              <div>
-                <div class="detail-eyebrow">
-                  Workflow
-                </div>
-                <h2 class="detail-section-title">
-                  只读流程说明
-                </h2>
-              </div>
-
-              <div
-                v-if="promptWorkflow.length > 0"
-                class="detail-workflow-list"
-              >
-                <div
-                  v-for="step in promptWorkflow"
-                  :key="`${step.title}-${step.detail}`"
-                  class="detail-workflow-step"
-                >
-                  <div class="detail-workflow-step__index">
-                    {{ step.title }}
-                  </div>
-                  <p class="detail-workflow-step__detail">
-                    {{ step.detail }}
-                  </p>
-                </div>
-              </div>
-              <p
-                v-else
-                class="detail-structure-empty"
-              >
-                当前提示词未提供结构化流程说明。
-              </p>
-            </article>
-          </section>
-
-          <section
-            v-if="relatedPrompts.length > 0"
-            class="detail-content-card"
+  <AppShell>
+    <div class="detail-page">
+      <div class="detail-container">
+        <header class="detail-breadcrumb">
+          <BackButton
+            fallback="/"
+            label="返回"
+            aria-label="返回上一页或首页"
+          />
+          <span>/</span>
+          <span v-if="prompt">{{ prompt.categoryName }}</span>
+          <span v-else>提示词详情</span>
+          <span
+            v-if="promptStore.usingMockData"
+            class="detail-badge"
           >
-            <div>
-              <div class="detail-eyebrow">
-                相关推荐
-              </div>
-              <h2 class="detail-section-title">
-                同分类更多内容
-              </h2>
-            </div>
+            演示详情
+          </span>
+        </header>
 
-            <div class="detail-related-grid">
-              <RouterLink
-                v-for="item in relatedPrompts"
-                :key="item.id"
-                :to="`/prompt/${item.id}`"
-                class="detail-related-card"
+        <PageLoading
+          v-if="promptStore.detailLoading"
+          variant="blocks"
+          :rows="2"
+          label="正在加载提示词详情"
+        />
+
+
+        <section
+          v-else-if="prompt"
+          class="detail-layout"
+        >
+          <div class="detail-main">
+            <section class="panel-card detail-hero">
+              <div
+                v-if="showCoverImage"
+                class="detail-cover-wrap"
               >
-                <div class="detail-related-model">
-                  {{ item.model }}
-                </div>
-                <div class="detail-related-title">
-                  {{ item.title }}
-                </div>
-                <p class="detail-related-desc">
-                  {{ item.description }}
-                </p>
-              </RouterLink>
-            </div>
-          </section>
-
-          <section class="detail-content-card">
-            <div class="detail-comments-head">
-              <div>
-                <div class="detail-eyebrow">
-                  评论
-                </div>
-                <h2 class="detail-section-title">
-                  社区反馈
-                </h2>
-              </div>
-              <div class="detail-comments-tools">
-                <div class="detail-comment-sort">
-                  <button
-                    v-for="option in commentSortOptions"
-                    :key="option.value"
-                    class="detail-comment-sort__btn"
-                    :class="{ 'detail-comment-sort__btn--active': commentSort === option.value }"
-                    :disabled="promptStore.commentsLoading"
-                    @click="commentSort = option.value"
+                <div class="detail-cover-inner">
+                  <img
+                    :src="activeGalleryImage"
+                    :alt="prompt.title"
+                    class="detail-cover-image"
+                    width="1200"
+                    height="900"
+                    decoding="async"
+                    fetchpriority="high"
                   >
-                    {{ option.label }}
+                  <button
+                    v-if="galleryImages.length > 1"
+                    class="detail-gallery-nav detail-gallery-nav--prev"
+                    type="button"
+                    aria-label="查看上一张图片"
+                    @click="goImage(-1)"
+                  >
+                    上一张
                   </button>
-                </div>
-                <div class="detail-comments-count">
-                  {{ comments.length }}
-                </div>
-              </div>
-            </div>
-
-            <div class="detail-comment-editor">
-              <textarea
-                v-model="commentDraft"
-                class="detail-comment-textarea"
-                rows="4"
-                placeholder="写下使用反馈、优化建议或实际效果"
-              />
-              <div class="detail-comment-actions">
-                <span class="detail-comment-tip">
-                  评论最多 1000 字。
-                </span>
-                <button
-                  class="detail-btn-like"
-                  :disabled="commentSubmitting"
-                  @click="submitComment()"
-                >
-                  {{ commentSubmitting ? '发布中...' : '发布评论' }}
-                </button>
-              </div>
-            </div>
-
-            <div
-              v-if="promptStore.commentsLoading"
-              class="detail-comments-loading"
-            >
-              评论加载中...
-            </div>
-
-            <div
-              v-else-if="comments.length === 0"
-              class="detail-comments-empty"
-            >
-              还没有评论。
-            </div>
-
-            <div
-              v-else
-              class="detail-comments-list"
-            >
-              <article
-                v-for="comment in comments"
-                :key="comment.id"
-                class="detail-comment-card"
-              >
-                <div class="detail-comment-header">
-                  <div>
-                    <div class="detail-comment-author">
-                      {{ comment.user.username }}
-                    </div>
-                    <div class="detail-comment-time">
-                      {{ formatCommentTime(comment.createdAt) }}
-                    </div>
+                  <button
+                    v-if="galleryImages.length > 1"
+                    class="detail-gallery-nav detail-gallery-nav--next"
+                    type="button"
+                    aria-label="查看下一张图片"
+                    @click="goImage(1)"
+                  >
+                    下一张
+                  </button>
+                  <div
+                    v-if="galleryImages.length > 1"
+                    class="detail-gallery-counter"
+                  >
+                    {{ activeImageIndex + 1 }} / {{ galleryImages.length }}
                   </div>
-                  <div class="detail-comment-meta">
-                    Lv.{{ comment.user.level }}
-                  </div>
-                </div>
-
-                <p class="detail-comment-content">
-                  {{ comment.content }}
-                </p>
-
-                <div class="detail-comment-row">
-                  <button
-                    class="detail-comment-link"
-                    @click="handleCommentLike(comment)"
-                  >
-                    赞 · {{ comment.likes }}
-                  </button>
-                  <button
-                    class="detail-comment-link"
-                    @click="toggleReply(comment.id)"
-                  >
-                    回复
-                  </button>
-                  <button
-                    class="detail-comment-link"
-                    :disabled="commentReporting"
-                    @click="handleCommentReport(comment)"
-                  >
-                    举报
-                  </button>
                 </div>
 
                 <div
-                  v-if="activeReplyId === comment.id"
-                  class="detail-reply-editor"
+                  v-if="galleryImages.length > 1"
+                  class="detail-gallery-thumbs"
                 >
-                  <textarea
-                    v-model="replyDrafts[comment.id]"
-                    class="detail-comment-textarea"
-                    rows="3"
-                    placeholder="写一条直接回复"
-                  />
-                  <div class="detail-comment-actions">
-                    <span class="detail-comment-tip">
-                      回复 {{ comment.user.username }}
+                  <button
+                    v-for="(image, index) in galleryImages"
+                    :key="image"
+                    class="detail-gallery-thumb"
+                    :class="{ 'detail-gallery-thumb--active': activeImageIndex === index }"
+                    type="button"
+                    :aria-label="`查看第 ${index + 1} 张图片`"
+                    :aria-current="activeImageIndex === index ? 'true' : undefined"
+                    @click="setActiveImage(index)"
+                  >
+                    <img
+                      :src="image"
+                      :alt="`${prompt.title} 第 ${index + 1} 张`"
+                      class="detail-gallery-thumb__image"
+                      width="80"
+                      height="64"
+                      loading="lazy"
+                      decoding="async"
+                    >
+                  </button>
+                </div>
+              </div>
+
+              <div class="detail-hero__grid">
+                <div class="detail-preview">
+                  <div class="detail-preview__badge">
+                    AI 效果预览
+                  </div>
+                  <h1 class="detail-preview__title">
+                    {{ prompt.title }}
+                  </h1>
+                  <p class="detail-preview__desc">
+                    {{ prompt.description }}
+                  </p>
+
+                  <div class="detail-preview__tags">
+                    <span
+                      v-for="tag in prompt.tags"
+                      :key="tag"
+                      class="detail-tag"
+                    >
+                      {{ tag }}
                     </span>
+                  </div>
+                </div>
+
+                <div class="detail-sidebar-panel">
+                  <div>
+                    <div class="detail-eyebrow">
+                      创作者
+                    </div>
+                    <div class="detail-creator-name">
+                      {{ prompt.user.username }}
+                    </div>
+                    <p class="detail-creator-bio">
+                      {{ prompt.user.bio }}
+                    </p>
+                    <div class="detail-creator-follow">
+                      <RouterLink
+                        :to="`/profile/${prompt.userId}`"
+                        class="detail-creator-link"
+                      >
+                        查看主页
+                      </RouterLink>
+                      <button
+                        v-if="canFollowCreator"
+                        class="detail-btn-follow"
+                        :class="{ 'detail-btn-follow--active': followStatus?.following }"
+                        :disabled="followingCreator"
+                        @click="handleFollowCreator"
+                      >
+                        {{
+                          followingCreator
+                            ? '处理中...'
+                            : followStatus?.following
+                              ? '已关注'
+                              : '关注创作者'
+                        }}
+                      </button>
+                    </div>
+                    <div
+                      v-if="followStatus"
+                      class="detail-creator-stats"
+                    >
+                      <span>{{ followStatus.followerCount }} 粉丝</span>
+                      <span>{{ followStatus.followingCount }} 关注</span>
+                    </div>
+                  </div>
+
+                  <div class="detail-actions">
+                    <button
+                      class="detail-btn-like"
+                      :disabled="liking"
+                      @click="handleLike"
+                    >
+                      {{ liking ? '点赞中...' : `点赞 · ${prompt.likes.toLocaleString()}` }}
+                    </button>
                     <button
                       class="detail-btn-favorite"
-                      :disabled="commentSubmitting"
-                      @click="submitComment(comment.id)"
+                      :disabled="favoriting"
+                      @click="handleFavorite"
                     >
-                      {{ commentSubmitting ? '发布中...' : '发布回复' }}
+                      {{ favoriting ? '收藏中...' : `收藏 · ${prompt.favorites.toLocaleString()}` }}
+                    </button>
+                    <button
+                      class="detail-btn-share"
+                      @click="handleShare"
+                    >
+                      分享
+                    </button>
+                    <button
+                      class="detail-btn-share"
+                      :disabled="promptReporting"
+                      @click="handlePromptReport"
+                    >
+                      {{ promptReporting ? '提交中...' : '举报' }}
                     </button>
                   </div>
+
+                  <div class="detail-stat-grid">
+                    <div
+                      v-for="stat in statCards"
+                      :key="stat.label"
+                      class="detail-stat"
+                    >
+                      <div class="detail-stat__value">
+                        {{ stat.value }}
+                      </div>
+                      <div class="detail-stat__label">
+                        {{ stat.label }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="detail-output">
+                    <div class="detail-output__label">
+                      预期输出
+                    </div>
+                    <p class="detail-output__text">
+                      适合作为可直接落地的起点。上线前请替换为你的业务场景、品牌信息与约束条件。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-content-grid">
+              <article class="detail-content-card">
+                <div class="detail-content-head">
+                  <div class="detail-eyebrow">
+                    提示词正文
+                  </div>
+                  <button
+                    class="detail-copy-btn"
+                    @click="copyText('提示词', prompt.content)"
+                  >
+                    复制提示词
+                  </button>
+                </div>
+                <pre class="detail-pre">{{ prompt.content }}</pre>
+              </article>
+
+              <article class="detail-content-card">
+                <div class="detail-content-head">
+                  <div class="detail-eyebrow">
+                    系统提示词
+                  </div>
+                  <button
+                    class="detail-copy-btn"
+                    @click="copyText('系统提示词', prompt.systemPrompt)"
+                  >
+                    复制系统提示词
+                  </button>
+                </div>
+                <pre class="detail-pre">{{ prompt.systemPrompt }}</pre>
+              </article>
+            </section>
+
+            <section class="detail-content-grid">
+              <article class="detail-content-card">
+                <div>
+                  <div class="detail-eyebrow">
+                    Few-shot
+                  </div>
+                  <h2 class="detail-section-title">
+                    示例输入与输出
+                  </h2>
                 </div>
 
                 <div
-                  v-if="comment.replies.length > 0"
-                  class="detail-replies"
+                  v-if="promptExamples.length > 0"
+                  class="detail-structure-list"
                 >
                   <article
-                    v-for="reply in comment.replies"
-                    :key="reply.id"
-                    class="detail-reply-card"
+                    v-for="example in promptExamples"
+                    :key="example.title"
+                    class="detail-structure-card"
                   >
-                    <div class="detail-comment-header">
-                      <div>
-                        <div class="detail-comment-author">
-                          {{ reply.user.username }}
-                        </div>
-                        <div class="detail-comment-time">
-                          {{ formatCommentTime(reply.createdAt) }}
-                        </div>
-                      </div>
-                      <div class="detail-comment-meta">
-                        Lv.{{ reply.user.level }}
-                      </div>
+                    <div class="detail-structure-card__title">
+                      {{ example.title }}
                     </div>
-
-                    <p class="detail-comment-content">
-                      {{ reply.content }}
-                    </p>
-
-                    <div class="detail-comment-row">
-                      <button
-                        class="detail-comment-link"
-                        @click="handleCommentLike(reply)"
-                      >
-                        赞 · {{ reply.likes }}
-                      </button>
-                      <button
-                        class="detail-comment-link"
-                        :disabled="commentReporting"
-                        @click="handleCommentReport(reply)"
-                      >
-                        举报
-                      </button>
+                    <div class="detail-structure-columns">
+                      <div>
+                        <div class="detail-structure-label">
+                          输入
+                        </div>
+                        <p class="detail-structure-text">
+                          {{ example.input || '未提供输入内容' }}
+                        </p>
+                      </div>
+                      <div>
+                        <div class="detail-structure-label">
+                          输出
+                        </div>
+                        <p class="detail-structure-text">
+                          {{ example.output || '未提供输出内容' }}
+                        </p>
+                      </div>
                     </div>
                   </article>
                 </div>
+                <p
+                  v-else
+                  class="detail-structure-empty"
+                >
+                  当前提示词未提供结构化示例。
+                </p>
               </article>
-            </div>
-          </section>
-        </div>
 
-        <aside class="detail-aside">
-          <section class="detail-content-card">
-            <div class="detail-eyebrow">
-              提示词信息
-            </div>
-            <div class="detail-meta-list">
+              <article class="detail-content-card">
+                <div>
+                  <div class="detail-eyebrow">
+                    Workflow
+                  </div>
+                  <h2 class="detail-section-title">
+                    只读流程说明
+                  </h2>
+                </div>
+
+                <div
+                  v-if="promptWorkflow.length > 0"
+                  class="detail-workflow-list"
+                >
+                  <div
+                    v-for="step in promptWorkflow"
+                    :key="`${step.title}-${step.detail}`"
+                    class="detail-workflow-step"
+                  >
+                    <div class="detail-workflow-step__index">
+                      {{ step.title }}
+                    </div>
+                    <p class="detail-workflow-step__detail">
+                      {{ step.detail }}
+                    </p>
+                  </div>
+                </div>
+                <p
+                  v-else
+                  class="detail-structure-empty"
+                >
+                  当前提示词未提供结构化流程说明。
+                </p>
+              </article>
+            </section>
+
+            <section
+              v-if="relatedPrompts.length > 0"
+              class="detail-content-card"
+            >
+              <div>
+                <div class="detail-eyebrow">
+                  相关推荐
+                </div>
+                <h2 class="detail-section-title">
+                  同分类更多内容
+                </h2>
+              </div>
+
+              <div class="detail-related-grid">
+                <RouterLink
+                  v-for="item in relatedPrompts"
+                  :key="item.id"
+                  :to="`/prompt/${item.id}`"
+                  class="detail-related-card"
+                >
+                  <div class="detail-related-model">
+                    {{ item.model }}
+                  </div>
+                  <div class="detail-related-title">
+                    {{ item.title }}
+                  </div>
+                  <p class="detail-related-desc">
+                    {{ item.description }}
+                  </p>
+                </RouterLink>
+              </div>
+            </section>
+
+            <section class="detail-content-card">
+              <div class="detail-comments-head">
+                <div>
+                  <div class="detail-eyebrow">
+                    评论
+                  </div>
+                  <h2 class="detail-section-title">
+                    社区反馈
+                  </h2>
+                </div>
+                <div class="detail-comments-tools">
+                  <div class="detail-comment-sort">
+                    <button
+                      v-for="option in commentSortOptions"
+                      :key="option.value"
+                      class="detail-comment-sort__btn"
+                      :class="{ 'detail-comment-sort__btn--active': commentSort === option.value }"
+                      :disabled="promptStore.commentsLoading"
+                      @click="commentSort = option.value"
+                    >
+                      {{ option.label }}
+                    </button>
+                  </div>
+                  <div class="detail-comments-count">
+                    {{ comments.length }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="detail-comment-editor">
+                <textarea
+                  v-model="commentDraft"
+                  class="detail-comment-textarea"
+                  rows="4"
+                  aria-label="写下你的评论"
+                  placeholder="写下使用反馈、优化建议或实际效果"
+                />
+                <div class="detail-comment-actions">
+                  <span class="detail-comment-tip">
+                    评论最多 1000 字。
+                  </span>
+                  <button
+                    class="detail-btn-like"
+                    :disabled="commentSubmitting"
+                    @click="submitComment()"
+                  >
+                    {{ commentSubmitting ? '发布中...' : '发布评论' }}
+                  </button>
+                </div>
+              </div>
+
               <div
-                v-for="item in promptMeta"
-                :key="item.label"
-                class="detail-meta-row"
+                v-if="promptStore.commentsLoading"
+                class="detail-comments-loading"
               >
-                <div class="detail-meta-label">
-                  {{ item.label }}
-                </div>
-                <div class="detail-meta-value">
-                  {{ item.value }}
-                </div>
+                评论加载中...
               </div>
-            </div>
-          </section>
 
-          <section class="detail-content-card">
-            <div class="detail-eyebrow">
-              参数
-            </div>
-            <div class="detail-params-grid">
-              <div class="detail-stat">
-                <div class="detail-stat__value">
-                  {{ prompt.params.temperature ?? '-' }}
-                </div>
-                <div class="detail-stat__label">
-                  温度
-                </div>
+              <div
+                v-else-if="comments.length === 0"
+                class="detail-comments-empty"
+              >
+                还没有评论，来写下第一条使用反馈吧。
               </div>
-              <div class="detail-stat">
-                <div class="detail-stat__value">
-                  {{ prompt.params.topP ?? '-' }}
-                </div>
-                <div class="detail-stat__label">
-                  Top P
-                </div>
-              </div>
-              <div class="detail-stat">
-                <div class="detail-stat__value">
-                  {{ prompt.params.maxTokens ?? '-' }}
-                </div>
-                <div class="detail-stat__label">
-                  最大 Token
-                </div>
-              </div>
-            </div>
-          </section>
 
-          <section class="detail-content-card">
-            <div class="detail-eyebrow">
-              使用说明
-            </div>
-            <ul class="detail-usage-list">
-              <li>保留整体结构，再替换为你的业务场景、目标用户与约束条件。</li>
-              <li>若输出过于发散，可先降低温度，再补充更强示例。</li>
-              <li>上线前请用真实生产输入至少跑一遍工作流回归验证。</li>
-            </ul>
-          </section>
-        </aside>
-      </section>
+              <div
+                v-else
+                class="detail-comments-list"
+              >
+                <article
+                  v-for="comment in comments"
+                  :key="comment.id"
+                  class="detail-comment-card"
+                >
+                  <div class="detail-comment-header">
+                    <div>
+                      <div class="detail-comment-author">
+                        {{ comment.user.username }}
+                      </div>
+                      <div class="detail-comment-time">
+                        {{ formatCommentTime(comment.createdAt) }}
+                      </div>
+                    </div>
+                    <div class="detail-comment-meta">
+                      Lv.{{ comment.user.level }}
+                    </div>
+                  </div>
 
-      <section
-        v-else
-        class="empty-state"
-      >
-        <h1 class="empty-state__title text-2xl">
-          未找到该提示词
-        </h1>
-        <p class="empty-state__desc">
-          内容可能已被删除，或链接已失效。
-        </p>
-        <RouterLink
-          to="/"
-          class="btn-pill-secondary detail-back"
-        >
-          返回首页
-        </RouterLink>
-      </section>
+                  <p class="detail-comment-content">
+                    {{ comment.content }}
+                  </p>
+
+                  <div class="detail-comment-row">
+                    <button
+                      class="detail-comment-link"
+                      @click="handleCommentLike(comment)"
+                    >
+                      赞 · {{ comment.likes }}
+                    </button>
+                    <button
+                      class="detail-comment-link"
+                      @click="toggleReply(comment.id)"
+                    >
+                      回复
+                    </button>
+                    <button
+                      class="detail-comment-link"
+                      :disabled="commentReporting"
+                      @click="handleCommentReport(comment)"
+                    >
+                      举报
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="activeReplyId === comment.id"
+                    class="detail-reply-editor"
+                  >
+                    <textarea
+                      v-model="replyDrafts[comment.id]"
+                      class="detail-comment-textarea"
+                      rows="3"
+                      aria-label="撰写回复"
+                      placeholder="写一条直接回复"
+                    />
+                    <div class="detail-comment-actions">
+                      <span class="detail-comment-tip">
+                        回复 {{ comment.user.username }}
+                      </span>
+                      <button
+                        class="detail-btn-favorite"
+                        :disabled="commentSubmitting"
+                        @click="submitComment(comment.id)"
+                      >
+                        {{ commentSubmitting ? '发布中...' : '发布回复' }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="comment.replies.length > 0"
+                    class="detail-replies"
+                  >
+                    <article
+                      v-for="reply in comment.replies"
+                      :key="reply.id"
+                      class="detail-reply-card"
+                    >
+                      <div class="detail-comment-header">
+                        <div>
+                          <div class="detail-comment-author">
+                            {{ reply.user.username }}
+                          </div>
+                          <div class="detail-comment-time">
+                            {{ formatCommentTime(reply.createdAt) }}
+                          </div>
+                        </div>
+                        <div class="detail-comment-meta">
+                          Lv.{{ reply.user.level }}
+                        </div>
+                      </div>
+
+                      <p class="detail-comment-content">
+                        {{ reply.content }}
+                      </p>
+
+                      <div class="detail-comment-row">
+                        <button
+                          class="detail-comment-link"
+                          @click="handleCommentLike(reply)"
+                        >
+                          赞 · {{ reply.likes }}
+                        </button>
+                        <button
+                          class="detail-comment-link"
+                          :disabled="commentReporting"
+                          @click="handleCommentReport(reply)"
+                        >
+                          举报
+                        </button>
+                      </div>
+                    </article>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+
+          <aside class="detail-aside">
+            <section class="detail-content-card">
+              <div class="detail-eyebrow">
+                提示词信息
+              </div>
+              <div class="detail-meta-list">
+                <div
+                  v-for="item in promptMeta"
+                  :key="item.label"
+                  class="detail-meta-row"
+                >
+                  <div class="detail-meta-label">
+                    {{ item.label }}
+                  </div>
+                  <div class="detail-meta-value">
+                    {{ item.value }}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-content-card">
+              <div class="detail-eyebrow">
+                参数
+              </div>
+              <div class="detail-params-grid">
+                <div class="detail-stat">
+                  <div class="detail-stat__value">
+                    {{ prompt.params.temperature ?? '-' }}
+                  </div>
+                  <div class="detail-stat__label">
+                    温度
+                  </div>
+                </div>
+                <div class="detail-stat">
+                  <div class="detail-stat__value">
+                    {{ prompt.params.topP ?? '-' }}
+                  </div>
+                  <div class="detail-stat__label">
+                    Top P
+                  </div>
+                </div>
+                <div class="detail-stat">
+                  <div class="detail-stat__value">
+                    {{ prompt.params.maxTokens ?? '-' }}
+                  </div>
+                  <div class="detail-stat__label">
+                    最大 Token
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-content-card">
+              <div class="detail-eyebrow">
+                使用说明
+              </div>
+              <ul class="detail-usage-list">
+                <li>保留整体结构，再替换为你的业务场景、目标用户与约束条件。</li>
+                <li>若输出过于发散，可先降低温度，再补充更强示例。</li>
+                <li>上线前请用真实生产输入至少跑一遍工作流回归验证。</li>
+              </ul>
+            </section>
+          </aside>
+        </section>
+
+        <PageError
+          v-else
+          kind="empty"
+          title="未找到该提示词"
+          description="内容可能已被删除或链接已失效，也可以重试加载。"
+          action-label="重试加载"
+          secondary-label="返回首页"
+          @action="retryDetail"
+          @secondary="router.push('/')"
+        />
+      </div>
     </div>
-  </div>
+  </AppShell>
 </template>
 
 <style scoped>
@@ -1063,11 +1079,11 @@ watch(commentSort, async () => {
 }
 
 .detail-breadcrumb {
-  @apply mb-8 flex flex-wrap items-center gap-3 text-sm text-[#777777];
+  @apply mb-8 flex flex-wrap items-center gap-3 text-sm text-[var(--prompt-text-faint)];
 }
 
 .detail-badge {
-  @apply rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-warning-bg)] px-3 py-1 text-xs text-[var(--prompt-warning)];
 }
 
 .detail-loading {
@@ -1075,7 +1091,7 @@ watch(commentSort, async () => {
 }
 
 .detail-loading__block {
-  @apply h-[520px] animate-pulse rounded-[28px] bg-black/5;
+  @apply h-[520px] animate-pulse rounded-[28px] bg-[var(--prompt-surface-muted)];
 }
 
 .detail-layout {
@@ -1095,7 +1111,7 @@ watch(commentSort, async () => {
 }
 
 .detail-cover-wrap {
-  @apply max-h-[420px] overflow-hidden border-b border-black/10 bg-[#f6f4ef];
+  @apply max-h-[420px] overflow-hidden border-b border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)];
 }
 
 .detail-cover-inner {
@@ -1123,7 +1139,7 @@ watch(commentSort, async () => {
 }
 
 .detail-gallery-thumbs {
-  @apply flex gap-2 overflow-x-auto border-t border-black/10 bg-white p-3;
+  @apply flex gap-2 overflow-x-auto border-t border-[var(--prompt-border)] bg-[var(--prompt-surface)] p-3;
   scrollbar-width: none;
 }
 
@@ -1132,11 +1148,11 @@ watch(commentSort, async () => {
 }
 
 .detail-gallery-thumb {
-  @apply h-16 w-20 shrink-0 overflow-hidden rounded-[12px] border border-black/10 bg-[#f6f4ef] opacity-70 transition hover:opacity-100;
+  @apply h-16 w-20 shrink-0 overflow-hidden rounded-[12px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] opacity-70 transition hover:opacity-100;
 }
 
 .detail-gallery-thumb--active {
-  @apply border-black opacity-100;
+  @apply border-[var(--prompt-border)] opacity-100;
 }
 
 .detail-gallery-thumb__image {
@@ -1148,19 +1164,19 @@ watch(commentSort, async () => {
 }
 
 .detail-preview {
-  @apply min-h-[340px] bg-[#faf8f4] p-8;
+  @apply min-h-[340px] bg-[var(--prompt-surface-muted)] p-8;
 }
 
 .detail-preview__badge {
-  @apply inline-flex rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444];
+  @apply inline-flex rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-3 py-1 text-xs text-[var(--prompt-text-muted)];
 }
 
 .detail-preview__title {
-  @apply mt-5 max-w-2xl text-3xl font-semibold leading-tight text-black sm:text-4xl;
+  @apply mt-5 max-w-2xl text-3xl font-semibold leading-tight text-[var(--prompt-text)] sm:text-4xl;
 }
 
 .detail-preview__desc {
-  @apply mt-4 max-w-xl text-base leading-7 text-[#555555];
+  @apply mt-4 max-w-xl text-base leading-7 text-[var(--prompt-text-muted)];
 }
 
 .detail-preview__tags {
@@ -1168,23 +1184,23 @@ watch(commentSort, async () => {
 }
 
 .detail-tag {
-  @apply rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-[#444444];
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-3 py-1 text-xs text-[var(--prompt-text-muted)];
 }
 
 .detail-sidebar-panel {
-  @apply flex flex-col justify-between gap-5 border-t border-black/10 bg-white p-8 lg:border-l lg:border-t-0;
+  @apply flex flex-col justify-between gap-5 border-t border-[var(--prompt-border)] bg-[var(--prompt-surface)] p-8 lg:border-l lg:border-t-0;
 }
 
 .detail-eyebrow {
-  @apply text-xs uppercase tracking-[0.2em] text-[#777777];
+  @apply text-xs uppercase tracking-[0.2em] text-[var(--prompt-text-faint)];
 }
 
 .detail-creator-name {
-  @apply mt-3 text-2xl font-semibold text-black;
+  @apply mt-3 text-2xl font-semibold text-[var(--prompt-text)];
 }
 
 .detail-creator-bio {
-  @apply mt-3 text-sm leading-6 text-[#555555];
+  @apply mt-3 text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .detail-creator-follow {
@@ -1193,15 +1209,15 @@ watch(commentSort, async () => {
 
 .detail-creator-link,
 .detail-btn-follow {
-  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-4 py-2 text-sm font-medium text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)] disabled:cursor-not-allowed disabled:opacity-70;
 }
 
 .detail-btn-follow--active {
-  @apply bg-black text-white hover:text-white;
+  @apply bg-[var(--prompt-primary)] text-[var(--prompt-primary-contrast)] hover:text-[var(--prompt-primary-contrast)];
 }
 
 .detail-creator-stats {
-  @apply mt-3 flex flex-wrap gap-3 text-xs text-[#777777];
+  @apply mt-3 flex flex-wrap gap-3 text-xs text-[var(--prompt-text-faint)];
 }
 
 .detail-actions {
@@ -1209,15 +1225,15 @@ watch(commentSort, async () => {
 }
 
 .detail-btn-like {
-  @apply rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-70;
+  @apply rounded-full bg-[var(--prompt-primary)] px-4 py-2 text-sm font-medium text-[var(--prompt-primary-contrast)] transition hover:bg-[var(--prompt-primary-hover)] disabled:cursor-not-allowed disabled:opacity-70;
 }
 
 .detail-btn-favorite {
-  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-70;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-4 py-2 text-sm font-medium text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)] disabled:cursor-not-allowed disabled:opacity-70;
 }
 
 .detail-btn-share {
-  @apply rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-[#333333] transition hover:border-black/20 hover:text-black;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-4 py-2 text-sm font-medium text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
 }
 
 .detail-stat-grid {
@@ -1225,27 +1241,27 @@ watch(commentSort, async () => {
 }
 
 .detail-stat {
-  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4 text-center;
+  @apply rounded-[18px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4 text-center;
 }
 
 .detail-stat__value {
-  @apply text-lg font-semibold text-black;
+  @apply text-lg font-semibold text-[var(--prompt-text)];
 }
 
 .detail-stat__label {
-  @apply mt-1 text-xs text-[#777777];
+  @apply mt-1 text-xs text-[var(--prompt-text-faint)];
 }
 
 .detail-output {
-  @apply rounded-[18px] border border-black/10 bg-[#111111] p-4 text-white;
+  @apply rounded-[18px] border border-[var(--prompt-border)] bg-[var(--prompt-primary)] p-4 text-[var(--prompt-primary-contrast)];
 }
 
 .detail-output__label {
-  @apply text-xs uppercase tracking-[0.2em] text-white/60;
+  @apply text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--prompt-primary-contrast)_60%,transparent)];
 }
 
 .detail-output__text {
-  @apply mt-3 text-sm leading-6 text-white/70;
+  @apply mt-3 text-sm leading-6 text-[color-mix(in_srgb,var(--prompt-primary-contrast)_70%,transparent)];
 }
 
 .detail-content-grid {
@@ -1261,11 +1277,11 @@ watch(commentSort, async () => {
 }
 
 .detail-copy-btn {
-  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1.5 text-xs text-[#333333] transition hover:border-black/20 hover:text-black;
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3 py-1.5 text-xs text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
 }
 
 .detail-pre {
-  @apply mt-4 whitespace-pre-wrap text-sm leading-7 text-[#444444];
+  @apply mt-4 whitespace-pre-wrap text-sm leading-7 text-[var(--prompt-text-muted)];
 }
 
 .detail-structure-list,
@@ -1275,12 +1291,12 @@ watch(commentSort, async () => {
 
 .detail-structure-card,
 .detail-workflow-step {
-  @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+  @apply rounded-[18px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4;
 }
 
 .detail-structure-card__title,
 .detail-workflow-step__index {
-  @apply text-sm font-semibold text-black;
+  @apply text-sm font-semibold text-[var(--prompt-text)];
 }
 
 .detail-structure-columns {
@@ -1288,17 +1304,17 @@ watch(commentSort, async () => {
 }
 
 .detail-structure-label {
-  @apply text-xs uppercase tracking-[0.16em] text-[#777777];
+  @apply text-xs uppercase tracking-[0.16em] text-[var(--prompt-text-faint)];
 }
 
 .detail-structure-text,
 .detail-workflow-step__detail,
 .detail-structure-empty {
-  @apply mt-2 whitespace-pre-wrap text-sm leading-6 text-[#555555];
+  @apply mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .detail-structure-empty {
-  @apply rounded-[18px] border border-dashed border-black/10 bg-[#faf8f4] px-4 py-5;
+  @apply rounded-[18px] border border-dashed border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-4 py-5;
 }
 
 .detail-related-grid {
@@ -1306,19 +1322,19 @@ watch(commentSort, async () => {
 }
 
 .detail-related-card {
-  @apply rounded-[20px] border border-black/10 bg-[#faf8f4] p-5 transition hover:-translate-y-1 hover:border-black/20 hover:bg-white;
+  @apply rounded-[20px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-5 transition hover:-translate-y-1 hover:border-[var(--prompt-border-strong)] hover:bg-[var(--prompt-surface)];
 }
 
 .detail-related-model {
-  @apply text-xs uppercase tracking-[0.18em] text-[#7c7c7c];
+  @apply text-xs uppercase tracking-[0.18em] text-[var(--prompt-text-faint)];
 }
 
 .detail-related-title {
-  @apply mt-3 text-lg font-semibold text-black;
+  @apply mt-3 text-lg font-semibold text-[var(--prompt-text)];
 }
 
 .detail-related-desc {
-  @apply mt-3 text-sm leading-6 text-[#555555];
+  @apply mt-3 text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .detail-aside {
@@ -1330,15 +1346,15 @@ watch(commentSort, async () => {
 }
 
 .detail-meta-row {
-  @apply flex items-start justify-between gap-4 border-b border-black/10 pb-4 last:border-b-0 last:pb-0;
+  @apply flex items-start justify-between gap-4 border-b border-[var(--prompt-border)] pb-4 last:border-b-0 last:pb-0;
 }
 
 .detail-meta-label {
-  @apply text-sm text-[#777777];
+  @apply text-sm text-[var(--prompt-text-faint)];
 }
 
 .detail-meta-value {
-  @apply text-right text-sm text-black;
+  @apply text-right text-sm text-[var(--prompt-text)];
 }
 
 .detail-params-grid {
@@ -1346,11 +1362,11 @@ watch(commentSort, async () => {
 }
 
 .detail-usage-list {
-  @apply mt-5 space-y-3 text-sm leading-6 text-[#555555];
+  @apply mt-5 space-y-3 text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .detail-section-title {
-  @apply mt-2 text-2xl font-semibold text-black;
+  @apply mt-2 text-2xl font-semibold text-[var(--prompt-text)];
 }
 
 .detail-comments-head {
@@ -1362,28 +1378,28 @@ watch(commentSort, async () => {
 }
 
 .detail-comment-sort {
-  @apply flex rounded-full border border-black/10 bg-[#f6f4ef] p-1;
+  @apply flex rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-1;
 }
 
 .detail-comment-sort__btn {
-  @apply rounded-full px-3 py-1 text-xs text-[#666666] transition hover:text-black disabled:cursor-not-allowed disabled:opacity-60;
+  @apply rounded-full px-3 py-1 text-xs text-[var(--prompt-text-faint)] transition hover:text-[var(--prompt-text)] disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .detail-comment-sort__btn--active {
-  @apply bg-black text-white hover:text-white;
+  @apply bg-[var(--prompt-primary)] text-[var(--prompt-primary-contrast)] hover:text-[var(--prompt-primary-contrast)];
 }
 
 .detail-comments-count {
-  @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444];
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3 py-1 text-sm text-[var(--prompt-text-muted)];
 }
 
 .detail-comment-editor,
 .detail-reply-editor {
-  @apply mt-5 rounded-[20px] border border-black/10 bg-[#faf8f4] p-4;
+  @apply mt-5 rounded-[20px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4;
 }
 
 .detail-comment-textarea {
-  @apply min-h-[110px] w-full resize-y rounded-[16px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[#222222] outline-none transition focus:border-black/20;
+  @apply min-h-[110px] w-full resize-y rounded-[16px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-4 py-3 text-sm leading-6 text-[var(--prompt-text)] transition focus:border-[var(--prompt-border-strong)];
 }
 
 .detail-comment-actions {
@@ -1391,12 +1407,12 @@ watch(commentSort, async () => {
 }
 
 .detail-comment-tip {
-  @apply text-xs text-[#777777];
+  @apply text-xs text-[var(--prompt-text-faint)];
 }
 
 .detail-comments-loading,
 .detail-comments-empty {
-  @apply mt-5 rounded-[18px] border border-dashed border-black/10 bg-[#faf8f4] px-4 py-5 text-sm text-[#666666];
+  @apply mt-5 rounded-[18px] border border-dashed border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-4 py-5 text-sm text-[var(--prompt-text-faint)];
 }
 
 .detail-comments-list {
@@ -1405,11 +1421,11 @@ watch(commentSort, async () => {
 
 .detail-comment-card,
 .detail-reply-card {
-  @apply rounded-[20px] border border-black/10 bg-[#faf8f4] p-4;
+  @apply rounded-[20px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4;
 }
 
 .detail-replies {
-  @apply mt-4 space-y-3 border-l border-black/10 pl-4;
+  @apply mt-4 space-y-3 border-l border-[var(--prompt-border)] pl-4;
 }
 
 .detail-comment-header {
@@ -1417,19 +1433,19 @@ watch(commentSort, async () => {
 }
 
 .detail-comment-author {
-  @apply text-sm font-semibold text-black;
+  @apply text-sm font-semibold text-[var(--prompt-text)];
 }
 
 .detail-comment-time {
-  @apply mt-1 text-xs text-[#777777];
+  @apply mt-1 text-xs text-[var(--prompt-text-faint)];
 }
 
 .detail-comment-meta {
-  @apply rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs text-[#555555];
+  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-2.5 py-1 text-xs text-[var(--prompt-text-muted)];
 }
 
 .detail-comment-content {
-  @apply mt-3 whitespace-pre-wrap text-sm leading-6 text-[#333333];
+  @apply mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .detail-comment-row {
@@ -1437,7 +1453,7 @@ watch(commentSort, async () => {
 }
 
 .detail-comment-link {
-  @apply text-xs text-[#555555] transition hover:text-black;
+  @apply text-xs text-[var(--prompt-text-muted)] transition hover:text-[var(--prompt-text)];
 }
 
 .detail-comment-link:disabled {
