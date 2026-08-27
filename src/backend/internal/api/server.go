@@ -77,6 +77,7 @@ func NewServer(cfg config.Config) http.Handler {
 	mux.HandleFunc("/api/v1/health/live", s.handleHealthLive)
 	mux.HandleFunc("/api/v1/health/ready", s.handleHealthReady)
 	mux.HandleFunc("/api/v1/categories", s.handleCategories)
+	mux.HandleFunc("/api/v1/home/summary", s.handleHomeSummary)
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
 	mux.HandleFunc("/api/v1/prompts/search", s.handlePromptSearch)
 	mux.HandleFunc("/api/v1/prompts/", s.handlePromptDetail)
@@ -146,6 +147,28 @@ func (s *server) handleCategories(w http.ResponseWriter, r *http.Request) {
 		Code:    200,
 		Message: "Success",
 		Data:    store.Categories(),
+	})
+}
+
+func (s *server) handleHomeSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	summary, err := s.promptStore.HomeSummary()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{
+			Code:      500,
+			Message:   "Failed to load home summary",
+			ErrorCode: "HOME_SUMMARY_FAILED",
+			Data:      nil,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, apiResponse[store.HomeSummary]{
+		Code:    200,
+		Message: "Success",
+		Data:    summary,
 	})
 }
 

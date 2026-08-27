@@ -25,6 +25,56 @@ func (s *MySQLPromptStore) QueryPage(filter PromptFilter, page, pageSize int) ([
 	return s.queryPage(filter, page, pageSize)
 }
 
+func (s *MySQLPromptStore) HomeSummary() (HomeSummary, error) {
+	var summary HomeSummary
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM prompts WHERE status = 1`).Scan(&summary.PromptCount); err != nil {
+		return summary, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM prompts WHERE status = 1`).Scan(&summary.CreatorCount); err != nil {
+		return summary, err
+	}
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(views), 0) FROM prompts WHERE status = 1`).Scan(&summary.TotalViews); err != nil {
+		return summary, err
+	}
+
+	tagRows, err := s.db.Query(`
+		SELECT pt.tag FROM prompt_tags pt
+		JOIN prompts p ON p.id = pt.prompt_id
+		WHERE p.status = 1
+		GROUP BY pt.tag ORDER BY COUNT(*) DESC LIMIT 8
+	`)
+	if err != nil {
+		return summary, err
+	}
+	defer tagRows.Close()
+	for tagRows.Next() {
+		var tag string
+		if err := tagRows.Scan(&tag); err != nil {
+			return summary, err
+		}
+		summary.HotTags = append(summary.HotTags, tag)
+	}
+
+	catRows, err := s.db.Query(`
+		SELECT c.name FROM prompts p
+		JOIN categories c ON c.id = p.category_id
+		WHERE p.status = 1
+		GROUP BY c.id, c.name ORDER BY COUNT(*) DESC LIMIT 8
+	`)
+	if err != nil {
+		return summary, err
+	}
+	defer catRows.Close()
+	for catRows.Next() {
+		var name string
+		if err := catRows.Scan(&name); err != nil {
+			return summary, err
+		}
+		summary.HotCategories = append(summary.HotCategories, name)
+	}
+	return summary, nil
+}
+
 func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error) {
 	if page < 1 {
 		page = 1

@@ -19,6 +19,8 @@ type PromptManager interface {
 	// QueryPage returns one page of results and the total count, pushing
 	// pagination down to the database layer.
 	QueryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error)
+	// HomeSummary returns real aggregates for the home page.
+	HomeSummary() (HomeSummary, error)
 	FindByID(id int) (Prompt, bool, error)
 	FindOwnedByID(id int, userID int) (Prompt, bool, error)
 	Create(input CreatePromptInput) (Prompt, error)
@@ -32,6 +34,15 @@ type PromptManager interface {
 	ListUserLikes(userID int) ([]Prompt, error)
 	ListUserHistory(userID int) ([]Prompt, error)
 	ListUserDrafts(userID int) ([]Prompt, error)
+}
+
+// HomeSummary carries live community aggregates for the home page.
+type HomeSummary struct {
+	PromptCount   int      `json:"promptCount"`
+	CreatorCount  int      `json:"creatorCount"`
+	TotalViews    int64    `json:"totalViews"`
+	HotTags       []string `json:"hotTags"`
+	HotCategories []string `json:"hotCategories"`
 }
 
 type CommentManager interface {
