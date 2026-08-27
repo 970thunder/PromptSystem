@@ -85,7 +85,7 @@ Docker services:
 
 ## Development Order
 
-All development should follow `TODO.md`. Update the checklist after each verified task, then commit the verified changes.
+All new frontend redesign work must follow [`docs/前端重设计开发执行手册.md`](docs/前端重设计开发执行手册.md). It is the current execution baseline: update each checkbox only with an evidence record, commit one task at a time, and push the task branch.
 
 Contributor and AI coding conventions (stack, directories, API style) are defined in `CLAUDE.md`. The backend is **Go** (`src/backend/`), not Spring/Java.
 

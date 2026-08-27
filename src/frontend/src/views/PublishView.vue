@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
   NButton,
   NCheckbox,
@@ -11,6 +11,7 @@ import {
   NStep,
   NTab,
   NTabs,
+  useDialog,
   useMessage
 } from 'naive-ui'
 import { promptApi } from '@/api/promptApi'
@@ -18,6 +19,9 @@ import { usePromptStore } from '@/stores/prompt'
 import type { PublishPromptRequest, PromptParams } from '@/types'
 import { renderMarkdownPreviewBlocks } from '@/utils/markdownPreview'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import BackButton from '@/components/navigation/BackButton.vue'
+import AppShell from '@/components/layout/AppShell.vue'
+import PageLoading from '@/components/feedback/PageLoading.vue'
 
 const MAX_TAGS = 30
 const MAX_IMAGES = 12
@@ -25,6 +29,7 @@ const MAX_IMAGES = 12
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const promptStore = usePromptStore()
 
 const submitting = ref(false)
@@ -39,6 +44,37 @@ const useSystemPrompt = ref(false)
 const useAdvancedParams = ref(false)
 const contentMode = ref<'plain' | 'markdown' | 'json'>('plain')
 const jsonError = ref('')
+const allowLeave = ref(false)
+
+const isDirty = computed(() =>
+  form.title.trim() !== '' ||
+  form.description.trim() !== '' ||
+  form.content.trim() !== '' ||
+  form.systemPrompt.trim() !== '' ||
+  form.cover.trim() !== '' ||
+  form.images.length > 0 ||
+  form.tags.length > 0
+)
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (allowLeave.value || !isDirty.value) {
+    next()
+    return
+  }
+  dialog.warning({
+    title: '离开发布页',
+    content: '页面还有未发布的草稿，确定要离开吗？',
+    positiveText: '继续编辑',
+    negativeText: '离开',
+    onNegativeClick: () => next(),
+    onPositiveClick: () => {
+      // Continue editing; stay on the page.
+    },
+    onClose: () => {
+      // Closing the dialog also keeps the user on the page.
+    }
+  })
+})
 
 const editingPromptId = computed(() => Number(route.query.edit) || 0)
 const isEditing = computed(() => editingPromptId.value > 0)
@@ -405,7 +441,10 @@ const handleSubmit = async () => {
     promptStore.upsertPrompt(response.data)
     await promptStore.loadHomeFeed()
     message.success(isEditing.value ? '提示词已发布/更新' : '提示词已发布')
+    allowLeave.value = true
     await router.push(`/prompt/${response.data.id}`)
+  } catch {
+    message.error('发布失败，请稍后重试')
   } finally {
     submitting.value = false
   }
@@ -433,7 +472,10 @@ const handleSaveDraft = async () => {
 
     promptStore.removePrompt(response.data.id)
     message.success('草稿已保存')
+    allowLeave.value = true
     await router.push('/profile')
+  } catch {
+    message.error('草稿保存失败，请稍后重试')
   } finally {
     savingDraft.value = false
   }
@@ -441,549 +483,551 @@ const handleSaveDraft = async () => {
 </script>
 
 <template>
-  <div class="publish-page">
-    <div
-      v-if="loadingPrompt"
-      class="publish-loading"
-    >
-      正在加载提示词...
-    </div>
+  <AppShell>
+    <div class="publish-page">
+      <PageLoading
+        v-if="loadingPrompt"
+        variant="blocks"
+        :rows="2"
+        label="正在加载提示词草稿"
+      />
 
-    <div
-      v-else
-      class="publish-layout"
-    >
-      <section class="publish-cover-pane">
-        <div class="publish-cover-pane__header">
-          <div>
-            <p class="publish-eyebrow">
-              {{ isEditing ? '编辑' : '发布' }}
-            </p>
-            <h1 class="publish-cover-pane__title">
-              {{ isEditingDraft ? '编辑草稿' : isEditing ? '编辑提示词' : '发布图像提示词' }}
-            </h1>
-          </div>
-          <RouterLink
-            to="/"
-            class="publish-back-link"
-          >
-            返回首页
-          </RouterLink>
-        </div>
-
-        <div class="publish-cover-pane__body">
-          <label
-            v-if="!form.cover"
-            class="publish-upload-zone"
-          >
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              class="hidden"
-              @change="handleCoverChange"
-            >
-            <span class="publish-upload-zone__title">
-              {{ uploading ? '正在上传...' : '点击上传封面图' }}
-            </span>
-            <span class="publish-upload-zone__hint">
-              JPG · PNG · WEBP · GIF，横版效果更佳
-            </span>
-            <span
-              v-if="selectedFileName"
-              class="publish-upload-zone__file"
-            >
-              {{ selectedFileName }}
-            </span>
-          </label>
-
-          <div
-            v-else
-            class="publish-preview"
-          >
-            <div class="publish-preview__frame">
-              <img
-                :src="resolveMediaUrl(form.cover)"
-                alt="封面预览"
-                class="publish-preview__image"
-              >
+      <div
+        v-else
+        class="publish-layout"
+      >
+        <section class="publish-cover-pane">
+          <div class="publish-cover-pane__header">
+            <div>
+              <p class="publish-eyebrow">
+                {{ isEditing ? '编辑' : '发布' }}
+              </p>
+              <h1 class="publish-cover-pane__title">
+                {{ isEditingDraft ? '编辑草稿' : isEditing ? '编辑提示词' : '发布图像提示词' }}
+              </h1>
             </div>
-            <label class="publish-preview__change">
+            <BackButton
+              fallback="/profile"
+              label="返回"
+              aria-label="返回上一页或个人主页"
+              class="publish-back-link"
+            />
+          </div>
+
+          <div class="publish-cover-pane__body">
+            <label
+              v-if="!form.cover"
+              class="publish-upload-zone"
+            >
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
                 class="hidden"
                 @change="handleCoverChange"
               >
-              {{ uploading ? '上传中...' : '更换封面' }}
-            </label>
-          </div>
-
-          <p
-            v-if="currentStep === 0 && !form.cover"
-            class="publish-cover-hint"
-          >
-            第一步需上传封面，完成后点击「下一步」
-          </p>
-
-          <div
-            v-if="form.cover"
-            class="publish-gallery"
-          >
-            <div class="publish-gallery__head">
-              <span>附加展示图</span>
-              <span>{{ form.images.length }} / {{ MAX_IMAGES }}</span>
-            </div>
-            <div
-              v-if="form.images.length > 0"
-              class="publish-gallery__grid"
-            >
-              <div
-                v-for="image in form.images"
-                :key="image"
-                class="publish-gallery__item"
+              <span class="publish-upload-zone__title">
+                {{ uploading ? '正在上传...' : '点击上传封面图' }}
+              </span>
+              <span class="publish-upload-zone__hint">
+                JPG · PNG · WEBP · GIF，横版效果更佳
+              </span>
+              <span
+                v-if="selectedFileName"
+                class="publish-upload-zone__file"
               >
+                {{ selectedFileName }}
+              </span>
+            </label>
+
+            <div
+              v-else
+              class="publish-preview"
+            >
+              <div class="publish-preview__frame">
                 <img
-                  :src="resolveMediaUrl(image)"
-                  alt="展示图预览"
-                  class="publish-gallery__image"
+                  :src="resolveMediaUrl(form.cover)"
+                  alt="封面预览"
+                  class="publish-preview__image"
                 >
-                <button
-                  class="publish-gallery__remove"
-                  type="button"
-                  @click="removeGalleryImage(image)"
-                >
-                  移除
-                </button>
               </div>
-            </div>
-            <label class="publish-gallery__upload">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                class="hidden"
-                multiple
-                @change="handleGalleryImagesChange"
-              >
-              {{ galleryUploading ? '上传中...' : '上传展示图' }}
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <section class="publish-wizard">
-        <header class="publish-wizard__header">
-          <NSteps
-            :current="currentStep"
-            size="small"
-          >
-            <NStep
-              v-for="(step, index) in wizardSteps"
-              :key="step.title"
-              :title="step.title"
-              :description="index === currentStep ? step.description : undefined"
-            />
-          </NSteps>
-        </header>
-
-        <div class="publish-wizard__body">
-          <div class="publish-wizard__card panel-card">
-            <div
-              v-show="currentStep === 0"
-              class="publish-step"
-            >
-              <h2 class="publish-step__title">
-                封面
-              </h2>
-              <p class="publish-step__desc">
-                左侧为封面预览区。请上传一张能代表生成效果的横版图片，画廊首页会以封面作为主视觉。
-              </p>
-              <label class="publish-upload-btn">
+              <label class="publish-preview__change">
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
                   class="hidden"
                   @change="handleCoverChange"
                 >
-                {{ form.cover ? '重新选择封面' : '从本地上传' }}
+                {{ uploading ? '上传中...' : '更换封面' }}
               </label>
-              <p
-                v-if="form.cover"
-                class="publish-step__success"
+            </div>
+
+            <p
+              v-if="currentStep === 0 && !form.cover"
+              class="publish-cover-hint"
+            >
+              第一步需上传封面，完成后点击「下一步」
+            </p>
+
+            <div
+              v-if="form.cover"
+              class="publish-gallery"
+            >
+              <div class="publish-gallery__head">
+                <span>附加展示图</span>
+                <span>{{ form.images.length }} / {{ MAX_IMAGES }}</span>
+              </div>
+              <div
+                v-if="form.images.length > 0"
+                class="publish-gallery__grid"
               >
-                封面已就绪，可进入下一步
-              </p>
-            </div>
-
-            <div
-              v-show="currentStep === 1"
-              class="publish-step publish-step--scroll"
-            >
-              <h2 class="publish-step__title">
-                基本信息
-              </h2>
-
-              <label class="publish-field">
-                <span class="publish-field__label">标题 <span class="publish-required">*</span></span>
-                <NInput
-                  v-model:value="form.title"
-                  maxlength="80"
-                  show-count
-                  placeholder="例如：电影感产品海报生成器"
-                />
-              </label>
-
-              <label class="publish-field">
-                <span class="publish-field__label">描述 <span class="publish-required">*</span></span>
-                <NInput
-                  v-model:value="form.description"
-                  type="textarea"
-                  :rows="3"
-                  maxlength="180"
-                  show-count
-                  placeholder="说明使用场景、风格与预期输出"
-                />
-              </label>
-
-              <div class="publish-field-row">
-                <label class="publish-field">
-                  <span class="publish-field__label">分类 <span class="publish-required">*</span></span>
-                  <NSelect
-                    v-model:value="form.categoryId"
-                    :options="categoryOptions"
-                    placeholder="选择图像分类"
-                  />
-                </label>
-
-                <label class="publish-field">
-                  <span class="publish-field__label">适用模型 <span class="publish-required">*</span></span>
-                  <NInput
-                    v-model:value="form.model"
-                    placeholder="Midjourney v6 / SDXL / DALL·E 3"
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div
-              v-show="currentStep === 2"
-              class="publish-step publish-step--fill"
-            >
-              <div class="publish-step__head">
-                <h2 class="publish-step__title">
-                  提示词正文
-                </h2>
-                <NTabs
-                  v-model:value="contentMode"
-                  type="segment"
-                  size="small"
+                <div
+                  v-for="image in form.images"
+                  :key="image"
+                  class="publish-gallery__item"
                 >
-                  <NTab
-                    name="plain"
-                    tab="纯文本"
-                  />
-                  <NTab
-                    name="markdown"
-                    tab="Markdown"
-                  />
-                  <NTab
-                    name="json"
-                    tab="JSON"
-                  />
-                </NTabs>
-              </div>
-
-              <div class="publish-content-grid">
-                <label class="publish-field publish-field--fill">
-                  <span class="publish-field__label">主提示词 <span class="publish-required">*</span></span>
-                  <NInput
-                    v-model:value="form.content"
-                    type="textarea"
-                    class="min-h-[200px]"
-                    :rows="10"
-                    placeholder="输入主提示词；JSON 模式可一键格式化"
-                  />
-                  <div
-                    v-if="contentMode === 'json'"
-                    class="flex items-center gap-2"
+                  <img
+                    :src="resolveMediaUrl(image)"
+                    alt="展示图预览"
+                    class="publish-gallery__image"
                   >
-                    <NButton
-                      size="small"
-                      secondary
-                      @click="formatJsonContent"
-                    >
-                      格式化 JSON
-                    </NButton>
-                    <span
-                      v-if="jsonError"
-                      class="publish-error"
-                    >{{ jsonError }}</span>
-                  </div>
+                  <button
+                    class="publish-gallery__remove"
+                    type="button"
+                    @click="removeGalleryImage(image)"
+                  >
+                    移除
+                  </button>
+                </div>
+              </div>
+              <label class="publish-gallery__upload">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="hidden"
+                  multiple
+                  @change="handleGalleryImagesChange"
+                >
+                {{ galleryUploading ? '上传中...' : '上传展示图' }}
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="publish-wizard">
+          <header class="publish-wizard__header">
+            <NSteps
+              :current="currentStep"
+              size="small"
+            >
+              <NStep
+                v-for="(step, index) in wizardSteps"
+                :key="step.title"
+                :title="step.title"
+                :description="index === currentStep ? step.description : undefined"
+              />
+            </NSteps>
+          </header>
+
+          <div class="publish-wizard__body">
+            <div class="publish-wizard__card panel-card">
+              <div
+                v-show="currentStep === 0"
+                class="publish-step"
+              >
+                <h2 class="publish-step__title">
+                  封面
+                </h2>
+                <p class="publish-step__desc">
+                  左侧为封面预览区。请上传一张能代表生成效果的横版图片，画廊首页会以封面作为主视觉。
+                </p>
+                <label class="publish-upload-btn">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    class="hidden"
+                    @change="handleCoverChange"
+                  >
+                  {{ form.cover ? '重新选择封面' : '从本地上传' }}
+                </label>
+                <p
+                  v-if="form.cover"
+                  class="publish-step__success"
+                >
+                  封面已就绪，可进入下一步
+                </p>
+              </div>
+
+              <div
+                v-show="currentStep === 1"
+                class="publish-step publish-step--scroll"
+              >
+                <h2 class="publish-step__title">
+                  基本信息
+                </h2>
+
+                <label class="publish-field">
+                  <span class="publish-field__label">标题 <span class="publish-required">*</span></span>
+                  <NInput
+                    v-model:value="form.title"
+                    maxlength="80"
+                    show-count
+                    placeholder="例如：电影感产品海报生成器"
+                  />
                 </label>
 
-                <div
-                  v-if="contentMode === 'markdown'"
-                  class="publish-field publish-field--fill"
-                >
-                  <span class="publish-field__label">Markdown 预览</span>
-                  <div class="publish-preview-box">
-                    <template v-if="markdownPreviewBlocks.length > 0">
-                      <template
-                        v-for="(block, index) in markdownPreviewBlocks"
-                        :key="`${block.type}-${index}`"
-                      >
-                        <h1
-                          v-if="block.type === 'heading' && block.level === 1"
-                          class="publish-preview-heading publish-preview-heading--one"
-                        >
-                          {{ block.text }}
-                        </h1>
-                        <h2
-                          v-else-if="block.type === 'heading' && block.level === 2"
-                          class="publish-preview-heading publish-preview-heading--two"
-                        >
-                          {{ block.text }}
-                        </h2>
-                        <h3
-                          v-else-if="block.type === 'heading'"
-                          class="publish-preview-heading publish-preview-heading--three"
-                        >
-                          {{ block.text }}
-                        </h3>
-                        <pre
-                          v-else-if="block.type === 'code'"
-                          class="publish-preview-code"
-                        >{{ block.text }}</pre>
-                        <p
-                          v-else
-                          class="publish-preview-paragraph"
-                        >
-                          {{ block.text }}
-                        </p>
-                      </template>
-                    </template>
-                    <p
-                      v-else
-                      class="publish-preview-empty"
+                <label class="publish-field">
+                  <span class="publish-field__label">描述 <span class="publish-required">*</span></span>
+                  <NInput
+                    v-model:value="form.description"
+                    type="textarea"
+                    :rows="3"
+                    maxlength="180"
+                    show-count
+                    placeholder="说明使用场景、风格与预期输出"
+                  />
+                </label>
+
+                <div class="publish-field-row">
+                  <label class="publish-field">
+                    <span class="publish-field__label">分类 <span class="publish-required">*</span></span>
+                    <NSelect
+                      v-model:value="form.categoryId"
+                      :options="categoryOptions"
+                      placeholder="选择图像分类"
+                    />
+                  </label>
+
+                  <label class="publish-field">
+                    <span class="publish-field__label">适用模型 <span class="publish-required">*</span></span>
+                    <NInput
+                      v-model:value="form.model"
+                      placeholder="Midjourney v6 / SDXL / DALL·E 3"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div
+                v-show="currentStep === 2"
+                class="publish-step publish-step--fill"
+              >
+                <div class="publish-step__head">
+                  <h2 class="publish-step__title">
+                    提示词正文
+                  </h2>
+                  <NTabs
+                    v-model:value="contentMode"
+                    type="segment"
+                    size="small"
+                  >
+                    <NTab
+                      name="plain"
+                      tab="纯文本"
+                    />
+                    <NTab
+                      name="markdown"
+                      tab="Markdown"
+                    />
+                    <NTab
+                      name="json"
+                      tab="JSON"
+                    />
+                  </NTabs>
+                </div>
+
+                <div class="publish-content-grid">
+                  <label class="publish-field publish-field--fill">
+                    <span class="publish-field__label">主提示词 <span class="publish-required">*</span></span>
+                    <NInput
+                      v-model:value="form.content"
+                      type="textarea"
+                      class="min-h-[200px]"
+                      :rows="10"
+                      placeholder="输入主提示词；JSON 模式可一键格式化"
+                    />
+                    <div
+                      v-if="contentMode === 'json'"
+                      class="flex items-center gap-2"
                     >
-                      输入 Markdown 后将在此预览
-                    </p>
+                      <NButton
+                        size="small"
+                        secondary
+                        @click="formatJsonContent"
+                      >
+                        格式化 JSON
+                      </NButton>
+                      <span
+                        v-if="jsonError"
+                        class="publish-error"
+                      >{{ jsonError }}</span>
+                    </div>
+                  </label>
+
+                  <div
+                    v-if="contentMode === 'markdown'"
+                    class="publish-field publish-field--fill"
+                  >
+                    <span class="publish-field__label">Markdown 预览</span>
+                    <div class="publish-preview-box">
+                      <template v-if="markdownPreviewBlocks.length > 0">
+                        <template
+                          v-for="(block, index) in markdownPreviewBlocks"
+                          :key="`${block.type}-${index}`"
+                        >
+                          <h1
+                            v-if="block.type === 'heading' && block.level === 1"
+                            class="publish-preview-heading publish-preview-heading--one"
+                          >
+                            {{ block.text }}
+                          </h1>
+                          <h2
+                            v-else-if="block.type === 'heading' && block.level === 2"
+                            class="publish-preview-heading publish-preview-heading--two"
+                          >
+                            {{ block.text }}
+                          </h2>
+                          <h3
+                            v-else-if="block.type === 'heading'"
+                            class="publish-preview-heading publish-preview-heading--three"
+                          >
+                            {{ block.text }}
+                          </h3>
+                          <pre
+                            v-else-if="block.type === 'code'"
+                            class="publish-preview-code"
+                          >{{ block.text }}</pre>
+                          <p
+                            v-else
+                            class="publish-preview-paragraph"
+                          >
+                            {{ block.text }}
+                          </p>
+                        </template>
+                      </template>
+                      <p
+                        v-else
+                        class="publish-preview-empty"
+                      >
+                        输入 Markdown 后将在此预览
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    v-else-if="contentMode === 'json'"
+                    class="publish-field publish-field--fill"
+                  >
+                    <span class="publish-field__label">结构预览</span>
+                    <pre class="publish-preview-box publish-preview-box--code">{{ form.content || '输入合法 JSON 后将在此预览' }}</pre>
                   </div>
                 </div>
 
-                <div
-                  v-else-if="contentMode === 'json'"
-                  class="publish-field publish-field--fill"
-                >
-                  <span class="publish-field__label">结构预览</span>
-                  <pre class="publish-preview-box publish-preview-box--code">{{ form.content || '输入合法 JSON 后将在此预览' }}</pre>
+                <div class="publish-panel">
+                  <NCheckbox v-model:checked="useSystemPrompt">
+                    使用系统提示词（图像生成网页端通常无需此项）
+                  </NCheckbox>
+                  <NInput
+                    v-if="useSystemPrompt"
+                    v-model:value="form.systemPrompt"
+                    class="mt-3"
+                    type="textarea"
+                    :rows="4"
+                    placeholder="角色设定、负面约束、风格统一说明等"
+                  />
                 </div>
               </div>
 
-              <div class="publish-panel">
-                <NCheckbox v-model:checked="useSystemPrompt">
-                  使用系统提示词（图像生成网页端通常无需此项）
-                </NCheckbox>
-                <NInput
-                  v-if="useSystemPrompt"
-                  v-model:value="form.systemPrompt"
-                  class="mt-3"
-                  type="textarea"
-                  :rows="4"
-                  placeholder="角色设定、负面约束、风格统一说明等"
-                />
-              </div>
-            </div>
+              <div
+                v-show="currentStep === 3"
+                class="publish-step publish-step--scroll"
+              >
+                <h2 class="publish-step__title">
+                  参数与标签
+                </h2>
 
-            <div
-              v-show="currentStep === 3"
-              class="publish-step publish-step--scroll"
-            >
-              <h2 class="publish-step__title">
-                参数与标签
-              </h2>
-
-              <label class="publish-field">
-                <span class="publish-field__label">
-                  标签
-                  <span class="publish-field__hint">{{ tagCount }} / {{ MAX_TAGS }}</span>
-                </span>
-                <NInput
-                  v-model:value="tagInput"
-                  placeholder="逗号或换行分隔，例如：电影感, 电商, 海报"
-                  @blur="syncTags"
-                />
-                <p class="publish-field__note">
-                  建议 3–8 个精准标签；最多 {{ MAX_TAGS }} 个
-                </p>
-              </label>
-
-              <div class="publish-panel">
-                <NCheckbox v-model:checked="useAdvancedParams">
-                  高级参数（温度 / Top P / 最大 Token）
-                </NCheckbox>
-                <div
-                  v-if="useAdvancedParams"
-                  class="publish-params-grid"
-                >
-                  <label class="publish-field">
-                    <span class="publish-field__label-muted">温度</span>
-                    <NInputNumber
-                      v-model:value="form.params.temperature"
-                      :min="0"
-                      :max="2"
-                      :step="0.1"
-                      class="w-full"
-                    />
-                  </label>
-                  <label class="publish-field">
-                    <span class="publish-field__label-muted">Top P</span>
-                    <NInputNumber
-                      v-model:value="form.params.topP"
-                      :min="0"
-                      :max="1"
-                      :step="0.05"
-                      class="w-full"
-                    />
-                  </label>
-                  <label class="publish-field">
-                    <span class="publish-field__label-muted">最大 Token</span>
-                    <NInputNumber
-                      v-model:value="form.params.maxTokens"
-                      :min="1"
-                      :step="100"
-                      class="w-full"
-                    />
-                  </label>
-                </div>
-                <p
-                  v-else
-                  class="publish-field__note"
-                >
-                  未开启时将使用默认参数提交
-                </p>
-              </div>
-            </div>
-
-            <div
-              v-show="currentStep === 4"
-              class="publish-step publish-step--scroll"
-            >
-              <h2 class="publish-step__title">
-                确认发布
-              </h2>
-              <dl class="publish-confirm">
-                <div class="publish-confirm__row">
-                  <dt class="publish-confirm__label">
-                    标题
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ form.title || '—' }}
-                  </dd>
-                </div>
-                <div class="publish-confirm__row">
-                  <dt class="publish-confirm__label">
-                    分类
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ selectedCategoryName }}
-                  </dd>
-                </div>
-                <div class="publish-confirm__row">
-                  <dt class="publish-confirm__label">
-                    模型
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ form.model || '—' }}
-                  </dd>
-                </div>
-                <div class="publish-confirm__row">
-                  <dt class="publish-confirm__label">
+                <label class="publish-field">
+                  <span class="publish-field__label">
                     标签
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ form.tags.length ? form.tags.join(' · ') : '无' }}
-                  </dd>
+                    <span class="publish-field__hint">{{ tagCount }} / {{ MAX_TAGS }}</span>
+                  </span>
+                  <NInput
+                    v-model:value="tagInput"
+                    placeholder="逗号或换行分隔，例如：电影感, 电商, 海报"
+                    @blur="syncTags"
+                  />
+                  <p class="publish-field__note">
+                    建议 3–8 个精准标签；最多 {{ MAX_TAGS }} 个
+                  </p>
+                </label>
+
+                <div class="publish-panel">
+                  <NCheckbox v-model:checked="useAdvancedParams">
+                    高级参数（温度 / Top P / 最大 Token）
+                  </NCheckbox>
+                  <div
+                    v-if="useAdvancedParams"
+                    class="publish-params-grid"
+                  >
+                    <label class="publish-field">
+                      <span class="publish-field__label-muted">温度</span>
+                      <NInputNumber
+                        v-model:value="form.params.temperature"
+                        :min="0"
+                        :max="2"
+                        :step="0.1"
+                        class="w-full"
+                      />
+                    </label>
+                    <label class="publish-field">
+                      <span class="publish-field__label-muted">Top P</span>
+                      <NInputNumber
+                        v-model:value="form.params.topP"
+                        :min="0"
+                        :max="1"
+                        :step="0.05"
+                        class="w-full"
+                      />
+                    </label>
+                    <label class="publish-field">
+                      <span class="publish-field__label-muted">最大 Token</span>
+                      <NInputNumber
+                        v-model:value="form.params.maxTokens"
+                        :min="1"
+                        :step="100"
+                        class="w-full"
+                      />
+                    </label>
+                  </div>
+                  <p
+                    v-else
+                    class="publish-field__note"
+                  >
+                    未开启时将使用默认参数提交
+                  </p>
                 </div>
-                <div class="publish-confirm__row">
-                  <dt class="publish-confirm__label">
-                    展示图
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ form.images.length }} 张
-                  </dd>
-                </div>
-                <div class="publish-confirm__row">
-                  <dt class="publish-confirm__label">
-                    系统提示词
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ useSystemPrompt && form.systemPrompt.trim() ? '已填写' : '未使用' }}
-                  </dd>
-                </div>
-                <div class="publish-confirm__row publish-confirm__row--last">
-                  <dt class="publish-confirm__label">
-                    高级参数
-                  </dt>
-                  <dd class="publish-confirm__value">
-                    {{ useAdvancedParams ? '已自定义' : '默认' }}
-                  </dd>
-                </div>
-              </dl>
-              <p class="publish-confirm__note">
-                提交后将在社区画廊展示。请确认封面与提示词内容符合平台规范。
-              </p>
+              </div>
+
+              <div
+                v-show="currentStep === 4"
+                class="publish-step publish-step--scroll"
+              >
+                <h2 class="publish-step__title">
+                  确认发布
+                </h2>
+                <dl class="publish-confirm">
+                  <div class="publish-confirm__row">
+                    <dt class="publish-confirm__label">
+                      标题
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ form.title || '—' }}
+                    </dd>
+                  </div>
+                  <div class="publish-confirm__row">
+                    <dt class="publish-confirm__label">
+                      分类
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ selectedCategoryName }}
+                    </dd>
+                  </div>
+                  <div class="publish-confirm__row">
+                    <dt class="publish-confirm__label">
+                      模型
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ form.model || '—' }}
+                    </dd>
+                  </div>
+                  <div class="publish-confirm__row">
+                    <dt class="publish-confirm__label">
+                      标签
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ form.tags.length ? form.tags.join(' · ') : '无' }}
+                    </dd>
+                  </div>
+                  <div class="publish-confirm__row">
+                    <dt class="publish-confirm__label">
+                      展示图
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ form.images.length }} 张
+                    </dd>
+                  </div>
+                  <div class="publish-confirm__row">
+                    <dt class="publish-confirm__label">
+                      系统提示词
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ useSystemPrompt && form.systemPrompt.trim() ? '已填写' : '未使用' }}
+                    </dd>
+                  </div>
+                  <div class="publish-confirm__row publish-confirm__row--last">
+                    <dt class="publish-confirm__label">
+                      高级参数
+                    </dt>
+                    <dd class="publish-confirm__value">
+                      {{ useAdvancedParams ? '已自定义' : '默认' }}
+                    </dd>
+                  </div>
+                </dl>
+                <p class="publish-confirm__note">
+                  提交后将在社区画廊展示。请确认封面与提示词内容符合平台规范。
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <footer class="publish-wizard__footer">
-          <NButton
-            v-if="currentStep > 0"
-            quaternary
-            @click="goBack"
-          >
-            上一步
-          </NButton>
-          <span v-else />
+          <footer class="publish-wizard__footer">
+            <NButton
+              v-if="currentStep > 0"
+              quaternary
+              @click="goBack"
+            >
+              上一步
+            </NButton>
+            <span v-else />
 
-          <div class="publish-wizard__actions">
-            <NButton
-              secondary
-              :loading="savingDraft"
-              :disabled="uploading || galleryUploading || !canSaveDraft"
-              @click="handleSaveDraft"
-            >
-              保存草稿
-            </NButton>
-            <NButton
-              v-if="currentStep < wizardSteps.length - 1"
-              type="primary"
-              class="publish-primary-btn"
-              :disabled="!stepValid || uploading || galleryUploading"
-              @click="goNext"
-            >
-              下一步
-            </NButton>
-            <NButton
-              v-else
-              type="primary"
-              class="publish-primary-btn"
-              :loading="submitting"
-              :disabled="!canSubmit || uploading || galleryUploading"
-              @click="handleSubmit"
-            >
-              {{ isEditing ? '保存修改' : '发布提示词' }}
-            </NButton>
-          </div>
-        </footer>
-      </section>
+            <div class="publish-wizard__actions">
+              <NButton
+                secondary
+                :loading="savingDraft"
+                :disabled="uploading || galleryUploading || !canSaveDraft"
+                @click="handleSaveDraft"
+              >
+                保存草稿
+              </NButton>
+              <NButton
+                v-if="currentStep < wizardSteps.length - 1"
+                type="primary"
+                class="publish-primary-btn"
+                :disabled="!stepValid || uploading || galleryUploading"
+                @click="goNext"
+              >
+                下一步
+              </NButton>
+              <NButton
+                v-else
+                type="primary"
+                class="publish-primary-btn"
+                :loading="submitting"
+                :disabled="!canSubmit || uploading || galleryUploading"
+                @click="handleSubmit"
+              >
+                {{ isEditing ? '保存修改' : '发布提示词' }}
+              </NButton>
+            </div>
+          </footer>
+        </section>
+      </div>
     </div>
-  </div>
+  </AppShell>
 </template>
 
 <style scoped>
 .publish-page {
-  @apply h-screen overflow-hidden bg-[#f5f3ee] text-[#111111];
+  @apply min-h-screen bg-[var(--prompt-bg)] text-[var(--prompt-text)] lg:h-[calc(100vh-65px)] lg:overflow-hidden;
 }
 
 .panel-card {
@@ -991,15 +1035,15 @@ const handleSaveDraft = async () => {
 }
 
 .publish-loading {
-  @apply flex h-full items-center justify-center text-sm text-[#666666];
+  @apply flex h-full items-center justify-center text-sm text-[var(--prompt-text-faint)];
 }
 
 .publish-layout {
-  @apply grid h-full min-h-0 grid-cols-1 lg:grid-cols-2;
+  @apply grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-2;
 }
 
 .publish-cover-pane {
-  @apply relative flex min-h-[40vh] flex-col overflow-hidden border-b border-black/10 bg-[#ebe8e1] lg:min-h-0 lg:border-b-0 lg:border-r;
+  @apply relative flex min-h-[40vh] flex-col overflow-hidden border-b border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] lg:min-h-0 lg:border-b-0 lg:border-r;
 }
 
 .publish-cover-pane__header {
@@ -1007,7 +1051,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-eyebrow {
-  @apply text-xs uppercase tracking-[0.2em] text-[#7a7a7a];
+  @apply text-xs uppercase tracking-[0.2em] text-[var(--prompt-text-faint)];
 }
 
 .publish-cover-pane__title {
@@ -1015,7 +1059,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-back-link {
-  @apply text-sm text-[#666666] transition hover:text-black;
+  @apply text-sm text-[var(--prompt-text-faint)] transition hover:text-[var(--prompt-text)];
 }
 
 .publish-cover-pane__body {
@@ -1023,28 +1067,28 @@ const handleSaveDraft = async () => {
 }
 
 .publish-upload-zone {
-  @apply flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-[28px] border border-dashed border-black/10 bg-white/60 text-center transition hover:border-black/20;
+  @apply flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-[28px] border border-dashed border-[var(--prompt-border)] bg-[color-mix(in_srgb,var(--prompt-surface)_65%,transparent)] text-center transition hover:border-[var(--prompt-border-strong)];
 }
 
 .publish-upload-zone__title {
-  @apply text-base font-medium text-[#333333];
+  @apply text-base font-medium text-[var(--prompt-text-muted)];
 }
 
 .publish-upload-zone__hint {
-  @apply mt-2 text-sm text-[#888888];
+  @apply mt-2 text-sm text-[var(--prompt-text-faint)];
 }
 
 .publish-upload-zone__file {
-  @apply mt-2 text-xs text-[#aaaaaa];
+  @apply mt-2 text-xs text-[var(--prompt-text-faint)];
 }
 
 .publish-preview {
-  @apply relative flex min-h-0 flex-1 overflow-hidden rounded-[28px] border border-black/10 bg-black;
+  @apply relative flex min-h-0 flex-1 overflow-hidden rounded-[28px] border border-[var(--prompt-border)] bg-[var(--prompt-primary)] text-[var(--prompt-primary-contrast)];
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
 .publish-preview__frame {
-  @apply flex h-full min-h-0 w-full items-center justify-center overflow-hidden bg-[#f6f4ef];
+  @apply flex h-full min-h-0 w-full items-center justify-center overflow-hidden bg-[var(--prompt-surface-muted)];
 }
 
 .publish-preview__image {
@@ -1052,19 +1096,19 @@ const handleSaveDraft = async () => {
 }
 
 .publish-preview__change {
-  @apply absolute bottom-4 right-4 cursor-pointer rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-black shadow transition hover:bg-white;
+  @apply absolute bottom-4 right-4 cursor-pointer rounded-full bg-[color-mix(in_srgb,var(--prompt-surface)_95%,transparent)] px-4 py-2 text-sm font-medium text-[var(--prompt-text)] shadow transition hover:bg-[var(--prompt-surface)];
 }
 
 .publish-cover-hint {
-  @apply mt-4 text-center text-sm text-[#888888];
+  @apply mt-4 text-center text-sm text-[var(--prompt-text-faint)];
 }
 
 .publish-gallery {
-  @apply mt-4 rounded-[22px] border border-black/10 bg-white/70 p-4;
+  @apply mt-4 rounded-[22px] border border-[var(--prompt-border)] bg-[color-mix(in_srgb,var(--prompt-surface)_75%,transparent)] p-4;
 }
 
 .publish-gallery__head {
-  @apply flex items-center justify-between gap-3 text-sm text-[#666666];
+  @apply flex items-center justify-between gap-3 text-sm text-[var(--prompt-text-faint)];
 }
 
 .publish-gallery__grid {
@@ -1072,7 +1116,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-gallery__item {
-  @apply relative aspect-square overflow-hidden rounded-[14px] bg-black/5;
+  @apply relative aspect-square overflow-hidden rounded-[14px] bg-[var(--prompt-surface-muted)];
 }
 
 .publish-gallery__image {
@@ -1084,7 +1128,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-gallery__upload {
-  @apply mt-3 inline-flex cursor-pointer rounded-full bg-[#111111] px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80;
+  @apply mt-3 inline-flex cursor-pointer rounded-full bg-[var(--prompt-primary)] px-4 py-2 text-sm font-medium text-[var(--prompt-primary-contrast)] transition hover:bg-[var(--prompt-primary-hover)];
 }
 
 .publish-wizard {
@@ -1092,7 +1136,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-wizard__header {
-  @apply shrink-0 border-b border-black/10 bg-white/80 px-6 py-5 backdrop-blur-sm lg:px-8;
+  @apply shrink-0 border-b border-[var(--prompt-border)] bg-[color-mix(in_srgb,var(--prompt-surface)_85%,transparent)] px-6 py-5 backdrop-blur-sm lg:px-8;
 }
 
 .publish-wizard__body {
@@ -1100,7 +1144,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-wizard__card {
-  @apply flex h-full flex-col overflow-hidden rounded-[24px] border border-black/10 bg-white p-5;
+  @apply flex h-full flex-col overflow-hidden rounded-[24px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)] p-5;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
 }
 
@@ -1121,11 +1165,11 @@ const handleSaveDraft = async () => {
 }
 
 .publish-step__desc {
-  @apply text-sm leading-6 text-[#666666];
+  @apply text-sm leading-6 text-[var(--prompt-text-faint)];
 }
 
 .publish-step__success {
-  @apply text-sm text-[#22a06b];
+  @apply text-sm text-[var(--prompt-success)];
 }
 
 .publish-step__head {
@@ -1133,7 +1177,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-upload-btn {
-  @apply inline-flex w-fit cursor-pointer items-center rounded-full bg-[#111111] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black/80;
+  @apply inline-flex w-fit cursor-pointer items-center rounded-full bg-[var(--prompt-primary)] px-5 py-2.5 text-sm font-medium text-[var(--prompt-primary-contrast)] transition hover:bg-[var(--prompt-primary-hover)];
 }
 
 .publish-field {
@@ -1145,23 +1189,23 @@ const handleSaveDraft = async () => {
 }
 
 .publish-field__label {
-  @apply text-sm font-medium text-[#333333];
+  @apply text-sm font-medium text-[var(--prompt-text-muted)];
 }
 
 .publish-field__label-muted {
-  @apply text-sm text-[#555555];
+  @apply text-sm text-[var(--prompt-text-muted)];
 }
 
 .publish-field__hint {
-  @apply ml-2 text-xs font-normal text-[#888888];
+  @apply ml-2 text-xs font-normal text-[var(--prompt-text-faint)];
 }
 
 .publish-field__note {
-  @apply text-xs text-[#888888];
+  @apply text-xs text-[var(--prompt-text-faint)];
 }
 
 .publish-required {
-  @apply text-[#c0392b];
+  @apply text-[var(--prompt-error)];
 }
 
 .publish-field-row {
@@ -1173,15 +1217,15 @@ const handleSaveDraft = async () => {
 }
 
 .publish-preview-box {
-  @apply min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-black/10 bg-[#faf8f4] p-4 text-sm leading-6 text-[#333333];
+  @apply min-h-0 flex-1 overflow-y-auto rounded-[16px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4 text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .publish-preview-box--code {
-  @apply overflow-auto text-xs leading-5 text-[#444444];
+  @apply overflow-auto text-xs leading-5 text-[var(--prompt-text-muted)];
 }
 
 .publish-preview-heading {
-  @apply font-semibold text-black;
+  @apply font-semibold text-[var(--prompt-text)];
 }
 
 .publish-preview-heading--one {
@@ -1197,23 +1241,23 @@ const handleSaveDraft = async () => {
 }
 
 .publish-preview-paragraph {
-  @apply text-sm leading-6 text-[#333333];
+  @apply text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .publish-preview-code {
-  @apply overflow-x-auto rounded-[12px] bg-black/5 p-3 text-xs leading-5 text-[#444444];
+  @apply overflow-x-auto rounded-[12px] bg-[var(--prompt-surface-muted)] p-3 text-xs leading-5 text-[var(--prompt-text-muted)];
 }
 
 .publish-preview-empty {
-  @apply text-sm text-[#888888];
+  @apply text-sm text-[var(--prompt-text-faint)];
 }
 
 .publish-panel {
-  @apply shrink-0 rounded-[16px] border border-black/10 bg-[#faf8f4] p-4;
+  @apply shrink-0 rounded-[16px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4;
 }
 
 .publish-error {
-  @apply text-xs text-[#c0392b];
+  @apply text-xs text-[var(--prompt-error)];
 }
 
 .publish-params-grid {
@@ -1225,7 +1269,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-confirm__row {
-  @apply flex justify-between gap-4 border-b border-black/5 pb-2;
+  @apply flex justify-between gap-4 border-b border-[var(--prompt-border)] pb-2;
 }
 
 .publish-confirm__row--last {
@@ -1233,7 +1277,7 @@ const handleSaveDraft = async () => {
 }
 
 .publish-confirm__label {
-  @apply text-[#888888];
+  @apply text-[var(--prompt-text-faint)];
 }
 
 .publish-confirm__value {
@@ -1241,11 +1285,11 @@ const handleSaveDraft = async () => {
 }
 
 .publish-confirm__note {
-  @apply text-xs leading-5 text-[#888888];
+  @apply text-xs leading-5 text-[var(--prompt-text-faint)];
 }
 
 .publish-wizard__footer {
-  @apply flex shrink-0 items-center justify-between gap-3 border-t border-black/10 bg-white/80 px-6 py-4 backdrop-blur-sm lg:px-8;
+  @apply flex shrink-0 items-center justify-between gap-3 border-t border-[var(--prompt-border)] bg-[color-mix(in_srgb,var(--prompt-surface)_85%,transparent)] px-6 py-4 backdrop-blur-sm lg:px-8;
 }
 
 .publish-wizard__actions {
@@ -1253,14 +1297,14 @@ const handleSaveDraft = async () => {
 }
 
 :deep(.publish-primary-btn.n-button--primary-type) {
-  --n-color: #111111;
-  --n-color-hover: #333333;
-  --n-color-pressed: #000000;
-  --n-color-focus: #111111;
-  --n-text-color: #ffffff;
-  --n-text-color-hover: #ffffff;
-  --n-text-color-pressed: #ffffff;
-  --n-text-color-focus: #ffffff;
+  --n-color: var(--prompt-primary);
+  --n-color-hover: var(--prompt-primary-hover);
+  --n-color-pressed: var(--prompt-primary-hover);
+  --n-color-focus: var(--prompt-primary);
+  --n-text-color: var(--prompt-primary-contrast);
+  --n-text-color-hover: var(--prompt-primary-contrast);
+  --n-text-color-pressed: var(--prompt-primary-contrast);
+  --n-text-color-focus: var(--prompt-primary-contrast);
   border-radius: 9999px;
   padding-left: 1.25rem;
   padding-right: 1.25rem;

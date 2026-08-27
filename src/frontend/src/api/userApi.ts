@@ -69,6 +69,10 @@ export const userApi = {
     return request.post('/user/logout')
   },
 
+  exchangeGithubCode(code: string): Promise<ApiResponse<LoginResponse>> {
+    return request.post('/auth/exchange', { code })
+  },
+
   sendCaptcha(email: string): Promise<ApiResponse<CaptchaResponse>> {
     return request.post('/user/captcha', { email })
   }

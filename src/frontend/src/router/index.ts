@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { isSafeInternalPath } from '@/composables/useBackNavigation'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -61,10 +62,15 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
+  scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
       return savedPosition
     }
+
+    if (to.path === from.path && to.hash === from.hash) {
+      return false
+    }
+
     return { top: 0 }
   }
 })
@@ -77,11 +83,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+    const redirect = isSafeInternalPath(to.fullPath)
     return {
       path: '/login',
-      query: {
-        redirect: to.fullPath
-      }
+      query: redirect === '/' ? undefined : { redirect }
     }
   }
 
@@ -95,6 +100,7 @@ router.beforeEach(async (to) => {
 router.afterEach((to) => {
   const pageTitle = typeof to.meta.title === 'string' ? to.meta.title : ''
   document.title = pageTitle ? `${pageTitle} · PromptOS` : 'PromptOS'
+  window.dispatchEvent(new CustomEvent('promptos:navigation'))
 })
 
 export default router

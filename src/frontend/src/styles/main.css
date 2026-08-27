@@ -1,9 +1,9 @@
+@import './tokens.css';
+@import './transitions.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import './tokens.css';
-@import './transitions.css';
 
 /* Base styles */
 html {
@@ -17,14 +17,24 @@ body {
   min-height: 100vh;
 }
 
+/* Visible, keyboard-driven focus ring. Never hidden by outline:none utilities --
+   this rule uses element+pseudo specificity higher than a bare utility class so
+   the focus indicator always stays visible (P5 accessibility). */
+:focus-visible {
+  outline: 3px solid var(--prompt-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 @layer components {
   .panel-card {
-    @apply rounded-[28px] border border-black/10 bg-white;
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+    @apply rounded-[var(--prompt-radius-lg)] border bg-[var(--prompt-surface)];
+    border-color: var(--prompt-border);
+    box-shadow: var(--prompt-shadow-1);
   }
 
   .view-page {
-    @apply min-h-screen bg-[#f5f3ee] text-[#111111];
+    @apply min-h-screen bg-[var(--prompt-bg)] text-[var(--prompt-text)];
   }
 
   /* Fluid page width: full bleed on small screens, vw-capped on xl+ (no fixed px cap) */
@@ -45,55 +55,65 @@ body {
   }
 
   .btn-pill-primary {
-    @apply btn-pill bg-black font-medium text-white hover:bg-black/80;
+    @apply btn-pill bg-[var(--prompt-primary)] font-medium text-[var(--prompt-primary-contrast)] hover:bg-[var(--prompt-primary-hover)];
   }
 
   .btn-pill-secondary {
-    @apply btn-pill border border-black/10 bg-[#f6f4ef] text-[#555555] hover:border-black/20 hover:text-black;
+    @apply btn-pill border bg-[var(--prompt-surface-muted)] text-[var(--prompt-text-muted)] hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
+    border-color: var(--prompt-border);
   }
 
   .btn-pill-outline {
-    @apply btn-pill border border-black/10 bg-white;
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+    @apply btn-pill border bg-[var(--prompt-surface)];
+    border-color: var(--prompt-border);
+    box-shadow: var(--prompt-shadow-1);
   }
 
   .tag-chip {
-    @apply rounded-full border border-black/10 bg-[#f6f4ef] px-3 py-1 text-sm text-[#444444];
+    @apply rounded-full border bg-[var(--prompt-surface-muted)] px-3 py-1 text-sm text-[var(--prompt-text-muted)];
+    border-color: var(--prompt-border);
   }
 
   .field-input {
-    @apply rounded-[16px] border border-black/10 bg-[#faf8f4] px-4 py-3 text-sm outline-none transition focus:border-black/30;
+    @apply rounded-[var(--prompt-radius)] border bg-[var(--prompt-surface-muted)] px-4 py-3 text-sm transition focus:border-[var(--prompt-border-strong)];
+    border-color: var(--prompt-border);
   }
 
   .empty-state {
-    @apply rounded-[28px] border border-dashed border-black/10 bg-white px-6 py-16 text-center;
+    @apply rounded-[var(--prompt-radius-lg)] border border-dashed bg-[var(--prompt-surface)] px-6 py-16 text-center;
+    border-color: var(--prompt-border);
   }
 
   .text-muted {
-    @apply text-[#777777];
+    @apply text-[var(--prompt-text-faint)];
   }
 
   .text-muted-sm {
-    @apply text-sm text-[#777777];
+    @apply text-sm text-[var(--prompt-text-faint)];
   }
 
   .section-eyebrow {
-    @apply text-sm uppercase tracking-[0.2em] text-[#7c7c7c];
+    @apply text-sm uppercase tracking-[0.2em] text-[var(--prompt-text-faint)];
   }
 
   .stat-card {
-    @apply rounded-[18px] border border-black/10 bg-[#faf8f4] p-4;
+    @apply rounded-[var(--prompt-radius)] border bg-[var(--prompt-surface-muted)] p-4;
+    border-color: var(--prompt-border);
   }
 }
 
-/* Glassmorphism utility classes */
+/* Glassmorphism utility classes. Translucent surfaces are derived from tokens
+   via color-mix so they follow the active light/dark mode (no fixed white). */
 @layer utilities {
   .glass {
-    @apply bg-white/5 backdrop-blur-glass border border-white/10;
+    @apply border backdrop-blur-glass;
+    background-color: color-mix(in srgb, var(--prompt-surface) 8%, transparent);
+    border-color: color-mix(in srgb, var(--prompt-surface) 15%, transparent);
   }
 
   .glass-hover:hover {
-    @apply bg-white/10 border-white/20;
+    background-color: color-mix(in srgb, var(--prompt-surface) 18%, transparent);
+    border-color: color-mix(in srgb, var(--prompt-surface) 22%, transparent);
   }
 
   .gradient-border {
@@ -102,8 +122,8 @@ body {
 
   .gradient-border::before {
     content: '';
-    @apply absolute inset-0 rounded-card p-[1px];
-    background: linear-gradient(135deg, #111111, #555555);
+    @apply absolute inset-0 rounded-[var(--prompt-radius)] p-[1px];
+    background: linear-gradient(135deg, var(--prompt-primary), var(--prompt-primary-hover));
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -111,7 +131,7 @@ body {
 
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #111111, #666666);
+    background-image: linear-gradient(135deg, var(--prompt-primary), var(--prompt-text-faint));
   }
 }
 
@@ -122,13 +142,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-[#ebe8e2];
+  background-color: var(--prompt-surface-muted);
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-black/20;
+  @apply rounded-full;
+  background-color: color-mix(in srgb, var(--prompt-text) 22%, transparent);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-black/35;
+  background-color: color-mix(in srgb, var(--prompt-text) 38%, transparent);
 }

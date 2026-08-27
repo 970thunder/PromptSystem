@@ -12,22 +12,6 @@
   z-index: 1;
 }
 
-/* Menu / panel expand-collapse (push-down mega menu). */
-.prompt-collapse {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows var(--prompt-duration-base) var(--prompt-ease-out);
-}
-
-.prompt-collapse--open {
-  grid-template-rows: 1fr;
-}
-
-.prompt-collapse__inner {
-  overflow: hidden;
-  min-height: 0;
-}
-
 /* Route transition wrappers. */
 .route-fade-enter-active,
 .route-fade-leave-active {
