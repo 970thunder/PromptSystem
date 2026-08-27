@@ -14,6 +14,8 @@ import (
 type Cache interface {
 	// Set stores value with a TTL.
 	Set(ctx context.Context, key string, value any, ttl time.Duration) error
+	// Get returns the stored value as a string.
+	Get(ctx context.Context, key string) (string, error)
 	// Exists reports whether key exists.
 	Exists(ctx context.Context, key string) (bool, error)
 	// Delete removes key.
@@ -51,6 +53,13 @@ func (c *redisCache) Set(ctx context.Context, key string, value any, ttl time.Du
 		return errors.New("cache not available")
 	}
 	return c.client.Set(ctx, key, value, ttl).Err()
+}
+
+func (c *redisCache) Get(ctx context.Context, key string) (string, error) {
+	if c == nil || c.client == nil {
+		return "", errors.New("cache not available")
+	}
+	return c.client.Get(ctx, key).Result()
 }
 
 func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {

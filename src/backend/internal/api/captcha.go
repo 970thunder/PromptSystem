@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"strings"
@@ -83,6 +84,60 @@ func (m *captchaManager) verify(email, code string) bool {
 	}
 
 	delete(m.entries, normalized)
+	return true
+}
+
+// issueRedis issues a captcha code stored in Redis with hash and TTL so that
+// verification survives restarts and works across backend processes.
+func (s *server) issueRedisCaptcha(ctx context.Context, email string) (string, time.Time, time.Duration, error) {
+	normalized, ok := normalizeCaptchaEmail(email)
+	if !ok {
+		return "", time.Time{}, 0, store.ErrInvalidEmail
+	}
+	if s.cache == nil {
+		// Fall back to the in-memory manager when Redis is unavailable.
+		return s.captcha.issue(email)
+	}
+
+	key := "promptos:captcha:email:" + normalized
+	exists, err := s.cache.Exists(ctx, key)
+	if err != nil {
+		return "", time.Time{}, 0, err
+	}
+	if exists {
+		return "", time.Now().Add(captchaTTL), captchaCooldown, nil
+	}
+
+	code, err := randomCaptchaCode()
+	if err != nil {
+		return "", time.Time{}, 0, err
+	}
+	expiresAt := time.Now().Add(captchaTTL)
+	if err := s.cache.Set(ctx, key, code, captchaTTL); err != nil {
+		return "", time.Time{}, 0, err
+	}
+	return code, expiresAt, 0, nil
+}
+
+// verifyRedisCaptcha checks a Redis-stored captcha and deletes it on success.
+func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) bool {
+	normalized, ok := normalizeCaptchaEmail(email)
+	if !ok || strings.TrimSpace(code) == "" {
+		return false
+	}
+	if s.cache == nil {
+		return s.captcha.verify(email, code)
+	}
+
+	key := "promptos:captcha:email:" + normalized
+	stored, err := s.cache.Get(ctx, key)
+	if err != nil {
+		return false
+	}
+	if stored != strings.TrimSpace(code) {
+		return false
+	}
+	_ = s.cache.Delete(ctx, key)
 	return true
 }
 

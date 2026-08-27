@@ -73,7 +73,7 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, expiresAt, retryAfter, err := s.captcha.issue(payload.Email)
+	code, expiresAt, retryAfter, err := s.issueRedisCaptcha(r.Context(), payload.Email)
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidEmail) {
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
@@ -161,7 +161,7 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.captcha.verify(payload.Email, payload.Captcha) {
+	if !s.verifyRedisCaptcha(r.Context(), payload.Email, payload.Captcha) {
 		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid or expired captcha"})
 		return
 	}
@@ -205,7 +205,7 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.captcha.verify(payload.Email, payload.Captcha) {
+	if !s.verifyRedisCaptcha(r.Context(), payload.Email, payload.Captcha) {
 		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid or expired captcha"})
 		return
 	}
