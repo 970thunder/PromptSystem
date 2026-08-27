@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"promptos-backend/internal/auth"
+	"promptos-backend/internal/cache"
 	"promptos-backend/internal/config"
 	"promptos-backend/internal/database"
 	"promptos-backend/internal/storage"
@@ -23,6 +24,7 @@ type server struct {
 	tokenManager *auth.TokenManager
 	captcha      *captchaManager
 	githubClient *http.Client
+	cache        cache.Cache
 	userStore    store.UserManager
 	promptStore  store.PromptManager
 	commentStore store.CommentManager
@@ -63,6 +65,7 @@ func NewServer(cfg config.Config) http.Handler {
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
 		captcha:      newCaptchaManager(),
 		githubClient: newGitHubClient(),
+		cache:        cache.New(cfg),
 		userStore:    userStore,
 		promptStore:  promptStore,
 		commentStore: commentStore,

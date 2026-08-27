@@ -299,6 +299,21 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if token != "" {
+		claims, err := s.tokenManager.Verify(token)
+		if err == nil && claims.JTI != "" {
+			// Denylist the token until it would have expired naturally.
+			ttl := time.Until(time.Unix(claims.Expiry, 0))
+			if ttl < 0 {
+				ttl = 0
+			}
+			if s.cache != nil {
+				_ = s.cache.Set(r.Context(), "promptos:jwt:denylist:"+claims.JTI, "1", ttl)
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
 }
 
@@ -547,9 +562,33 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		if s.cache != nil && claims.JTI != "" {
+			denied, err := s.cache.Exists(r.Context(), "promptos:jwt:denylist:"+claims.JTI)
+			if err == nil && denied {
+				writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+					Code:      401,
+					Message:   "Token has been revoked",
+					ErrorCode: "AUTH_TOKEN_REVOKED",
+				})
+				return
+			}
+		}
+
 		userID, err := strconv.Atoi(claims.Subject)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+			return
+		}
+
+		// Confirm the user still exists and is active; disabled users' old
+		// tokens must not keep working.
+		userRecord, found := s.userStore.FindByID(userID)
+		if !found || userRecord.Status != 1 {
+			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+				Code:      401,
+				Message:   "Unauthorized",
+				ErrorCode: "AUTH_USER_DISABLED",
+			})
 			return
 		}
 
