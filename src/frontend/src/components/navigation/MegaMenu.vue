@@ -5,7 +5,7 @@ import { watch } from 'vue'
 
 const props = defineProps<{
   open: boolean
-  activeSection?: 'discover' | 'workspace' | null
+  activeSection?: 'discover' | 'community' | 'workspace' | null
 }>()
 
 const emit = defineEmits<{
@@ -15,7 +15,7 @@ const emit = defineEmits<{
 interface MegaItem {
   label: string
   to?: string
-  active?: 'discover' | 'workspace' | null
+  active?: 'discover' | 'community' | 'workspace' | null
   disabled?: boolean
 }
 
@@ -40,9 +40,9 @@ const groups: MegaGroup[] = [
   {
     title: '参与社区',
     items: [
-      { label: '工作流', to: '/search?tag=流程', active: 'discover' },
-      { label: '智能体', to: '/search?tag=智能体', active: 'discover' },
-      { label: '发布提示词', to: '/publish', active: null }
+      { label: '工作流', to: '/search?tag=流程', active: 'community' },
+      { label: '智能体', to: '/search?tag=智能体', active: 'community' },
+      { label: '发布提示词', to: '/publish', active: 'community' }
     ]
   },
   {

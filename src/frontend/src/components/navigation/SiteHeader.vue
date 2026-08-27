@@ -1,5 +1,6 @@
-<!-- 文件作用：全局站点导航（非回调页面统一渲染）。顶部结构为品牌 Logo、一级入口触发按钮
-     （展开文档流内超级菜单）、搜索入口、发布入口、主题按钮与用户入口。 -->
+<!-- 文件作用：全局站点导航。顶级入口（发现 / 社区 / 我的）直接铺开在顶栏，
+     不聚合进单一按钮；鼠标悬停任意一级入口即整页下推展开超级菜单（文档流内，
+     非浮层），支持键盘展开/关闭。 -->
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
@@ -7,42 +8,77 @@ import MegaMenu from './MegaMenu.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import { useUserStore } from '@/stores/user'
 
+type NavEntry = 'discover' | 'community' | 'workspace'
+
 const route = useRoute()
 const userStore = useUserStore()
 
-const open = ref(false)
-const triggerRef = ref<HTMLButtonElement | null>(null)
+// 当前悬停/展开的一级入口；null 表示菜单关闭。
+const activeEntry = ref<NavEntry | null>(null)
+const open = computed(() => activeEntry.value !== null)
 
-const toggleMenu = () => {
-  open.value = !open.value
-  if (open.value) {
-    // 菜单展开后，下方内容会被真实推开；这里记录基准供测量（不输出日志）。
-    document.documentElement.dataset.menuOpen = 'true'
-  } else {
+const closeTimer = ref<number | null>(null)
+const lastFocused = ref<NavEntry | null>(null)
+
+const openMenu = (entry: NavEntry, focus = false) => {
+  if (closeTimer.value !== null) {
+    window.clearTimeout(closeTimer.value)
+    closeTimer.value = null
+  }
+  activeEntry.value = entry
+  if (focus) {
+    lastFocused.value = entry
+  }
+  document.documentElement.dataset.menuOpen = 'true'
+}
+
+const scheduleClose = () => {
+  if (closeTimer.value !== null) {
+    return
+  }
+  closeTimer.value = window.setTimeout(() => {
+    activeEntry.value = null
+    closeTimer.value = null
     document.documentElement.dataset.menuOpen = 'false'
+  }, 180)
+}
+
+const cancelClose = () => {
+  if (closeTimer.value !== null) {
+    window.clearTimeout(closeTimer.value)
+    closeTimer.value = null
   }
 }
 
 const closeMenu = () => {
-  if (!open.value) {
-    return
-  }
-  open.value = false
+  cancelClose()
+  activeEntry.value = null
   document.documentElement.dataset.menuOpen = 'false'
 }
 
 const onKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && open.value) {
     closeMenu()
-    triggerRef.value?.focus()
+    if (lastFocused.value) {
+      const el = document.querySelector<HTMLElement>(`[data-nav-entry="${lastFocused.value}"]`)
+      el?.focus()
+    }
   }
 }
 
-// 当前路由对应的一级入口，用于高亮触发按钮（发现 / 工作台）。
-const activeSection = computed<'discover' | 'workspace' | null>(() => {
+// 当前路由对应的一级入口，用于高亮顶栏项与超菜单分组。
+const currentEntry = computed<NavEntry | null>(() => {
   const path = route.path
-  if (path.startsWith('/search') || path.startsWith('/prompt') || path === '/') {
+  if (path === '/' || path.startsWith('/search') || path.startsWith('/prompt')) {
+    const tag = String(route.query.tag ?? '')
+    const sort = String(route.query.sort ?? '')
+    if (tag === '流程' || tag === '智能体' || sort === 'popular') {
+      return 'community'
+    }
     return 'discover'
+  }
+  if (path.startsWith('/publish')) {
+    return 'community'
   }
   if (path.startsWith('/profile')) {
     return 'workspace'
@@ -66,6 +102,8 @@ onBeforeUnmount(() => {
   <header
     class="site-header"
     :class="{ 'site-header--menu-open': open }"
+    @mouseenter="cancelClose"
+    @mouseleave="scheduleClose"
   >
     <div class="site-header__bar">
       <div class="site-header__left">
@@ -76,22 +114,51 @@ onBeforeUnmount(() => {
         >
           PromptOS
         </RouterLink>
-        <button
-          ref="triggerRef"
-          type="button"
-          class="nav-trigger"
-          :class="{ 'nav-trigger--active': activeSection }"
-          :aria-expanded="open"
-          aria-controls="mega-menu"
-          aria-label="展开站点导航菜单"
-          @click="toggleMenu"
+
+        <nav
+          class="site-header__primary"
+          aria-label="主导航"
         >
-          <span>菜单</span>
-          <span
-            class="nav-trigger__caret"
-            aria-hidden="true"
-          >{{ open ? '▴' : '▾' }}</span>
-        </button>
+          <RouterLink
+            to="/search"
+            data-nav-entry="discover"
+            class="site-nav"
+            :class="{ 'site-nav--active': currentEntry === 'discover' || activeEntry === 'discover' }"
+            aria-haspopup="true"
+            :aria-expanded="activeEntry === 'discover'"
+            @mouseenter="openMenu('discover')"
+            @keydown.enter.prevent="openMenu('discover', true)"
+            @keydown.space.prevent="openMenu('discover', true)"
+          >
+            发现
+          </RouterLink>
+          <RouterLink
+            to="/search?sort=popular"
+            data-nav-entry="community"
+            class="site-nav"
+            :class="{ 'site-nav--active': currentEntry === 'community' || activeEntry === 'community' }"
+            aria-haspopup="true"
+            :aria-expanded="activeEntry === 'community'"
+            @mouseenter="openMenu('community')"
+            @keydown.enter.prevent="openMenu('community', true)"
+            @keydown.space.prevent="openMenu('community', true)"
+          >
+            社区
+          </RouterLink>
+          <RouterLink
+            :to="userStore.isLoggedIn ? '/profile' : '/login?redirect=/profile'"
+            data-nav-entry="workspace"
+            class="site-nav"
+            :class="{ 'site-nav--active': currentEntry === 'workspace' || activeEntry === 'workspace' }"
+            aria-haspopup="true"
+            :aria-expanded="activeEntry === 'workspace'"
+            @mouseenter="openMenu('workspace')"
+            @keydown.enter.prevent="openMenu('workspace', true)"
+            @keydown.space.prevent="openMenu('workspace', true)"
+          >
+            我的
+          </RouterLink>
+        </nav>
       </div>
 
       <nav
@@ -134,7 +201,7 @@ onBeforeUnmount(() => {
 
     <MegaMenu
       :open="open"
-      :active-section="activeSection"
+      :active-section="activeEntry"
       @navigate="closeMenu"
     />
   </header>
@@ -165,7 +232,8 @@ onBeforeUnmount(() => {
 .site-header__left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .site-header__logo {
@@ -173,6 +241,64 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--prompt-text);
+  white-space: nowrap;
+}
+
+.site-header__primary {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* 小屏下收窄一级入口，保证三个入口铺开不溢出 */
+@media (max-width: 639px) {
+  .site-header__bar {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .site-header__left {
+    flex: 1 1 auto;
+  }
+
+  .site-nav {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.875rem;
+  }
+}
+
+.site-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: var(--prompt-radius-sm);
+  padding: 0.45rem 0.9rem;
+  font-size: 0.925rem;
+  font-weight: 500;
+  color: var(--prompt-text-muted);
+  white-space: nowrap;
+  transition: background-color var(--prompt-duration-fast) var(--prompt-ease-out),
+    color var(--prompt-duration-fast) var(--prompt-ease-out);
+}
+
+.site-nav:hover {
+  background-color: var(--prompt-surface-muted);
+  color: var(--prompt-text);
+}
+
+.site-nav--active {
+  background-color: var(--prompt-surface-muted);
+  color: var(--prompt-text);
+  font-weight: 600;
+}
+
+.site-nav--active::after {
+  content: '';
+  display: block;
+  height: 2px;
+  border-radius: 9999px;
+  background-color: var(--prompt-primary);
+  margin-top: 1px;
 }
 
 .site-header__quick {
@@ -191,37 +317,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.nav-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 9999px;
-  border: 1px solid var(--prompt-border);
-  background-color: var(--prompt-surface-muted);
-  padding: 0.4rem 0.9rem;
-  font-size: 0.875rem;
-  color: var(--prompt-text-muted);
-  transition: border-color var(--prompt-duration-fast) var(--prompt-ease-out),
-    color var(--prompt-duration-fast) var(--prompt-ease-out),
-    background-color var(--prompt-duration-fast) var(--prompt-ease-out);
-}
-
-.nav-trigger:hover {
-  border-color: var(--prompt-border-strong);
-  color: var(--prompt-text);
-}
-
-.nav-trigger--active {
-  border-color: transparent;
-  background-color: var(--prompt-primary);
-  color: var(--prompt-primary-contrast);
-}
-
-.nav-trigger__caret {
-  font-size: 0.7rem;
-  line-height: 1;
 }
 
 .header-link {
