@@ -33,3 +33,5 @@ Thumbs.db
 *.exe
 *.test
 coverage.out
+# Temporary files (root-level scratch area)
+temp/
