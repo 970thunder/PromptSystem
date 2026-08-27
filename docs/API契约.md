@@ -10,7 +10,8 @@
 - 认证：受保护接口使用 `Authorization: Bearer <token>`。
 - 分页：`page`（默认 1，`>=1`）、`pageSize`（默认 12，`1..100`）。非法值返回 `400`。
 - 请求体：单个 JSON 值，未知字段被拒绝，超限返回 `413 BODY_TOO_LARGE`。
-- 错误码示例：`AUTH_INVALID_CREDENTIALS`、`AUTH_TOKEN_EXPIRED`、`PROMPT_NOT_FOUND`、`INVALID_PAGE`、`INVALID_PAGE_SIZE`、`INVALID_JSON`、`ORIGIN_NOT_ALLOWED`、`INTERNAL_ERROR`。
+- 错误码示例：`AUTH_INVALID_CREDENTIALS`、`AUTH_TOKEN_MISSING`、`AUTH_TOKEN_INVALID`、`AUTH_TOKEN_EXPIRED`、`AUTH_TOKEN_REVOKED`、`AUTH_USER_DISABLED`、`PROMPT_NOT_FOUND`、`PROMPT_FORBIDDEN`、`COMMENT_NOT_FOUND`、`INVALID_REPORT_REASON`、`INVALID_PAGE`、`INVALID_PAGE_SIZE`、`INVALID_JSON`、`ORIGIN_NOT_ALLOWED`、`INVALID_UPLOAD_OWNERSHIP`、`INVALID_IMAGE_FORMAT`、`IMAGE_REQUIRED`、`IMAGE_TOO_LARGE`、`REQUEST_TOO_LARGE`、`INTERNAL_ERROR`。
+- 内部错误不直接暴露给客户端：`err.Error()` / SQL 细节不会出现在响应里，业务错误统一走稳定 `errorCode` + 展示用 `message`。
 
 ## 健康检查
 
@@ -38,13 +39,15 @@
 ### `GET /prompts`
 Prompt 列表。查询参数：`page`、`pageSize`、`categoryId`、`userId`、`sort`、`keyword`、`model`、`tag`。
 
+`sort` 使用 `latest`（默认）或 `popular`；`tag` 用于能力/主题标签筛选。前端历史链接中的 `tab=workflow`、`tab=agent` 仅作兼容输入，分别规范化为 `tag=流程`、`tag=智能体`，服务端无需处理 `tab`。
+
 响应：
 ```json
 { "code": 200, "message": "Success", "data": { "list": [ ... ], "total": 0, "page": 1, "pageSize": 12 } }
 ```
 
 ### `GET /prompts/search`
-搜索接口，参数与 `/prompts` 一致。
+搜索接口，参数与 `/prompts` 一致（包括 `page`、`pageSize`、`keyword`、`categoryId`、`model`、`tag` 和 `sort=latest|popular`）。
 
 ### `POST /prompts`（需登录）
 发布 Prompt。请求体：
@@ -62,8 +65,19 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 ### `DELETE /prompts/{id}`（需登录，本人）
 软删除 Prompt。返回 `200`。
 
-### `POST /prompts/{id}/like | /favorite | /view | /report`（需登录）
-互动操作。`like`/`favorite` 幂等；`view` 记录浏览；`report` 提交举报。
+### `POST /prompts/{id}/like | /favorite | /report`（需登录）
+互动操作。`like`/`favorite` 均**幂等**：同一用户对同一 Prompt 重复操作只生效一次，计数只加 1。响应返回 `{ prompt, applied }`，`applied=true` 表示本次是首次生效。
+
+### `DELETE /prompts/{id}/like | /favorite`（需登录）
+取消点赞/取消收藏。与 `POST` 对应，**幂等**并反转计数（同一事务内删除明细并递减 `prompts.likes/favorites`）。响应返回 `{ prompt, applied }`。
+
+### `GET /prompts/{id}/interaction`（需登录）
+返回当前用户对该 Prompt 的互动状态：`{ "liked": boolean, "favorited": boolean }`。前端据此渲染点赞/收藏按钮的选中态，不依赖反规范化计数猜测。Prompt 不存在或已软删除返回 `404 PROMPT_NOT_FOUND`。
+
+`report` 提交举报，`reason` 必须是受限枚举 `spam` / `abuse` / `nsfw` / `other` 之一，`detail` 最多 500 字（runes）。举报**幂等**：同一用户对同一目标只保留一条自动举报，重复提交不重复计数，响应返回 `{ report, applied }`。对已软删除的 Prompt 举报返回 `404 PROMPT_NOT_FOUND`；非法 `reason` 返回 `400 INVALID_REPORT_REASON`。
+
+### `POST /prompts/{id}/view`（可选登录）
+浏览计数接口，**匿名友好**（无需 Bearer 也可调用）。见下方「收藏/浏览/互动」隐私约定。
 
 ### `GET /prompts/{id}/comments`
 评论列表。支持 `sort`（`hot`/`newest`/`oldest`）。
@@ -73,6 +87,30 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 
 ### `GET /home/summary`
 首页聚合数据：已发布 Prompt 数、创作者数、热门标签/分类。实时计算（短期可缓存）。
+
+## 收藏/浏览/互动
+
+### 计数与明细一致性（B5-02）
+`likes`/`favorites`/`view_histories` 明细与 `prompts.likes/favorites/views` 反规范化计数**在同一事务内写入**：要么明细与计数同增、要么都回滚，杜绝「有明细无计数」或「有计数无明细」的半写。互动均为**幂等**：
+
+- `like`：`likes` 表 `(user_id, target_type, target_id)` 唯一约束保证重复动作只增一次计数。
+- `favorite`：同上，`favorites` 表唯一约束。
+- `view`（登录用户）：`view_histories` 的 `(user_id, prompt_id)` 唯一约束保证同一用户对同一 Prompt 只产生一条历史、计数只增一次。
+
+历史不一致可用迁移 `sql/migrations/0012_recalibrate_counters.sql` 一键重算（可重复执行、幂等）。
+
+### 浏览隐私与去重（B5-03）
+- **匿名浏览**：只增加 `prompts.views` 总浏览计数，**不写浏览历史**（无法归属到用户）。`POST /prompts/{id}/view` 无需登录即可调用。
+- **登录用户浏览**：写入/刷新 `view_histories`，**同一用户对同一 Prompt 只保留一行**，重复浏览只刷新 `viewed_at`（历史更新时间），不新建行、不重复计数；首次浏览才使 `views` 计数 +1。
+- 用户只能读取**自己的**历史（服务端以鉴权上下文为准）；软删除的 Prompt 永不出现在历史响应。
+- `views` 计数语义：匿名每次 +1，登录用户首次 +1（去重后）。因此 `views` 是「匿名独立浏览 + 登录去重后首次」的近似口径，重算迁移以 `view_histories` 为可重建基线（详见迁移头注释）。
+
+### 举报与审核状态闭环（B5-04）
+- `reason` 为受限枚举：`spam`、`abuse`、`nsfw`、`other`（代码内以类型化常量定义），非法值返回 `400 INVALID_REPORT_REASON`。
+- `detail` 上限 500 字（runes），超限拒绝。
+- 举报**幂等**：`reports` 表 `(user_id, target_type, target_id)` 唯一约束保证同一用户对同一目标只保留一条、重复提交不重复计数。
+- 对已软删除目标（Prompt/评论）举报返回 `404 PROMPT_NOT_FOUND` / `404 COMMENT_NOT_FOUND`。
+- 本轮不实现审核后台（Phase 3）；`reports.status` 保留 `pending/reviewed/rejected` 供未来审核流程使用。未来审核队列建议补充索引 `(target_type, target_id, status)` 与按 `status, created_at` 的取队列索引。
 
 ## 用户与认证
 
@@ -94,8 +132,11 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 ### `GET /user/info` / `PUT /user/info`（需登录）
 当前用户资料读取与更新。
 
-### `GET /user/favorites`、`/user/likes`、`/user/history`、`/user/drafts`（需登录）
-当前用户收藏/点赞/浏览历史/草稿列表。
+### `GET /user/favorites`、`/user/likes`、`/user/drafts`（需登录）
+当前用户收藏/点赞/草稿列表。
+
+### `GET /user/history`（需登录）
+当前用户浏览历史，**分页返回**（`page`/`pageSize`，同全局约定），响应为 `{ list, total, page, pageSize }`。只返回**本人**历史（用户 ID 取自鉴权上下文，不接受第三方 userId 参数），且**软删除（已下架）的 Prompt 不会出现**在结果中。新增/刷新浏览见下方隐私约定。
 
 ### `GET|POST|DELETE /users/{id}/follow`、`GET /users/{id}/follow-status`（需登录）
 关注/取关/关注状态。
@@ -114,10 +155,14 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 ### `POST /auth/exchange`
 用一次性 code 换取 JWT。code 60 秒过期、只允许使用一次。
 
+- 请求：`{ "code": "..." }`
+- 成功：`200`，返回 `{ code, message, data: { token, user } }`（与登录/注册同构）
+- 失败：`400 INVALID_EXCHANGE_CODE`（缺失/无效/已用过/过期）；code 对应的用户已禁用或会话版本不匹配时 `401 AUTH_TOKEN_REVOKED`
+
 ## 评论
 
 ### `POST /comments/{id}/like`、`POST /comments/{id}/report`（需登录）
-评论点赞/举报。
+评论点赞/举报。`like` 幂等（同一用户对同一评论只增一次计数）。`report` 的 `reason` 同为受限枚举（`spam`/`abuse`/`nsfw`/`other`）、`detail` ≤ 500 字，且幂等（唯一约束去重）；对不存在的评论返回 `404 COMMENT_NOT_FOUND`。
 
 ## 上传
 
