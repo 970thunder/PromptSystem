@@ -83,6 +83,26 @@ Docker services:
 - MySQL: `localhost:3306`
 - Redis: `localhost:6379`
 
+## One-Click Development Startup
+
+Use the bundled launcher to avoid port conflicts with other local apps. Ports are fixed in the `28301-28399` range:
+
+| Service   | Port  |
+|-----------|-------|
+| Frontend  | 28301 |
+| Backend   | 28302 |
+| MySQL     | 28303 |
+| Redis     | 28304 |
+
+```bash
+# Windows: double-click start-dev.bat, or from Git Bash:
+bash scripts/start-dev.sh          # start everything (MySQL/Redis via Docker Compose)
+bash scripts/start-dev.sh --no-db  # start without MySQL/Redis (backend memory fallback)
+bash scripts/start-dev.sh stop     # stop everything (containers down, data volumes kept)
+```
+
+The launcher refuses to start if any fixed port is already in use, and never silently picks another port. Logs are written to `logs/frontend.log` and `logs/backend.log`; stop with `stop-dev.bat` on Windows.
+
 ## Development Order
 
 All new frontend redesign work must follow [`docs/前端重设计开发执行手册.md`](docs/前端重设计开发执行手册.md). It is the current execution baseline: update each checkbox only with an evidence record, commit one task at a time, and push the task branch.
