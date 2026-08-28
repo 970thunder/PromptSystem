@@ -42,7 +42,7 @@ onMounted(() => {
   <AppShell>
     <div class="home-page">
       <div class="home-container">
-        <!-- 首屏：产品式入口 -->
+        <!-- 首屏大屏：用全幅区块 + 分割线构图，无圆角边框包裹 -->
         <section
           class="home-hero"
           aria-labelledby="home-hero-title"
@@ -75,6 +75,11 @@ onMounted(() => {
             </button>
           </div>
         </section>
+
+        <hr
+          class="home-divider"
+          aria-hidden="true"
+        >
 
         <!-- 大屏展示图：今日精选 -->
         <section
@@ -175,6 +180,10 @@ onMounted(() => {
         </section>
 
         <!-- 真实发现入口：分类与标签 -->
+        <hr
+          class="home-divider"
+          aria-hidden="true"
+        >
         <section
           v-if="promptStore.categories.length > 0"
           class="home-discover"
@@ -226,10 +235,9 @@ onMounted(() => {
   @apply view-container--home;
 }
 
-/* 首屏：单一视觉焦点，充足留白 */
+/* 首屏大屏：全幅区块，无圆角边框，无 background 包裹；下方用分割线分隔 */
 .home-hero {
-  @apply flex flex-col items-start rounded-[28px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-6 py-12 sm:px-10 sm:py-16;
-  box-shadow: var(--prompt-shadow-1);
+  @apply relative w-full py-16 sm:py-24;
 }
 
 .home-hero__eyebrow {
@@ -237,15 +245,15 @@ onMounted(() => {
 }
 
 .home-hero__title {
-  @apply mt-3 text-4xl font-semibold leading-tight sm:text-5xl text-[var(--prompt-text)];
+  @apply mt-4 text-4xl font-semibold leading-tight sm:text-6xl text-[var(--prompt-text)];
 }
 
 .home-hero__desc {
-  @apply mt-4 max-w-xl text-base leading-7 text-[var(--prompt-text-muted)];
+  @apply mt-6 max-w-2xl text-base leading-7 text-[var(--prompt-text-muted)] sm:text-lg;
 }
 
 .home-hero__actions {
-  @apply mt-7 flex flex-wrap items-center gap-4;
+  @apply mt-10 flex flex-wrap items-center gap-4;
 }
 
 .home-hero__primary,
@@ -273,13 +281,18 @@ onMounted(() => {
   color: var(--prompt-text);
 }
 
+/* 分割线：贯穿页面宽度的横向分隔 */
+.home-divider {
+  @apply my-12 border-0 border-t border-[var(--prompt-border)];
+}
+
 /* 大屏展示图 */
 .home-showcase {
-  @apply mt-10;
+  @apply mt-2;
 }
 
 .home-showcase__head {
-  @apply mb-4 flex items-end justify-between gap-4;
+  @apply mb-6 flex items-end justify-between gap-4;
 }
 
 .home-showcase__title {
@@ -287,20 +300,19 @@ onMounted(() => {
 }
 
 .home-showcase__more {
-  @apply shrink-0 rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-4 py-2 text-sm text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
+  @apply shrink-0 text-sm text-[var(--prompt-text-muted)] underline-offset-4 hover:text-[var(--prompt-text)] hover:underline;
 }
 
 .home-showcase__state {
-  @apply min-h-[360px] rounded-[24px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)];
+  @apply min-h-[360px];
 }
 
 .home-showcase__card {
-  @apply relative block overflow-hidden rounded-[24px] border border-[var(--prompt-border)];
-  min-height: 420px;
+  @apply relative block overflow-hidden;
+  min-height: 460px;
   background-color: var(--prompt-surface-muted);
   background-size: cover;
   background-position: center;
-  box-shadow: var(--prompt-shadow-1);
 }
 
 .home-showcase__fallback {
@@ -353,29 +365,28 @@ onMounted(() => {
 }
 
 .home-showcase__mini {
-  @apply rounded-[16px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)] px-4 py-6 text-sm text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
+  @apply px-4 py-6 text-sm text-[var(--prompt-text-muted)] transition hover:text-[var(--prompt-text)];
 }
 
 /* 发现入口 */
 .home-discover {
-  @apply mt-8 grid gap-3;
+  @apply mt-2 grid gap-3;
 }
 
 .home-discover__row {
-  @apply flex flex-wrap gap-2;
+  @apply flex flex-wrap gap-x-6 gap-y-2;
 }
 
 .home-chip {
-  @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3.5 py-2 text-sm text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
+  @apply text-sm text-[var(--prompt-text-muted)] transition hover:text-[var(--prompt-text)];
 }
 
 .home-chip--tag {
-  border-color: transparent;
-  background-color: var(--prompt-surface);
+  @apply text-[var(--prompt-text-faint)];
 }
 
 .home-demo {
-  @apply mt-8 rounded-[16px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-4 py-3 text-sm text-[var(--prompt-text-muted)];
+  @apply mt-8 text-sm text-[var(--prompt-text-faint)];
 }
 
 @media (prefers-reduced-motion: reduce) {

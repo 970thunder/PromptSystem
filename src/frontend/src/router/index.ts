@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Search',
     component: () => import('@/views/SearchView.vue'),
     meta: { title: '搜索' }
+  },
+  {
+    path: '/community',
+    name: 'Community',
+    component: () => import('@/views/CommunityView.vue'),
+    meta: { title: '社区' }
   }
 ]
 

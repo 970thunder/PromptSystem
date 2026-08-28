@@ -8,7 +8,7 @@ import MegaMenu from './MegaMenu.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import { useUserStore } from '@/stores/user'
 
-type NavEntry = 'discover' | 'community' | 'workspace'
+type NavEntry = 'home' | 'discover' | 'community' | 'workspace'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -30,6 +30,12 @@ const openMenu = (entry: NavEntry, focus = false) => {
     lastFocused.value = entry
   }
   document.documentElement.dataset.menuOpen = 'true'
+}
+
+// 鼠标进入顶栏任意位置即展开当前上下文对应的超级菜单；之后在入口间
+// 移动时切换 activeEntry，离开顶栏（包含菜单）后再关闭。
+const expandFromEntry = (entry: NavEntry) => {
+  openMenu(entry)
 }
 
 const scheduleClose = () => {
@@ -69,16 +75,18 @@ const onKeydown = (event: KeyboardEvent) => {
 // 当前路由对应的一级入口，用于高亮顶栏项与超菜单分组。
 const currentEntry = computed<NavEntry | null>(() => {
   const path = route.path
-  if (path === '/' || path.startsWith('/search') || path.startsWith('/prompt')) {
+  if (path === '/' || path.startsWith('/prompt')) {
+    return null
+  }
+  if (path === '/community' || path === '/publish') {
+    return 'community'
+  }
+  if (path.startsWith('/search')) {
     const tag = String(route.query.tag ?? '')
-    const sort = String(route.query.sort ?? '')
-    if (tag === '流程' || tag === '智能体' || sort === 'popular') {
+    if (tag === '流程' || tag === '智能体') {
       return 'community'
     }
     return 'discover'
-  }
-  if (path.startsWith('/publish')) {
-    return 'community'
   }
   if (path.startsWith('/profile')) {
     return 'workspace'
@@ -102,7 +110,7 @@ onBeforeUnmount(() => {
   <header
     class="site-header"
     :class="{ 'site-header--menu-open': open }"
-    @mouseenter="cancelClose"
+    @mouseenter="expandFromEntry(currentEntry ?? 'discover')"
     @mouseleave="scheduleClose"
   >
     <div class="site-header__bar">
@@ -120,6 +128,19 @@ onBeforeUnmount(() => {
           aria-label="主导航"
         >
           <RouterLink
+            to="/"
+            data-nav-entry="home"
+            class="site-nav"
+            :class="{ 'site-nav--active': route.path === '/' || activeEntry === 'home' }"
+            aria-haspopup="true"
+            :aria-expanded="activeEntry === 'home'"
+            @mouseenter="openMenu('home')"
+            @keydown.enter.prevent="openMenu('home', true)"
+            @keydown.space.prevent="openMenu('home', true)"
+          >
+            首页
+          </RouterLink>
+          <RouterLink
             to="/search"
             data-nav-entry="discover"
             class="site-nav"
@@ -133,7 +154,7 @@ onBeforeUnmount(() => {
             发现
           </RouterLink>
           <RouterLink
-            to="/search?sort=popular"
+            to="/community"
             data-nav-entry="community"
             class="site-nav"
             :class="{ 'site-nav--active': currentEntry === 'community' || activeEntry === 'community' }"
@@ -160,6 +181,8 @@ onBeforeUnmount(() => {
           </RouterLink>
         </nav>
       </div>
+
+      <div class="site-header__spacer" />
 
       <nav
         class="site-header__quick"
@@ -224,9 +247,14 @@ onBeforeUnmount(() => {
 .site-header__bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 1rem;
   padding: 0.75rem 1rem;
+}
+
+.site-header__spacer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .site-header__left {

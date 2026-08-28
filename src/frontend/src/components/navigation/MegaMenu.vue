@@ -5,7 +5,7 @@ import { watch } from 'vue'
 
 const props = defineProps<{
   open: boolean
-  activeSection?: 'discover' | 'community' | 'workspace' | null
+  activeSection?: 'home' | 'discover' | 'community' | 'workspace' | null
 }>()
 
 const emit = defineEmits<{
@@ -15,7 +15,7 @@ const emit = defineEmits<{
 interface MegaItem {
   label: string
   to?: string
-  active?: 'discover' | 'community' | 'workspace' | null
+  active?: 'home' | 'discover' | 'community' | 'workspace' | null
   disabled?: boolean
 }
 

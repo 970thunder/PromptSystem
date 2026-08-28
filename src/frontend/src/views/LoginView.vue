@@ -12,8 +12,8 @@ const route = useRoute()
 const router = useRouter()
 
 const formValue = reactive({
-  email: 'astra@example.com',
-  password: 'PromptOS123!'
+  email: '',
+  password: ''
 })
 
 const handleSubmit = async () => {
@@ -40,7 +40,7 @@ const handleGitHubLogin = () => {
               登录后即可发布、收藏并管理你的 AI 提示词库
             </h1>
             <p class="auth-hero__desc">
-              当前版本已支持密码哈希、JWT 鉴权与受保护路由。演示账号已预填，便于快速体验完整流程。
+              登录后即可发布、收藏并管理你的 AI 提示词库。
             </p>
           </div>
 
@@ -110,10 +110,6 @@ const handleGitHubLogin = () => {
                 使用 GitHub 继续
               </NButton>
             </NForm>
-
-            <div class="auth-card__hint text-muted-sm">
-              演示账号：`astra@example.com` / `PromptOS123!`
-            </div>
 
             <div class="auth-card__actions">
               <RouterLink
