@@ -90,6 +90,16 @@ func (m *captchaManager) verify(email, code string) bool {
 	return true
 }
 
+func (m *captchaManager) discard(email string) {
+	normalized, ok := normalizeCaptchaEmail(email)
+	if !ok {
+		return
+	}
+	m.mu.Lock()
+	delete(m.entries, normalized)
+	m.mu.Unlock()
+}
+
 // issueRedis issues a captcha code stored in Redis with hash and TTL so that
 // verification survives restarts and works across backend processes.
 func (s *server) issueRedisCaptcha(ctx context.Context, email string) (string, time.Time, time.Duration, error) {
@@ -140,6 +150,18 @@ func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) boo
 	}
 	expected := captchaDigest(s.config.JWTSecret, normalized, strings.TrimSpace(code))
 	return hmac.Equal([]byte(stored), []byte(expected))
+}
+
+func (s *server) discardRedisCaptcha(ctx context.Context, email string) {
+	normalized, ok := normalizeCaptchaEmail(email)
+	if !ok {
+		return
+	}
+	if s.cache == nil {
+		s.captcha.discard(email)
+		return
+	}
+	_ = s.cache.Delete(ctx, "promptos:captcha:email:"+normalized)
 }
 
 func captchaDigest(secret, email, code string) string {

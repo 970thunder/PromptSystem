@@ -77,3 +77,11 @@
 - 当前 release：`/srv/releases/promptsystem/20260830-b584585`；上一回滚版本：`20260829-a9ba2cf`。
 - 备份：`/srv/backups/promptsystem/20260830-b584585/`，MySQL 与 uploads 均通过 SHA-256、gzip/tar 完整性校验。
 - 发布验证：`/api/v1/health/ready` 返回 `200`、`storageMode=mysql`、`degraded=false`；HTTPS 首页、详情、评论分页和匿名浏览正常。
+
+### 生产演示数据处置记录（2026-08-30）
+
+- 处置前备份：`/srv/backups/promptsystem/20260830-demo-removal/`。
+- 校验：`mysql.sql.gz` SHA-256 `cb3ecee7a1d10e7a407d7f246c4419bb43c7b71a1eb5ee2cfe86e7a75bb23d48`；`uploads.tar.gz` SHA-256 `9a2609e8613823970486698dbca7c9f8c3e07456dcac88d0749e1f403f8fd3ca`；`sha256sum -c`、`gzip -t`、`tar -tzf` 通过。
+- 用户 ID 1-6 已禁用、密码置空并递增 `session_version`；固定演示密码登录验证 HTTP 401。Prompt ID 101-106 已转移至无密码官方归属账号 `PromptOS Official`（ID 7）。
+- 数据库复核：1-6 为 `status=0,password_is_null=1,session_version=1`；ID 7 为 `status=1,password_is_null=1`；Prompt 101-106 为 `user_id=7,status=1`。
+- 该处置不等同于完整恢复演练；临时库/临时卷恢复仍是 P0-12 未完成项。

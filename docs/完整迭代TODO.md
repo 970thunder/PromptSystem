@@ -17,8 +17,8 @@
 
 - [x] **P0-01 正式生产环境**：生产设置 `APP_ENV=production`；开发、测试、生产判断集中到配置包。验收：生产不会返回 `devCode`，生产校验测试通过。
 - [x] **P0-02 禁止生产内存降级**：MySQL、迁移或生产初始化失败时启动失败，不接受会在重启后消失的写入。验收：线上应用账号 DDL 权限拒绝时 backend 反复启动失败且 ready 不可用；恢复迁移账号后 ready 200。
-- [ ] **P0-03 禁止生产演示账号 Seed**：生产只维护必要参考数据，不创建固定密码用户和演示 Prompt。验收：空生产库启动后无演示账号。
-- [ ] **P0-04 处置线上演示账号**：先备份，再禁用/重置已有固定密码账号，并明确 6 条 Prompt 的官方内容归属。验收：已知密码无法登录，数据处置有记录。
+- [x] **P0-03 禁止生产演示账号 Seed**：生产只维护必要参考数据，不创建固定密码用户和演示 Prompt。验收：空生产库启动后无演示账号。
+- [x] **P0-04 处置线上演示账号**：先备份，再禁用/重置已有固定密码账号，并明确 6 条 Prompt 的官方内容归属。验收：已知密码无法登录，数据处置有记录。
 - [x] **P0-05 公开用户隐私拆分**：公开用户 DTO 不含邮箱、OAuth 绑定和账户状态；本人 DTO 单独返回私有字段。验收：Prompt/评论/关注公开响应无邮箱。
 - [ ] **P0-06 验证码生产安全**：接入邮件发送；验证码不在生产响应/日志出现，Redis 只存哈希并原子消费。验收：发送、过期、重放、并发、限流测试通过。
 - [x] **P0-07 独立数据库账号**：应用不再以 MySQL root 运行，迁移与运行权限分离。验收：最小权限账号可正常运行，越权 DDL/跨库访问失败。
@@ -122,6 +122,8 @@
 ### 2026-08-30
 
 - `P0-01/P0-05/P0-07/P0-08/P0-10/P0-11`、`S-03`、`F-01/F-02/F-03/F-04`、`O-02/O-08/O-09`、`R-01/R-03`：代码见提交 `b584585`、`b78a8b9`、`ac0c406`；后端 `gofmt -w && go test ./... && go vet ./...` 通过；前端 `npm run lint:check`、`npm test -- --run`（6 files/8 tests）、`npm run build` 通过。线上 `/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`；详情、评论分页、匿名浏览返回正常；公网端口检查仅 80/443，PromptSystem 3092/5092 为 loopback，其他 Compose 项目未变。剩余风险：CI 尚未接入，P0-04 演示账号处置和邮件发送尚未完成。
+- `P0-03`：新增 `src/backend/internal/store/mysql_seed_test.go`，真实 MySQL 隔离库执行 `SeedMySQLData(db, false)`，并断言 categories>0、users=0、prompts=0；`go test ./internal/store -run TestProductionSeedDoesNotCreateDemoData -count=1` 通过。生产启动路径已使用 `!cfg.IsProduction()` 关闭演示数据。
+- `P0-04`：处置前备份目录 `/srv/backups/promptsystem/20260830-demo-removal/`；`mysql.sql.gz` SHA-256=`cb3ecee7a1d10e7a407d7f246c4419bb43c7b71a1eb5ee2cfe86e7a75bb23d48`，`uploads.tar.gz` SHA-256=`9a2609e8613823970486698dbca7c9f8c3e07456dcac88d0749e1f403f8fd3ca`；服务器执行 `sha256sum -c`、`gzip -t`、`tar -tzf` 均通过。用户 ID 1-6（Astra Lab、Nora Chen、Delta Forge、Mica Studio、Ops Lantern、North Queue）已禁用、密码置 NULL、session_version+1；Prompt ID 101-106 已转移至无密码官方账号 ID 7（PromptOS Official）。已知演示密码 `PromptOS123!` 登录返回 HTTP 401；数据库复核 `status=0,password_is_null=1,session_version=1`（1-6），ID 7 `status=1,password_is_null=1`，Prompt 101-106 `user_id=7,status=1`。
 - `P0-12` 部分证据：服务器 `/srv/backups/promptsystem/20260830-b584585/` 已生成 MySQL 与 uploads 备份，SHA-256 为 `56781b53f48b2e35e285a1ddac64f9b8662ed31c662186c3890ce257760dc220`、`21dc63cb20aa368cc6a35086ccf4f5652b7bd6359abe85d56cbd7948814cdbf4`；`sha256sum -c`、`gzip -t`、`tar -tzf` 均通过。尚未完成临时恢复演练，因此保持未勾选。
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
 - `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。

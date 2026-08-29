@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +21,17 @@ import (
 type fakeCache struct {
 	counters map[string]int64
 	store    map[string]string
+}
+
+type fakeEmailSender struct {
+	err  error
+	to   string
+	body string
+}
+
+func (f *fakeEmailSender) Send(_ context.Context, to, _ string, body string) error {
+	f.to, f.body = to, body
+	return f.err
 }
 
 func newFakeCache() *fakeCache {
@@ -237,6 +249,7 @@ func TestResetPasswordDoesNotRevealRegistration(t *testing.T) {
 func TestProductionCaptchaResponseDoesNotExposeCode(t *testing.T) {
 	s, _ := newTestServer(t)
 	s.config.AppEnv = "production"
+	s.emailSender = &fakeEmailSender{}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/captcha", strings.NewReader(`{"email":"safe@example.com"}`))
 	req.Header.Set("X-Forwarded-For", "10.0.0.50")
 	rec := httptest.NewRecorder()
@@ -246,6 +259,22 @@ func TestProductionCaptchaResponseDoesNotExposeCode(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "devCode") {
 		t.Fatalf("production captcha response leaked devCode: %s", rec.Body.String())
+	}
+}
+
+func TestProductionCaptchaSendFailureDeletesPendingCode(t *testing.T) {
+	s, fc := newTestServer(t)
+	s.config.AppEnv = "production"
+	s.emailSender = &fakeEmailSender{err: errors.New("smtp unavailable")}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/captcha", strings.NewReader(`{"email":"cleanup@example.com"}`))
+	req.Header.Set("X-Forwarded-For", "10.0.0.51")
+	rec := httptest.NewRecorder()
+	s.handleCaptcha(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := fc.store["promptos:captcha:email:cleanup@example.com"]; ok {
+		t.Fatal("captcha must be deleted after SMTP send failure")
 	}
 }
 

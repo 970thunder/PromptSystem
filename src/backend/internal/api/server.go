@@ -29,6 +29,7 @@ type server struct {
 	commentStore store.CommentManager
 	uploadStore  store.UploadManager
 	imageStorage storage.ImageStorage
+	emailSender  emailSender
 	storageMode  string
 }
 
@@ -46,6 +47,7 @@ type serverDeps struct {
 	commentStore store.CommentManager
 	uploadStore  store.UploadManager
 	imageStorage storage.ImageStorage
+	emailSender  emailSender
 	storageMode  string
 }
 
@@ -118,6 +120,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		commentStore: commentStore,
 		uploadStore:  uploadStore,
 		imageStorage: imageStorage,
+		emailSender:  newSMTPEmailSender(cfg),
 		storageMode:  storageMode,
 	}), nil
 }
@@ -136,6 +139,7 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		commentStore: deps.commentStore,
 		uploadStore:  deps.uploadStore,
 		imageStorage: deps.imageStorage,
+		emailSender:  deps.emailSender,
 		storageMode:  deps.storageMode,
 	}
 	mux := http.NewServeMux()

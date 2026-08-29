@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -103,6 +104,18 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
 		writeJSON(w, http.StatusTooManyRequests, apiResponse[any]{Code: 429, Message: "Captcha was sent too frequently"})
 		return
+	}
+	if s.config.IsProduction() {
+		if s.emailSender == nil {
+			s.discardRedisCaptcha(r.Context(), payload.Email)
+			writeJSON(w, http.StatusServiceUnavailable, apiResponse[any]{Code: 503, Message: "Email service is not configured", ErrorCode: "EMAIL_NOT_CONFIGURED"})
+			return
+		}
+		if err := s.emailSender.Send(r.Context(), strings.TrimSpace(payload.Email), "PromptOS verification code", fmt.Sprintf("Your PromptOS verification code is %s. It expires in 10 minutes.", code)); err != nil {
+			s.discardRedisCaptcha(r.Context(), payload.Email)
+			writeJSON(w, http.StatusBadGateway, apiResponse[any]{Code: 502, Message: "Failed to send captcha email", ErrorCode: "EMAIL_SEND_FAILED"})
+			return
+		}
 	}
 
 	response := captchaResponse{

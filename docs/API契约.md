@@ -118,7 +118,7 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 注册。请求体：`{ "username", "email", "password", "captcha" }`。
 
 ### `POST /user/captcha`
-发送验证码。请求体：`{ "email" }`。非生产返回 `devCode`；生产不返回。
+发送验证码。请求体：`{ "email" }`。非生产返回 `devCode`；生产不返回，必须配置 SMTP。SMTP 不可用时返回 `502`（`EMAIL_SEND_FAILED`），发送失败不会保留验证码。
 
 ### `POST /user/login`
 登录。请求体：`{ "email", "password" }`。失败统一 `401 AUTH_INVALID_CREDENTIALS`（不存在或密码错误不区分）。
