@@ -30,6 +30,8 @@ type Config struct {
 	MySQLUser           string
 	MySQLPass           string
 	MySQLDB             string
+	MySQLMigrationUser  string
+	MySQLMigrationPass  string
 	RedisHost           string
 	RedisPort           string
 	RedisPass           string
@@ -69,6 +71,8 @@ func Load() Config {
 		MySQLUser:           getEnv("MYSQL_USER", "root"),
 		MySQLPass:           getEnv("MYSQL_PASSWORD", "root"),
 		MySQLDB:             getEnv("MYSQL_DATABASE", "promptos"),
+		MySQLMigrationUser:  getEnv("MYSQL_MIGRATION_USER", ""),
+		MySQLMigrationPass:  getEnv("MYSQL_MIGRATION_PASSWORD", ""),
 		RedisHost:           getEnv("REDIS_HOST", "localhost"),
 		RedisPort:           getEnv("REDIS_PORT", "6379"),
 		RedisPass:           getEnv("REDIS_PASSWORD", ""),
@@ -105,6 +109,15 @@ func (c Config) Validate() error {
 	}
 	if prod && strings.EqualFold(c.MySQLPass, "root") {
 		return errors.New("MYSQL_PASSWORD must not be the default root password in non-development environments")
+	}
+	if prod && strings.EqualFold(strings.TrimSpace(c.MySQLUser), "root") {
+		return errors.New("MYSQL_USER must be a dedicated application user in production")
+	}
+	if prod && (strings.TrimSpace(c.MySQLMigrationUser) == "" || strings.TrimSpace(c.MySQLMigrationPass) == "") {
+		return errors.New("MYSQL_MIGRATION_USER and MYSQL_MIGRATION_PASSWORD must be configured in production")
+	}
+	if prod && strings.EqualFold(strings.TrimSpace(c.MySQLMigrationUser), strings.TrimSpace(c.MySQLUser)) {
+		return errors.New("MYSQL_MIGRATION_USER must differ from MYSQL_USER in production")
 	}
 	if prod && c.AllowedOrigin == "*" {
 		return errors.New("ALLOWED_ORIGIN must be an explicit origin list (not *) in non-development environments")

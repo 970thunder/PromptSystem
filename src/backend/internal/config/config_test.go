@@ -98,13 +98,16 @@ func TestValidateRejectsMissingOAuthInProduction(t *testing.T) {
 
 func TestValidateAllowsDisabledOAuthInProduction(t *testing.T) {
 	cfg := Config{
-		AppEnv:         "production",
-		Port:           "8080",
-		JWTSecret:      "super-strong-secret",
-		MySQLPass:      "strong-password",
-		AllowedOrigin:  "https://example.com",
-		JWTExpireHours: 72,
-		UploadMaxMB:    10,
+		AppEnv:             "production",
+		Port:               "8080",
+		JWTSecret:          "super-strong-secret",
+		MySQLPass:          "strong-password",
+		MySQLUser:          "promptos_app",
+		MySQLMigrationUser: "promptos_migrator",
+		MySQLMigrationPass: "migration-password",
+		AllowedOrigin:      "https://example.com",
+		JWTExpireHours:     72,
+		UploadMaxMB:        10,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("disabled OAuth should validate: %v", err)

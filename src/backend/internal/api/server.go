@@ -61,26 +61,40 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 	uploadStore := store.UploadManager(store.NewMemoryUploadStore())
 	storageMode := "memory"
 
-	db, err := database.OpenMySQL(cfg)
+	migrationCfg := cfg
+	if cfg.MySQLMigrationUser != "" {
+		migrationCfg.MySQLUser = cfg.MySQLMigrationUser
+		migrationCfg.MySQLPass = cfg.MySQLMigrationPass
+	}
+	migrationDB, err := database.OpenMySQL(migrationCfg)
 	if err == nil {
-		if migrateErr := database.RunMigrations(db, ""); migrateErr != nil {
-			_ = db.Close()
+		if migrateErr := database.RunMigrations(migrationDB, ""); migrateErr != nil {
+			_ = migrationDB.Close()
 			if cfg.IsProduction() {
 				return nil, fmt.Errorf("run MySQL migrations: %w", migrateErr)
 			}
 			log.Printf("failed to run MySQL migrations, using development memory store: %v", migrateErr)
-		} else if seedErr := store.SeedMySQLData(db, !cfg.IsProduction()); seedErr == nil {
-			userStore = store.NewMySQLUserStore(db)
-			promptStore = store.NewMySQLPromptStore(db)
-			if s, ok := promptStore.(interface{ SetAllowedImageDomains([]string) }); ok {
-				s.SetAllowedImageDomains(cfg.AllowedImageDomains)
+		} else if seedErr := store.SeedMySQLData(migrationDB, !cfg.IsProduction()); seedErr == nil {
+			_ = migrationDB.Close()
+			db, runtimeErr := database.OpenMySQL(cfg)
+			if runtimeErr != nil {
+				if cfg.IsProduction() {
+					return nil, fmt.Errorf("connect to MySQL as runtime user: %w", runtimeErr)
+				}
+				log.Printf("failed to connect to MySQL as runtime user, using development memory store: %v", runtimeErr)
+			} else {
+				userStore = store.NewMySQLUserStore(db)
+				promptStore = store.NewMySQLPromptStore(db)
+				if s, ok := promptStore.(interface{ SetAllowedImageDomains([]string) }); ok {
+					s.SetAllowedImageDomains(cfg.AllowedImageDomains)
+				}
+				commentStore = store.NewMySQLCommentStore(db)
+				uploadStore = store.NewMySQLUploadStore(db)
+				storageMode = "mysql"
+				log.Printf("using MySQL-backed stores at %s:%s/%s", cfg.MySQLHost, cfg.MySQLPort, cfg.MySQLDB)
 			}
-			commentStore = store.NewMySQLCommentStore(db)
-			uploadStore = store.NewMySQLUploadStore(db)
-			storageMode = "mysql"
-			log.Printf("using MySQL-backed user and prompt stores at %s:%s/%s", cfg.MySQLHost, cfg.MySQLPort, cfg.MySQLDB)
 		} else {
-			_ = db.Close()
+			_ = migrationDB.Close()
 			if cfg.IsProduction() {
 				return nil, fmt.Errorf("initialize MySQL reference data: %w", seedErr)
 			}
@@ -88,7 +102,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		}
 	} else {
 		if cfg.IsProduction() {
-			return nil, fmt.Errorf("connect to MySQL: %w", err)
+			return nil, fmt.Errorf("connect to MySQL as migration user: %w", err)
 		}
 		log.Printf("failed to connect to MySQL, using development memory store: %v", err)
 	}
