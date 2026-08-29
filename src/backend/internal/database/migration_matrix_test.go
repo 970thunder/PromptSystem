@@ -88,7 +88,7 @@ func TestMigrationMatrix(t *testing.T) {
 
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
-			admin, err := sql.Open("mysql", baseDSN)
+			admin, err := sql.Open("mysql", baseDSN+"mysql")
 			if err != nil {
 				t.Fatalf("open admin conn: %v", err)
 			}
@@ -104,7 +104,7 @@ func TestMigrationMatrix(t *testing.T) {
 				_, _ = admin.Exec("DROP DATABASE IF EXISTS " + sc.db)
 			}()
 
-			db, err := sql.Open("mysql", baseDSN+"/"+sc.db+"?parseTime=true&multiStatements=true")
+			db, err := sql.Open("mysql", baseDSN+sc.db+"?parseTime=true&multiStatements=true")
 			if err != nil {
 				t.Fatalf("open test db: %v", err)
 			}
@@ -134,7 +134,9 @@ func splitDSNDatabase(dsn string) (base string, db string, err error) {
 	if idx < 0 {
 		return "", "", fmt.Errorf("DSN %q has no database separator", dsn)
 	}
-	base = dsn[:idx]
+	// Keep the slash so the returned base remains a valid DSN prefix for both
+	// the admin connection and each temporary database.
+	base = dsn[:idx+1]
 	rest := dsn[idx+1:]
 	rest = strings.SplitN(rest, "?", 2)[0]
 	if rest == "" {
