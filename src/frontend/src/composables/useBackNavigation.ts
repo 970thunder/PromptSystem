@@ -4,7 +4,7 @@ import { useNavigationHistory } from '@/navigation/navigationHistory'
 const DEFAULT_FALLBACK = '/'
 
 export const isSafeInternalPath = (value: unknown, fallback = DEFAULT_FALLBACK) => {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) {
+  if (typeof value !== 'string' || value.length > 2048 || !value.startsWith('/') || value.startsWith('//')) {
     return fallback
   }
 
@@ -15,7 +15,7 @@ export const isSafeInternalPath = (value: unknown, fallback = DEFAULT_FALLBACK) 
     return fallback
   }
 
-  if (!path.startsWith('/') || path.startsWith('//')) {
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || hasControlCharacter(path)) {
     return fallback
   }
 
@@ -25,6 +25,14 @@ export const isSafeInternalPath = (value: unknown, fallback = DEFAULT_FALLBACK) 
   }
 
   return path
+}
+
+const hasControlCharacter = (value: string) => {
+  for (const character of value) {
+    const code = character.charCodeAt(0)
+    if (code <= 0x1f || code === 0x7f) return true
+  }
+  return false
 }
 
 export const useBackNavigation = (fallback = DEFAULT_FALLBACK) => {

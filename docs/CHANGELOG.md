@@ -32,6 +32,7 @@
 - 线上演示账号处置记录：备份 `/srv/backups/promptsystem/20260830-demo-removal/`，固定密码登录已返回 401，6 条 Prompt 归属 `PromptOS Official`；本次仅更新数据与文档，尚未发布新的应用镜像
 - 完成首次恢复演练：MySQL 与 uploads 备份在临时资源恢复，上一版本 ready 通过（RTO 约 50 秒）；临时容器、卷、网络和目录已清理
 - 发布检查清单已实化为当前生产参数：域名、SSH、Compose 项目、loopback 端口、备份、迁移和回滚命令均已固定记录
+- 收紧前端站内 redirect 校验，拒绝编码协议相对路径、反斜杠和控制字符
 
 ## [v0.2.0] - 2026-08-30
 
