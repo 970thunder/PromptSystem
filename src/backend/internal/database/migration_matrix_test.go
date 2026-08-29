@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -172,6 +173,9 @@ func runSingleMigration(db *sql.DB, dir, name string) error {
 func readFileOrFail(t *testing.T, path string) string {
 	t.Helper()
 	body, err := os.ReadFile(path)
+	if err != nil && path == "sql/schema.sql" {
+		body, err = os.ReadFile(filepath.Join("..", "..", "sql", "schema.sql"))
+	}
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

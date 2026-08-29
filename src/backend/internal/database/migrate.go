@@ -85,6 +85,7 @@ func defaultMigrationsDir() string {
 		"sql/migrations",
 		"/app/sql/migrations",
 		filepath.Join("..", "sql", "migrations"),
+		filepath.Join("..", "..", "sql", "migrations"),
 	}
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {

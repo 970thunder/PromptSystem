@@ -61,6 +61,12 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: initialize integration schema
+        shell: bash
+        run: |
+          sed 's/CREATE DATABASE IF NOT EXISTS promptos[^;]*;//; s/USE promptos;/USE promptos_test;/' sql/schema.sql \
+            | mysql -h 127.0.0.1 -uroot -proot
+
       - name: go test -race
         env:
           PROMPTOS_TEST_MYSQL_DSN: root:root@tcp(localhost:3306)/promptos_test?parseTime=true&multiStatements=true
