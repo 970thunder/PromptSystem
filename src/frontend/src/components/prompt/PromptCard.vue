@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Prompt } from '@/types'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
+import { fallbackCoverUrl } from '@/utils/coverFallback'
 
 type PromptCardVariant = 'gallery' | 'result' | 'compact'
 
@@ -25,14 +26,6 @@ defineSlots<{
 }>()
 
 const IMAGE_ASPECT = '4 / 3'
-const FALLBACK_COVER_URLS = [
-  'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'
-]
 
 const formatCount = (value: number) => {
   if (value >= 1000) {
@@ -45,7 +38,7 @@ const coverUrl = computed(() => {
   if (isDisplayableCover(props.prompt.cover)) {
     return resolveMediaUrl(props.prompt.cover)
   }
-  return FALLBACK_COVER_URLS[props.index % FALLBACK_COVER_URLS.length]
+  return fallbackCoverUrl(props.prompt.id)
 })
 
 const imageFailed = ref(false)
@@ -57,7 +50,7 @@ const imageFailed = ref(false)
     :class="`prompt-card--${variant}`"
   >
     <RouterLink
-      :to="target ?? `/prompt/${prompt.id}`"
+      :to="target || `/prompt/${prompt.id}`"
       class="prompt-card__link"
       :aria-label="`查看提示词：${prompt.title}`"
     >
@@ -107,9 +100,9 @@ const imageFailed = ref(false)
         <div class="prompt-card__footer">
           <span
             class="prompt-card__author"
-            :title="prompt.user.username"
+            :title="prompt.user?.username || '作者'"
           >
-            {{ prompt.user.username }}
+            {{ prompt.user?.username || '作者' }}
           </span>
           <div class="prompt-card__stats">
             <span

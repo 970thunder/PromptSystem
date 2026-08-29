@@ -31,6 +31,11 @@ FRONTEND_LOG="$LOG_DIR/frontend.log"
 BACKEND_LOG="$LOG_DIR/backend.log"
 FRONTEND_PID="$PID_DIR/frontend.pid"
 BACKEND_PID="$PID_DIR/backend.pid"
+LOG_TAIL_PID=""
+COMPOSE_STARTED=0
+STOP_REQUESTED=0
+BACKEND_STARTED=0
+FRONTEND_STARTED=0
 
 mkdir -p "$LOG_DIR" "$PID_DIR" "$UPLOAD_DIR" 2>/dev/null || true
 
@@ -67,6 +72,20 @@ check_port() {
     exit 1
   fi
   log_ok "端口 $port（$name）可用"
+}
+
+container_running() {
+  local container="$1"
+  [[ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" == "true" ]]
+}
+
+check_db_port() {
+  local port="$1" name="$2" container="$3"
+  if container_running "$container"; then
+    log_ok "端口 $port（$name）已由 PromptOS 容器提供"
+    return 0
+  fi
+  check_port "$port" "$name"
 }
 
 is_running() { [[ -f "$1" ]] && kill -0 "$(cat "$1" 2>/dev/null)" 2>/dev/null; }
@@ -120,20 +139,36 @@ wait_ready() {
 }
 
 # ============================================================================
-# stop：停止全部服务
+# stop/cleanup：停止全部服务
 # ============================================================================
+cleanup_services() {
+  if [[ -n "$LOG_TAIL_PID" ]] && kill -0 "$LOG_TAIL_PID" 2>/dev/null; then
+    kill "$LOG_TAIL_PID" 2>/dev/null || true
+  fi
+
+  if [[ "$FRONTEND_STARTED" == "1" || "$STOP_REQUESTED" == "1" ]]; then
+    kill_pid_file "$FRONTEND_PID" "前端 (28301)"
+    kill_port_listeners "$FRONTEND_PORT" "前端 (28301)"
+  fi
+  if [[ "$BACKEND_STARTED" == "1" || "$STOP_REQUESTED" == "1" ]]; then
+    kill_pid_file "$BACKEND_PID"  "后端 (28302)"
+    kill_port_listeners "$BACKEND_PORT" "后端 (28302)"
+  fi
+
+  if [[ "$COMPOSE_STARTED" == "1" || "$STOP_REQUESTED" == "1" ]] && \
+    docker compose version >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    (cd "$ROOT_DIR" && docker compose down 2>/dev/null || true)
+  elif [[ "$STOP_REQUESTED" == "1" ]]; then
+    log_warn "Docker 引擎不可用，跳过容器 down（数据卷保留）"
+  fi
+}
+
 stop_all() {
   log_info "停止 PromptOS 全部服务..."
-  kill_pid_file "$FRONTEND_PID" "前端 (28301)"
-  kill_pid_file "$BACKEND_PID"  "后端 (28302)"
-  kill_port_listeners "$FRONTEND_PORT" "前端 (28301)"
-  kill_port_listeners "$BACKEND_PORT"  "后端 (28302)"
-
-  if docker compose version >/dev/null 2>&1; then
-    (cd "$ROOT_DIR" && docker compose down 2>/dev/null || true)
-  fi
+  STOP_REQUESTED=1
+  cleanup_services
   log_ok "已停止（MySQL/Redis 容器已 down；数据卷保留）"
-  exit 0
+  return 0
 }
 
 # ============================================================================
@@ -141,6 +176,7 @@ stop_all() {
 # ============================================================================
 if [[ "${1:-}" == "stop" ]]; then
   stop_all
+  exit 0
 fi
 
 if [[ "${1:-}" == "--no-db" ]]; then
@@ -148,6 +184,9 @@ if [[ "${1:-}" == "--no-db" ]]; then
 else
   SKIP_DB=0
 fi
+
+# 启动窗口被 Ctrl+C、终端关闭或脚本异常终止时，统一清理所有子进程。
+trap cleanup_services EXIT INT TERM HUP
 
 log_info "PromptOS 一键启动（固定端口段 28301-28399）"
 log_info "  前端 http://localhost:$FRONTEND_PORT"
@@ -163,17 +202,26 @@ fi
 check_port "$FRONTEND_PORT" "前端 Vite"
 check_port "$BACKEND_PORT"  "后端 Go API"
 if [[ "$SKIP_DB" == "0" ]]; then
-  check_port "$MYSQL_PORT" "MySQL"
-  check_port "$REDIS_PORT" "Redis"
+  check_db_port "$MYSQL_PORT" "MySQL" "promptos-mysql"
+  check_db_port "$REDIS_PORT" "Redis" "promptos-redis"
 fi
 
 # 2) MySQL + Redis（容器）
 if [[ "$SKIP_DB" == "0" ]]; then
+  # 必须同时校验 CLI 与守护进程：docker compose version 是纯客户端命令，
+  # Docker Desktop 没启动时它照样返回 0，后续 up 才会抛一堆 npipe 报错。
   if ! docker compose version >/dev/null 2>&1; then
     log_error "未检测到 Docker Compose；请安装 Docker 或使用 --no-db 模式（内存降级）"
     exit 1
   fi
+  if ! docker info >/dev/null 2>&1; then
+    log_error "Docker 引擎未运行（Docker Desktop 未启动或还在初始化）。"
+    log_error "  请先启动 Docker Desktop 并等到托盘图标不再闪烁，再重试本脚本；"
+    log_error "  或改用内存降级模式：bash scripts/start-dev.sh --no-db"
+    exit 1
+  fi
   log_info "启动 MySQL (28303) + Redis (28304) 容器..."
+  COMPOSE_STARTED=1
   (
     cd "$ROOT_DIR"
     PROMPTOS_MYSQL_PORT=$MYSQL_PORT \
@@ -184,34 +232,36 @@ fi
 
 # 3) 后端 Go API
 log_info "启动后端 API (28302)..."
-(
-  cd "$ROOT_DIR/src/backend"
-  APP_ENV=development \
-  PORT=$BACKEND_PORT \
-  MYSQL_HOST=127.0.0.1 \
-  MYSQL_PORT=$MYSQL_PORT \
-  MYSQL_USER=root \
-  MYSQL_PASSWORD=root \
-  MYSQL_DATABASE=promptos \
-  REDIS_HOST=127.0.0.1 \
-  REDIS_PORT=$REDIS_PORT \
-  UPLOAD_DIR="$UPLOAD_DIR" \
-  UPLOAD_BASE_URL="http://localhost:$BACKEND_PORT" \
-  JWT_SECRET="${PROMPTOS_JWT_SECRET:-promptos-local-dev-secret-change-me-28302}" \
-  ALLOWED_ORIGIN="http://localhost:$FRONTEND_PORT" \
-    nohup go run ./cmd/api > "$BACKEND_LOG" 2>&1 &
-  echo $! > "$BACKEND_PID"
-)
+pushd "$ROOT_DIR/src/backend" >/dev/null
+APP_ENV=development \
+PORT=$BACKEND_PORT \
+MYSQL_HOST=127.0.0.1 \
+MYSQL_PORT=$MYSQL_PORT \
+MYSQL_USER=root \
+MYSQL_PASSWORD=root \
+MYSQL_DATABASE=promptos \
+REDIS_HOST=127.0.0.1 \
+REDIS_PORT=$REDIS_PORT \
+UPLOAD_DIR="$UPLOAD_DIR" \
+UPLOAD_BASE_URL="http://localhost:$BACKEND_PORT" \
+JWT_SECRET="${PROMPTOS_JWT_SECRET:-promptos-local-dev-secret-change-me-28302}" \
+ALLOWED_ORIGIN="http://localhost:$FRONTEND_PORT" \
+  go run ./cmd/api > "$BACKEND_LOG" 2>&1 &
+BACKEND_CHILD_PID=$!
+popd >/dev/null
+echo "$BACKEND_CHILD_PID" > "$BACKEND_PID"
+BACKEND_STARTED=1
 
 # 4) 前端 Vite
 log_info "启动前端 dev server (28301)..."
-(
-  cd "$ROOT_DIR/src/frontend"
-  PROMPTOS_FRONTEND_PORT=$FRONTEND_PORT \
-  PROMPTOS_BACKEND_PORT=$BACKEND_PORT \
-    nohup npm run dev > "$FRONTEND_LOG" 2>&1 &
-  echo $! > "$FRONTEND_PID"
-)
+pushd "$ROOT_DIR/src/frontend" >/dev/null
+PROMPTOS_FRONTEND_PORT=$FRONTEND_PORT \
+PROMPTOS_BACKEND_PORT=$BACKEND_PORT \
+  npm run dev > "$FRONTEND_LOG" 2>&1 &
+FRONTEND_CHILD_PID=$!
+popd >/dev/null
+echo "$FRONTEND_CHILD_PID" > "$FRONTEND_PID"
+FRONTEND_STARTED=1
 
 # 5) 等待就绪
 log_info "等待服务就绪..."
@@ -244,3 +294,16 @@ cat <<EOF
   停止：bash scripts/start-dev.sh stop
 ============================================================
 EOF
+
+# 开发阶段保持当前窗口并实时显示前后端日志。窗口关闭或 Ctrl+C
+# 会触发上面的 trap，避免后台服务变成孤儿进程。
+log_info "正在显示开发日志（关闭窗口或按 Ctrl+C 将停止全部服务）..."
+tail -n 30 -f "$BACKEND_LOG" "$FRONTEND_LOG" &
+LOG_TAIL_PID=$!
+
+if ! wait -n "$(cat "$BACKEND_PID")" "$(cat "$FRONTEND_PID")"; then
+  log_warn "检测到前端或后端进程已退出，正在清理其余服务..."
+  exit 1
+fi
+log_warn "检测到前端或后端进程已退出，正在清理其余服务..."
+exit 1

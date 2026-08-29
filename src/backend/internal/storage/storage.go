@@ -38,7 +38,9 @@ type R2Storage struct {
 }
 
 func NewImageStorage(cfg config.Config) (ImageStorage, error) {
-	if strings.EqualFold(cfg.UploadProvider, "r2") {
+	if strings.EqualFold(cfg.UploadProvider, "r2") ||
+		strings.EqualFold(cfg.UploadProvider, "rustfs") ||
+		strings.EqualFold(cfg.UploadProvider, "s3") {
 		return newR2Storage(cfg)
 	}
 
@@ -57,8 +59,8 @@ func newLocalStorage(cfg config.Config) (*LocalStorage, error) {
 }
 
 func newR2Storage(cfg config.Config) (*R2Storage, error) {
-	if cfg.R2AccountID == "" || cfg.R2AccessKeyID == "" || cfg.R2SecretKey == "" || cfg.R2Bucket == "" || cfg.R2PublicURL == "" {
-		return nil, fmt.Errorf("missing R2 configuration")
+	if (cfg.R2AccountID == "" && cfg.R2Endpoint == "") || cfg.R2AccessKeyID == "" || cfg.R2SecretKey == "" || cfg.R2Bucket == "" || cfg.R2PublicURL == "" {
+		return nil, fmt.Errorf("missing S3/RustFS configuration")
 	}
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(
@@ -71,7 +73,11 @@ func newR2Storage(cfg config.Config) (*R2Storage, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
-		options.BaseEndpoint = stringPtr(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.R2AccountID))
+		endpoint := cfg.R2Endpoint
+		if endpoint == "" {
+			endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.R2AccountID)
+		}
+		options.BaseEndpoint = stringPtr(strings.TrimRight(endpoint, "/"))
 		options.UsePathStyle = true
 		// Bound every R2 request so a stalled network cannot hang a request
 		// handler indefinitely. The storage interface takes a context that can

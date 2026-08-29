@@ -1,29 +1,50 @@
 @echo off
 REM ============================================================================
-REM  PromptOS ä¸€é”®åœæ­¢ï¼ˆWindows åŒå‡»å…¥å£ï¼‰
-REM  åœæ­¢å‰åç«¯è¿›ç¨‹å¹¶ down MySQL/Redis å®¹å™¨ï¼ˆæ•°æ®å·ä¿ç•™ï¼‰
+REM  PromptOS Ò»¼üÍ£Ö¹£¨Windows Ë«»÷Èë¿Ú£©
+REM  Í£Ö¹Ç°ºó¶Ë½ø³Ì²¢ down MySQL/Redis ÈİÆ÷£¨Êı¾İ¾í±£Áô£©
 REM ============================================================================
 setlocal
 
+set "ROOT_DIR=%~dp0"
+set "SH=%ROOT_DIR%scripts\start-dev.sh"
 set "BASH="
-for %%p in (
-  "%ProgramFiles%\Git\bin\bash.exe"
-  "%ProgramFiles(x86)%\Git\bin\bash.exe"
-  "%LocalAppData%\Programs\Git\bin\bash.exe"
-  "%ProgramFiles%\Git\usr\bin\bash.exe"
-) do (
-  if exist %%p set "BASH=%%~p"
-)
 
+REM Í¬ start-dev.bat£º%ProgramFiles(x86)% ²»ÄÜ·Å½øÀ¨ºÅ¿é£¬·ñÔòÉÁÍË¡£
+if exist "%ProgramFiles%\Git\bin\bash.exe" set "BASH=%ProgramFiles%\Git\bin\bash.exe"
+if not defined BASH if exist "%ProgramFiles(x86)%\Git\bin\bash.exe" set "BASH=%ProgramFiles(x86)%\Git\bin\bash.exe"
+if not defined BASH if exist "%LocalAppData%\Programs\Git\bin\bash.exe" set "BASH=%LocalAppData%\Programs\Git\bin\bash.exe"
+if not defined BASH if exist "%ProgramFiles%\Git\usr\bin\bash.exe" set "BASH=%ProgramFiles%\Git\usr\bin\bash.exe"
+if not defined BASH if exist "%USERPROFILE%\.workbuddy\binaries\PortableGit\current\bin\bash.exe" set "BASH=%USERPROFILE%\.workbuddy\binaries\PortableGit\current\bin\bash.exe"
+if not defined BASH if exist "%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\1.2.0\bin\bash.exe" set "BASH=%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\1.2.0\bin\bash.exe"
 if not defined BASH (
   where bash >nul 2>nul && set "BASH=bash"
 )
 
 if not defined BASH (
-  echo [ERROR] æœªæ‰¾åˆ° Git Bashï¼Œè¯·å®‰è£… Git for Windows åé‡è¯•ã€‚
-  pause
+  echo [ERROR] Î´ÕÒµ½ Git Bash£¬Çë°²×° Git for Windows ºóÖØÊÔ¡£
+  echo.
+  cmd /k
   exit /b 1
 )
 
-"%BASH%" "%~dp0scripts\start-dev.sh" stop
-pause
+if not exist "%SH%" (
+  echo [ERROR] Î´ÕÒµ½Æô¶¯½Å±¾£º%SH%
+  echo.
+  cmd /k
+  exit /b 1
+)
+
+echo [INFO ] Git Bash : %BASH%
+echo.
+
+"%BASH%" "%SH%" stop
+set "RC=%ERRORLEVEL%"
+
+echo.
+if not "%RC%"=="0" (
+  echo [ERROR] Í£Ö¹¹ı³Ì·µ»ØÍË³öÂë %RC%¡£
+) else (
+  echo [ OK  ] ÒÑÍ£Ö¹È«²¿·şÎñ¡£
+)
+echo.
+exit /b %RC%

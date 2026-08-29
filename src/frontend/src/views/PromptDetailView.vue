@@ -554,10 +554,10 @@ watch(commentSort, async () => {
                       创作者
                     </div>
                     <div class="detail-creator-name">
-                      {{ prompt.user.username }}
+                      {{ prompt.user?.username || '作者' }}
                     </div>
                     <p class="detail-creator-bio">
-                      {{ prompt.user.bio }}
+                      {{ prompt.user?.bio || '提示词创作者' }}
                     </p>
                     <div class="detail-creator-follow">
                       <RouterLink
@@ -877,14 +877,14 @@ watch(commentSort, async () => {
                   <div class="detail-comment-header">
                     <div>
                       <div class="detail-comment-author">
-                        {{ comment.user.username }}
+                        {{ comment.user?.username || '社区用户' }}
                       </div>
                       <div class="detail-comment-time">
                         {{ formatCommentTime(comment.createdAt) }}
                       </div>
                     </div>
                     <div class="detail-comment-meta">
-                      Lv.{{ comment.user.level }}
+                      Lv.{{ comment.user?.level ?? 1 }}
                     </div>
                   </div>
 
@@ -927,7 +927,7 @@ watch(commentSort, async () => {
                     />
                     <div class="detail-comment-actions">
                       <span class="detail-comment-tip">
-                        回复 {{ comment.user.username }}
+                        回复 {{ comment.user?.username || '社区用户' }}
                       </span>
                       <button
                         class="detail-btn-favorite"
@@ -940,7 +940,7 @@ watch(commentSort, async () => {
                   </div>
 
                   <div
-                    v-if="comment.replies.length > 0"
+                    v-if="comment.replies?.length > 0"
                     class="detail-replies"
                   >
                     <article
@@ -951,14 +951,14 @@ watch(commentSort, async () => {
                       <div class="detail-comment-header">
                         <div>
                           <div class="detail-comment-author">
-                            {{ reply.user.username }}
+                            {{ reply.user?.username || '社区用户' }}
                           </div>
                           <div class="detail-comment-time">
                             {{ formatCommentTime(reply.createdAt) }}
                           </div>
                         </div>
                         <div class="detail-comment-meta">
-                          Lv.{{ reply.user.level }}
+                          Lv.{{ reply.user?.level ?? 1 }}
                         </div>
                       </div>
 

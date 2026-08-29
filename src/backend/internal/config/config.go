@@ -19,6 +19,7 @@ type Config struct {
 	UploadMaxMB         int
 	AllowGif            bool
 	R2AccountID         string
+	R2Endpoint          string
 	R2AccessKeyID       string
 	R2SecretKey         string
 	R2Bucket            string
@@ -56,6 +57,7 @@ func Load() Config {
 		UploadMaxMB:         getEnvAsInt("UPLOAD_MAX_MB", 10),
 		AllowGif:            getEnvAsBool("UPLOAD_ALLOW_GIF", false),
 		R2AccountID:         getEnv("R2_ACCOUNT_ID", ""),
+		R2Endpoint:          getEnv("R2_ENDPOINT", getEnv("S3_ENDPOINT", "")),
 		R2AccessKeyID:       getEnv("R2_ACCESS_KEY_ID", ""),
 		R2SecretKey:         getEnv("R2_SECRET_ACCESS_KEY", ""),
 		R2Bucket:            getEnv("R2_BUCKET", ""),

@@ -1,36 +1,60 @@
 @echo off
 REM ============================================================================
-REM  PromptOS ä¸€é”®å¯åŠ¨ï¼ˆWindows åŒå‡»å…¥å£ï¼‰
-REM  å›ºå®šç«¯å£ï¼šå‰ç«¯ 28301 / åŽç«¯ 28302 / MySQL 28303 / Redis 28304
-REM  è°ƒç”¨ Git Bash æ‰§è¡Œ scripts/start-dev.sh
+REM  PromptOS Ò»¼üÆô¶¯£¨Windows Ë«»÷Èë¿Ú£©
+REM  ¹Ì¶¨¶Ë¿Ú£ºÇ°¶Ë 28301 / ºó¶Ë 28302 / MySQL 28303 / Redis 28304
+REM  µ÷ÓÃ Git Bash Ö´ÐÐ scripts/start-dev.sh
 REM ============================================================================
 setlocal
 
-REM æŸ¥æ‰¾ Git Bashï¼ˆå¸¸è§å®‰è£…è·¯å¾„ï¼‰
+set "ROOT_DIR=%~dp0"
+set "SH=%ROOT_DIR%scripts\start-dev.sh"
 set "BASH="
-for %%p in (
-  "%ProgramFiles%\Git\bin\bash.exe"
-  "%ProgramFiles(x86)%\Git\bin\bash.exe"
-  "%LocalAppData%\Programs\Git\bin\bash.exe"
-  "%ProgramFiles%\Git\usr\bin\bash.exe"
-) do (
-  if exist %%p set "BASH=%%~p"
-)
 
+REM ×¢Òâ£º%ProgramFiles(x86)% ¾ø¶Ô²»ÄÜ³öÏÖÔÚ for ( ... ) »ò if ( ... ) ´úÂë¿éÖÐ¡£
+REM      ±äÁ¿ÃûÀïµÄ ")" »á±» cmd µ±³É´úÂë¿é½áÊø·û£¬Ôì³ÉÓï·¨´íÎó¡¢Ë«»÷Ö±½ÓÉÁÍË¡£
+REM      Òò´ËÕâÀïÒ»ÂÉÊ¹ÓÃµ¥ÐÐ if exist£¬²»ÓÃÀ¨ºÅ¿é¡£
+if exist "%ProgramFiles%\Git\bin\bash.exe" set "BASH=%ProgramFiles%\Git\bin\bash.exe"
+if not defined BASH if exist "%ProgramFiles(x86)%\Git\bin\bash.exe" set "BASH=%ProgramFiles(x86)%\Git\bin\bash.exe"
+if not defined BASH if exist "%LocalAppData%\Programs\Git\bin\bash.exe" set "BASH=%LocalAppData%\Programs\Git\bin\bash.exe"
+if not defined BASH if exist "%ProgramFiles%\Git\usr\bin\bash.exe" set "BASH=%ProgramFiles%\Git\usr\bin\bash.exe"
+if not defined BASH if exist "%USERPROFILE%\.workbuddy\binaries\PortableGit\current\bin\bash.exe" set "BASH=%USERPROFILE%\.workbuddy\binaries\PortableGit\current\bin\bash.exe"
+if not defined BASH if exist "%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\1.2.0\bin\bash.exe" set "BASH=%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\1.2.0\bin\bash.exe"
 if not defined BASH (
   where bash >nul 2>nul && set "BASH=bash"
 )
 
 if not defined BASH (
-  echo [ERROR] æœªæ‰¾åˆ° Git Bashï¼Œè¯·å®‰è£… Git for Windows åŽé‡è¯•ã€‚
-  pause
+  echo [ERROR] Î´ÕÒµ½ Git Bash£¬Çë°²×° Git for Windows ºóÖØÊÔ¡£
+  echo.
+  cmd /k
   exit /b 1
 )
 
-echo [INFO] ä½¿ç”¨ Git Bash: %BASH%
-"%BASH%" "%~dp0scripts\start-dev.sh" %*
-if errorlevel 1 (
+if not exist "%SH%" (
+  echo [ERROR] Î´ÕÒµ½Æô¶¯½Å±¾£º%SH%
   echo.
-  echo [ERROR] å¯åŠ¨å¤±è´¥ï¼Œè¯·æŸ¥çœ‹ scripts ä¸Šæ–¹æ—¥å¿—è¾“å‡ºã€‚
+  cmd /k
+  exit /b 1
 )
-pause
+
+echo [INFO ] Git Bash : %BASH%
+echo [INFO ] ½Å±¾     : %SH%
+echo [INFO ] ¶Ë¿Ú     : Ç°¶Ë 28301 / ºó¶Ë 28302 / MySQL 28303 / Redis 28304
+echo.
+
+"%BASH%" "%SH%" %*
+set "RC=%ERRORLEVEL%"
+
+echo.
+if not "%RC%"=="0" (
+  echo [ERROR] Æô¶¯Ê§°Ü£¬ÍË³öÂë %RC%¡£Çë²é¿´ÉÏ·½Êä³ö£¬»ò´ò¿ªÈÕÖ¾£º
+  echo         %ROOT_DIR%logs\backend.log
+  echo         %ROOT_DIR%logs\frontend.log
+  echo.
+  echo [INFO ] ´°¿ÚÒÑ±£³Ö´ò¿ª£¬¿ÉÖ±½Ó²é¿´ÉÏ·½ÈÕÖ¾£»¹Ø±Õ´°¿Ú²»»áÁôÏÂ·þÎñ½ø³Ì¡£
+  cmd /k
+) else (
+  echo [ OK  ] ¿ª·¢·þÎñÒÑ½áÊø£¬ËùÓÐ×Ó½ø³ÌÒÑÇåÀí¡£
+)
+echo.
+exit /b %RC%

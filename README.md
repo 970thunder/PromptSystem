@@ -63,7 +63,7 @@ If you already have an existing database created from an older schema, apply inc
 mysql -u root -p promptos < src/backend/sql/migrations/0001_prompts_cover_and_params.sql
 ```
 
-The backend reads runtime configuration from environment variables such as `PORT`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `UPLOAD_*`, `R2_*`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`.
+The backend reads runtime configuration from environment variables such as `PORT`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `UPLOAD_*`, `R2_*`, `MYSQL_*`, `REDIS_*`, and `ALLOWED_ORIGIN`. Set `UPLOAD_PROVIDER=rustfs` (or `s3`), `R2_ENDPOINT` (or `S3_ENDPOINT`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_PUBLIC_URL` for RustFS. The S3-compatible endpoint uses path-style requests and supports HTTP for an internal RustFS network.
 
 ## Docker
 
@@ -101,7 +101,7 @@ bash scripts/start-dev.sh --no-db  # start without MySQL/Redis (backend memory f
 bash scripts/start-dev.sh stop     # stop everything (containers down, data volumes kept)
 ```
 
-The launcher refuses to start if any fixed port is already in use, and never silently picks another port. Logs are written to `logs/frontend.log` and `logs/backend.log`; stop with `stop-dev.bat` on Windows.
+The launcher refuses to start if any fixed application port is already in use, and never silently picks another port. Existing `promptos-mysql` and `promptos-redis` containers are reused. During development the launcher stays in the foreground and follows `logs/frontend.log` and `logs/backend.log`; press `Ctrl+C` or close the launcher window to stop the child services and containers. `stop-dev.bat` remains available for an explicit cleanup.
 
 ## Development Order
 
