@@ -85,3 +85,10 @@
 - 用户 ID 1-6 已禁用、密码置空并递增 `session_version`；固定演示密码登录验证 HTTP 401。Prompt ID 101-106 已转移至无密码官方归属账号 `PromptOS Official`（ID 7）。
 - 数据库复核：1-6 为 `status=0,password_is_null=1,session_version=1`；ID 7 为 `status=1,password_is_null=1`；Prompt 101-106 为 `user_id=7,status=1`。
 - 该处置不等同于完整恢复演练；临时库/临时卷恢复仍是 P0-12 未完成项。
+
+### 首次恢复演练记录（2026-08-30）
+
+- 使用 `/srv/backups/promptsystem/20260830-demo-removal/` 在临时 MySQL 卷恢复，数据复核 `users=6,prompts=6,published=6`；uploads 归档可解包。
+- 使用上一版本镜像 `promptsystem-backend:20260829-a9ba2cf` 加入临时网络和 Redis，`/api/v1/health/ready` 返回 `200`、`storageMode=mysql`、`degraded=false`。
+- 约 50 秒完成备份恢复到 ready（演练 RTO）；RPO 为备份时间点，当前尚未设置每日定时备份。
+- 演练结束删除临时容器、网络、卷和 `/srv/tmp/promptos-restore-uploads-20260830`，服务器复核无残留。演练不影响 `promptsystem` 正式 Compose 项目。

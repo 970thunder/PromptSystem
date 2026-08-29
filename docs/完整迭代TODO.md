@@ -26,7 +26,7 @@
 - [x] **P0-09 浏览历史分页契约统一**：工作台适配分页响应。验收：历史列表不再被错误清空，分页/软删除过滤正确。
 - [x] **P0-10 举报枚举修复**：前端只发送 `spam/abuse/nsfw/other`；后端保留非法枚举拒绝。验收：代码审计、后端 store 契约测试和前端构建通过。
 - [x] **P0-11 互动闭环**：接入 interaction、unlike、unfavorite，显示真实选中态。验收：后端互动集成测试、前端构建和状态接入通过。
-- [ ] **P0-12 首次可恢复备份**：完成 MySQL 与上传卷备份、校验、临时恢复。验收：记录备份位置、校验值、恢复步骤、RPO/RTO。
+- [x] **P0-12 首次可恢复备份**：完成 MySQL 与上传卷备份、校验、临时恢复。验收：记录备份位置、校验值、恢复步骤、RPO/RTO。
 
 ## A 架构
 
@@ -124,7 +124,7 @@
 - `P0-01/P0-05/P0-07/P0-08/P0-10/P0-11`、`S-03`、`F-01/F-02/F-03/F-04`、`O-02/O-08/O-09`、`R-01/R-03`：代码见提交 `b584585`、`b78a8b9`、`ac0c406`；后端 `gofmt -w && go test ./... && go vet ./...` 通过；前端 `npm run lint:check`、`npm test -- --run`（6 files/8 tests）、`npm run build` 通过。线上 `/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`；详情、评论分页、匿名浏览返回正常；公网端口检查仅 80/443，PromptSystem 3092/5092 为 loopback，其他 Compose 项目未变。剩余风险：CI 尚未接入，P0-04 演示账号处置和邮件发送尚未完成。
 - `P0-03`：新增 `src/backend/internal/store/mysql_seed_test.go`，真实 MySQL 隔离库执行 `SeedMySQLData(db, false)`，并断言 categories>0、users=0、prompts=0；`go test ./internal/store -run TestProductionSeedDoesNotCreateDemoData -count=1` 通过。生产启动路径已使用 `!cfg.IsProduction()` 关闭演示数据。
 - `P0-04`：处置前备份目录 `/srv/backups/promptsystem/20260830-demo-removal/`；`mysql.sql.gz` SHA-256=`cb3ecee7a1d10e7a407d7f246c4419bb43c7b71a1eb5ee2cfe86e7a75bb23d48`，`uploads.tar.gz` SHA-256=`9a2609e8613823970486698dbca7c9f8c3e07456dcac88d0749e1f403f8fd3ca`；服务器执行 `sha256sum -c`、`gzip -t`、`tar -tzf` 均通过。用户 ID 1-6（Astra Lab、Nora Chen、Delta Forge、Mica Studio、Ops Lantern、North Queue）已禁用、密码置 NULL、session_version+1；Prompt ID 101-106 已转移至无密码官方账号 ID 7（PromptOS Official）。已知演示密码 `PromptOS123!` 登录返回 HTTP 401；数据库复核 `status=0,password_is_null=1,session_version=1`（1-6），ID 7 `status=1,password_is_null=1`，Prompt 101-106 `user_id=7,status=1`。
-- `P0-12` 部分证据：服务器 `/srv/backups/promptsystem/20260830-b584585/` 已生成 MySQL 与 uploads 备份，SHA-256 为 `56781b53f48b2e35e285a1ddac64f9b8662ed31c662186c3890ce257760dc220`、`21dc63cb20aa368cc6a35086ccf4f5652b7bd6359abe85d56cbd7948814cdbf4`；`sha256sum -c`、`gzip -t`、`tar -tzf` 均通过。尚未完成临时恢复演练，因此保持未勾选。
+- `P0-12`：备份 `/srv/backups/promptsystem/20260830-demo-removal/` 经 SHA-256、`gzip -t`、`tar -tzf` 校验后，使用临时 MySQL 卷 `promptos_restore_mysql_20260830` 恢复，复核 `users=6,prompts=6,published=6`；上传归档解包成功。上一 release 镜像 `promptsystem-backend:20260829-a9ba2cf` 连接恢复库和临时 Redis 后 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。演练资源由 trap 清理并复核无容器、网络、卷或临时目录残留。以备份开始至恢复 ready 约 50 秒（演练 RTO）；备份时间点为备份命令完成时（RPO 取决于备份间隔，当前尚未配置定时备份）。首次失败原因为演练未注入旧版必需的 OAuth 占位配置，已修正并重跑成功。
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
 - `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。
 - `R-02/R-04`：GitHub Actions `backend-ci` 运行 `33270442024` 成功，包含 gofmt、vet、race、MySQL/Redis 集成、迁移矩阵、build，以及 Docker fresh-start、ready 和 compose 健康检查。安全扫描最新运行 `33270441831` 成功。

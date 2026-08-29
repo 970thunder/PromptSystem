@@ -30,6 +30,7 @@
 - GitHub Actions 前端、后端、契约、迁移矩阵、Docker fresh-start 和安全扫描已在 `ffcfaf7` 上全部通过
 - 本批代码提交 `27eb81e` 尚未部署到生产；生产仍运行 `20260830-b584585`，发布需走备份、迁移、健康检查和回滚流程
 - 线上演示账号处置记录：备份 `/srv/backups/promptsystem/20260830-demo-removal/`，固定密码登录已返回 401，6 条 Prompt 归属 `PromptOS Official`；本次仅更新数据与文档，尚未发布新的应用镜像
+- 完成首次恢复演练：MySQL 与 uploads 备份在临时资源恢复，上一版本 ready 通过（RTO 约 50 秒）；临时容器、卷、网络和目录已清理
 
 ## [v0.2.0] - 2026-08-30
 
