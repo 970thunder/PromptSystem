@@ -25,9 +25,21 @@ func OpenMySQL(cfg config.Config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(30 * time.Minute)
+	maxOpen := cfg.DBMaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 10
+	}
+	maxIdle := cfg.DBMaxIdleConns
+	if maxIdle <= 0 || maxIdle > maxOpen {
+		maxIdle = min(5, maxOpen)
+	}
+	lifetime := cfg.DBConnMaxLifetimeMin
+	if lifetime <= 0 {
+		lifetime = 30
+	}
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
+	db.SetConnMaxLifetime(time.Duration(lifetime) * time.Minute)
 
 	var pingErr error
 	for attempt := 0; attempt < 10; attempt++ {

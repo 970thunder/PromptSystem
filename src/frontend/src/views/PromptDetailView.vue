@@ -13,7 +13,7 @@ import PageLoading from '@/components/feedback/PageLoading.vue'
 import PageError from '@/components/feedback/PageError.vue'
 import { extractPromptExamples, extractPromptWorkflow } from '@/utils/promptStructure'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
-import type { Comment, FollowStatus } from '@/types'
+import type { Comment, FollowStatus, Prompt } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,13 +43,7 @@ const commentSortOptions = [
   { label: '最早', value: 'oldest' }
 ] as const
 
-const relatedPrompts = computed(() => {
-  if (!prompt.value) {
-    return []
-  }
-
-  return promptStore.getRelatedPrompts(prompt.value.id, prompt.value.categoryId)
-})
+const relatedPrompts = ref<Prompt[]>([])
 
 const promptExamples = computed(() => prompt.value ? extractPromptExamples(prompt.value.content) : [])
 const promptWorkflow = computed(() => prompt.value ? extractPromptWorkflow(prompt.value.content) : [])
@@ -425,6 +419,9 @@ const loadDetail = async () => {
     promptStore.favorited = false
   }
   await promptStore.loadPromptComments(promptId.value, commentSort.value)
+  relatedPrompts.value = prompt.value
+    ? await promptStore.loadRelatedPrompts(prompt.value.id, prompt.value.categoryId)
+    : []
   await loadFollowStatus()
   setActiveImage(0)
 }
@@ -879,6 +876,20 @@ watch(commentSort, async () => {
                 class="detail-comments-loading"
               >
                 评论加载中...
+              </div>
+
+              <div
+                v-else-if="promptStore.commentsError"
+                class="detail-comments-empty"
+              >
+                评论暂时加载失败，请重试。
+                <button
+                  type="button"
+                  class="detail-comment-link"
+                  @click="promptStore.loadPromptComments(promptId, commentSort)"
+                >
+                  重试
+                </button>
               </div>
 
               <div

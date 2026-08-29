@@ -3,6 +3,11 @@ services:
     image: mysql:8.4
     container_name: promptsystem-mysql
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-promptos}
@@ -20,6 +25,11 @@ services:
     image: redis:7-alpine
     container_name: promptsystem-redis
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
     volumes:
       - promptsystem_redis_data:/data
     healthcheck:
@@ -32,6 +42,13 @@ services:
     image: promptsystem-backend:${PROMPTSYSTEM_VERSION}
     container_name: promptsystem-backend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     env_file:
       - /opt/secrets/promptsystem/app.env
     environment:
@@ -46,6 +63,9 @@ services:
       MYSQL_MIGRATION_PASSWORD: ${MYSQL_MIGRATION_PASSWORD:?MYSQL_MIGRATION_PASSWORD must be set}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-8}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-4}
+      DB_CONN_MAX_LIFETIME_MINUTES: ${DB_CONN_MAX_LIFETIME_MINUTES:-30}
       UPLOAD_PROVIDER: local
       UPLOAD_DIR: /app/uploads
       UPLOAD_BASE_URL: https://${PROMPTSYSTEM_DOMAIN}
@@ -65,6 +85,13 @@ services:
     image: promptsystem-frontend:${PROMPTSYSTEM_VERSION}
     container_name: promptsystem-frontend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
     ports:
       - "127.0.0.1:3092:80"
     depends_on:

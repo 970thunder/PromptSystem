@@ -3,6 +3,11 @@
     image: mysql:8.4
     container_name: promptos-mysql
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     environment:
       MYSQL_ROOT_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: promptos
@@ -23,6 +28,11 @@
     image: redis:7-alpine
     container_name: promptos-redis
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
     ports:
       - "${PROMPTOS_REDIS_PORT:-6379}:6379"
     volumes:
@@ -38,6 +48,13 @@
       context: ./src/backend
     container_name: promptos-backend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     environment:
       APP_ENV: development
       PORT: 8080
@@ -60,6 +77,9 @@
       MYSQL_USER: ${PROMPTOS_MYSQL_USER:-promptos_app}
       MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:-promptos-local-password}
       MYSQL_DATABASE: promptos
+      DB_MAX_OPEN_CONNS: ${PROMPTOS_DB_MAX_OPEN_CONNS:-10}
+      DB_MAX_IDLE_CONNS: ${PROMPTOS_DB_MAX_IDLE_CONNS:-5}
+      DB_CONN_MAX_LIFETIME_MINUTES: ${PROMPTOS_DB_CONN_MAX_LIFETIME_MINUTES:-30}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       ALLOWED_ORIGIN: http://localhost:3000
@@ -87,6 +107,13 @@
         VITE_GITHUB_OAUTH_ENABLED: "false"
     container_name: promptos-frontend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
     ports:
       - "${PROMPTOS_FRONTEND_PORT:-3000}:80"
     depends_on:

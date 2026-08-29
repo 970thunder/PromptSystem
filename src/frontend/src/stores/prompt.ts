@@ -17,6 +17,7 @@ export const usePromptStore = defineStore('prompt', () => {
   const commentsPage = ref(1)
   const commentsPageSize = ref(20)
   const commentsLoadingMore = ref(false)
+  const commentsError = ref(false)
   const liked = ref(false)
   const favorited = ref(false)
   const usingMockData = ref(false)
@@ -242,6 +243,7 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const loadPromptComments = async (id: number, sort = 'latest') => {
     commentsLoading.value = true
+    commentsError.value = false
 
     const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
 
@@ -259,6 +261,9 @@ export const usePromptStore = defineStore('prompt', () => {
       return response.data.list
     } catch {
       comments.value = []
+      commentsTotal.value = 0
+      commentsPage.value = 1
+      commentsError.value = true
       return []
     } finally {
       commentsLoading.value = false
@@ -312,6 +317,18 @@ export const usePromptStore = defineStore('prompt', () => {
       .slice(0, 3)
   }
 
+  const loadRelatedPrompts = async (promptId: number, categoryId: number) => {
+    if (import.meta.env.VITE_ENABLE_PROMPT_API !== 'true') {
+      return getRelatedPrompts(promptId, categoryId)
+    }
+    try {
+      const response = await promptApi.getRelatedPrompts(promptId)
+      return response.data
+    } catch {
+      return getRelatedPrompts(promptId, categoryId)
+    }
+  }
+
   return {
     prompts,
     currentPrompt,
@@ -323,6 +340,7 @@ export const usePromptStore = defineStore('prompt', () => {
     commentsTotal,
     commentsPage,
     commentsLoadingMore,
+    commentsError,
     liked,
     favorited,
     usingMockData,
@@ -354,6 +372,7 @@ export const usePromptStore = defineStore('prompt', () => {
     likeComment,
     reportComment,
     reportPrompt,
-    getRelatedPrompts
+    getRelatedPrompts,
+    loadRelatedPrompts
   }
 })

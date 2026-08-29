@@ -33,6 +33,10 @@ export const promptApi = {
     return request.get(`/prompts/${id}`)
   },
 
+  getRelatedPrompts(id: number): Promise<ApiResponse<Prompt[]>> {
+    return request.get(`/prompts/${id}/related`)
+  },
+
   // Publish a new prompt
   publishPrompt(data: PublishPromptRequest): Promise<ApiResponse<Prompt>> {
     return request.post('/prompts', data)

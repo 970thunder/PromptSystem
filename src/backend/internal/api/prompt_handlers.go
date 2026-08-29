@@ -384,6 +384,13 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 				writeMethodNotAllowed(w)
 			}
 			return
+		case "related":
+			if r.Method != http.MethodGet {
+				writeMethodNotAllowed(w)
+				return
+			}
+			s.handleRelatedPrompts(w, r, id)
+			return
 		default:
 			writeJSON(w, http.StatusNotFound, apiResponse[any]{
 				Code:    404,
@@ -427,6 +434,36 @@ func (s *server) handlePromptDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+// handleRelatedPrompts performs a fresh backend query instead of relying on
+// whatever page happens to be cached in the browser store.
+func (s *server) handleRelatedPrompts(w http.ResponseWriter, r *http.Request, id int) {
+	current, found, err := s.promptStore.FindByID(id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load related prompts", ErrorCode: "RELATED_LOAD_FAILED"})
+		return
+	}
+	if !found {
+		writeAPIError(w, &apiError{Status: http.StatusNotFound, Code: "PROMPT_NOT_FOUND", Message: "Prompt not found"})
+		return
+	}
+	list, _, err := s.promptStore.QueryPage(store.PromptFilter{CategoryID: current.CategoryID, SortBy: "popular"}, 1, 12)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load related prompts", ErrorCode: "RELATED_LOAD_FAILED"})
+		return
+	}
+	filtered := make([]store.Prompt, 0, 3)
+	for _, item := range list {
+		if item.ID == id {
+			continue
+		}
+		filtered = append(filtered, item)
+		if len(filtered) == 3 {
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, apiResponse[[]store.Prompt]{Code: 200, Message: "Success", Data: filtered})
 }
 
 func (s *server) handleUserPromptDetail(w http.ResponseWriter, r *http.Request) {

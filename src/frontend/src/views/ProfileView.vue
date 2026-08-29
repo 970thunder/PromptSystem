@@ -31,6 +31,9 @@ const draftPrompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
 const likedPrompts = ref<Prompt[]>([])
 const historyPrompts = ref<Prompt[]>([])
+const historyTotal = ref(0)
+const historyPage = ref(1)
+const historyLoadingMore = ref(false)
 const followingUsers = ref<User[]>([])
 const followerUsers = ref<User[]>([])
 const followStatus = ref<FollowStatus | null>(null)
@@ -121,7 +124,7 @@ const libraryTabs = computed(() => [
   { key: 'drafts' as const, label: '草稿', count: draftPrompts.value.length },
   { key: 'favorites' as const, label: '收藏', count: favoritePrompts.value.length },
   { key: 'likes' as const, label: '点赞', count: likedPrompts.value.length },
-  { key: 'history' as const, label: '浏览', count: historyPrompts.value.length },
+  { key: 'history' as const, label: '浏览', count: historyTotal.value },
   { key: 'following' as const, label: '关注', count: followingUsers.value.length },
   { key: 'followers' as const, label: '粉丝', count: followerUsers.value.length }
 ])
@@ -263,11 +266,15 @@ const loadProfile = async () => {
       favoritePrompts.value = favoritesRes.data
       likedPrompts.value = likesRes.data
       historyPrompts.value = historyRes.data.list
+      historyTotal.value = historyRes.data.total
+      historyPage.value = historyRes.data.page
       draftPrompts.value = draftsRes.data
     } catch {
       favoritePrompts.value = []
       likedPrompts.value = []
       historyPrompts.value = []
+      historyTotal.value = 0
+      historyPage.value = 1
       draftPrompts.value = []
     }
     await loadSocialData()
@@ -280,6 +287,8 @@ const loadProfile = async () => {
   draftPrompts.value = []
   likedPrompts.value = []
   historyPrompts.value = []
+  historyTotal.value = 0
+  historyPage.value = 1
   followingUsers.value = []
   followerUsers.value = []
   activeLibraryTab.value = 'published'
@@ -295,6 +304,26 @@ const loadProfile = async () => {
     followStatus.value = null
   }
   syncProfileForm()
+}
+
+const loadMoreHistory = async () => {
+  if (historyLoadingMore.value || historyPrompts.value.length >= historyTotal.value) {
+    return
+  }
+
+  historyLoadingMore.value = true
+  try {
+    const response = await userApi.getHistoryPrompts(historyPage.value + 1)
+    const existing = new Set(historyPrompts.value.map((prompt) => prompt.id))
+    historyPrompts.value = [
+      ...historyPrompts.value,
+      ...response.data.list.filter((prompt) => !existing.has(prompt.id))
+    ]
+    historyTotal.value = response.data.total
+    historyPage.value = response.data.page
+  } finally {
+    historyLoadingMore.value = false
+  }
 }
 
 const handleEditPrompt = async (promptId: number) => {
@@ -664,8 +693,18 @@ watch(() => route.params.userId, loadProfile)
               </article>
             </div>
 
+            <button
+              v-if="activeLibraryTab === 'history' && historyPrompts.length < historyTotal"
+              type="button"
+              class="profile-history-more"
+              :disabled="historyLoadingMore"
+              @click="loadMoreHistory"
+            >
+              {{ historyLoadingMore ? '加载中...' : '加载更多浏览记录' }}
+            </button>
+
             <div
-              v-else
+              v-else-if="(isUserLibraryTab && activeUserList.length === 0) || (!isUserLibraryTab && activePromptList.length === 0)"
               class="profile-empty"
             >
               <div class="profile-empty__title">
@@ -853,6 +892,10 @@ watch(() => route.params.userId, loadProfile)
 
 .profile-prompts__grid {
   @apply mt-6 grid gap-4 md:grid-cols-2;
+}
+
+.profile-history-more {
+  @apply mt-6 w-full rounded-full border border-[var(--prompt-border)] px-4 py-3 text-sm text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .profile-users-list {

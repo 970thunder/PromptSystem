@@ -9,38 +9,41 @@ import (
 )
 
 type Config struct {
-	AppEnv              string
-	Port                string
-	JWTSecret           string
-	JWTExpireHours      int
-	UploadProvider      string
-	UploadDir           string
-	UploadBaseURL       string
-	UploadMaxMB         int
-	AllowGif            bool
-	R2AccountID         string
-	R2Endpoint          string
-	R2AccessKeyID       string
-	R2SecretKey         string
-	R2Bucket            string
-	R2PublicURL         string
-	AllowedImageDomains []string
-	MySQLHost           string
-	MySQLPort           string
-	MySQLUser           string
-	MySQLPass           string
-	MySQLDB             string
-	MySQLMigrationUser  string
-	MySQLMigrationPass  string
-	RedisHost           string
-	RedisPort           string
-	RedisPass           string
-	AllowedOrigin       string
-	GitHubClientID      string
-	GitHubClientSecret  string
-	GitHubOAuthEnabled  bool
-	GitHubRedirectURI   string
-	FrontendURL         string
+	AppEnv               string
+	Port                 string
+	JWTSecret            string
+	JWTExpireHours       int
+	UploadProvider       string
+	UploadDir            string
+	UploadBaseURL        string
+	UploadMaxMB          int
+	AllowGif             bool
+	R2AccountID          string
+	R2Endpoint           string
+	R2AccessKeyID        string
+	R2SecretKey          string
+	R2Bucket             string
+	R2PublicURL          string
+	AllowedImageDomains  []string
+	MySQLHost            string
+	MySQLPort            string
+	MySQLUser            string
+	MySQLPass            string
+	MySQLDB              string
+	MySQLMigrationUser   string
+	MySQLMigrationPass   string
+	DBMaxOpenConns       int
+	DBMaxIdleConns       int
+	DBConnMaxLifetimeMin int
+	RedisHost            string
+	RedisPort            string
+	RedisPass            string
+	AllowedOrigin        string
+	GitHubClientID       string
+	GitHubClientSecret   string
+	GitHubOAuthEnabled   bool
+	GitHubRedirectURI    string
+	FrontendURL          string
 }
 
 // DefaultAllowedOrigins is the comma-separated origin list used in development.
@@ -50,38 +53,41 @@ const DefaultAllowedOrigins = "*"
 // to check that the resulting config is safe to run.
 func Load() Config {
 	return Config{
-		AppEnv:              getEnv("APP_ENV", "development"),
-		Port:                getEnv("PORT", "8080"),
-		JWTSecret:           getEnv("JWT_SECRET", "promptos-dev-secret-change-me"),
-		JWTExpireHours:      getEnvAsInt("JWT_EXPIRE_HOURS", 72),
-		UploadProvider:      getEnv("UPLOAD_PROVIDER", "local"),
-		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
-		UploadBaseURL:       getEnv("UPLOAD_BASE_URL", "http://localhost:8080"),
-		UploadMaxMB:         getEnvAsInt("UPLOAD_MAX_MB", 10),
-		AllowGif:            getEnvAsBool("UPLOAD_ALLOW_GIF", false),
-		R2AccountID:         getEnv("R2_ACCOUNT_ID", ""),
-		R2Endpoint:          getEnv("R2_ENDPOINT", getEnv("S3_ENDPOINT", "")),
-		R2AccessKeyID:       getEnv("R2_ACCESS_KEY_ID", ""),
-		R2SecretKey:         getEnv("R2_SECRET_ACCESS_KEY", ""),
-		R2Bucket:            getEnv("R2_BUCKET", ""),
-		R2PublicURL:         getEnv("R2_PUBLIC_URL", ""),
-		AllowedImageDomains: splitDomains(getEnv("ALLOWED_IMAGE_DOMAINS", ""), getEnv("R2_PUBLIC_URL", "")),
-		MySQLHost:           getEnv("MYSQL_HOST", "localhost"),
-		MySQLPort:           getEnv("MYSQL_PORT", "3306"),
-		MySQLUser:           getEnv("MYSQL_USER", "root"),
-		MySQLPass:           getEnv("MYSQL_PASSWORD", "root"),
-		MySQLDB:             getEnv("MYSQL_DATABASE", "promptos"),
-		MySQLMigrationUser:  getEnv("MYSQL_MIGRATION_USER", ""),
-		MySQLMigrationPass:  getEnv("MYSQL_MIGRATION_PASSWORD", ""),
-		RedisHost:           getEnv("REDIS_HOST", "localhost"),
-		RedisPort:           getEnv("REDIS_PORT", "6379"),
-		RedisPass:           getEnv("REDIS_PASSWORD", ""),
-		AllowedOrigin:       getEnv("ALLOWED_ORIGIN", "*"),
-		GitHubClientID:      getEnv("GITHUB_CLIENT_ID", ""),
-		GitHubClientSecret:  getEnv("GITHUB_CLIENT_SECRET", ""),
-		GitHubOAuthEnabled:  getEnvAsBool("GITHUB_OAUTH_ENABLED", false),
-		GitHubRedirectURI:   getEnv("GITHUB_REDIRECT_URI", ""),
-		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),
+		AppEnv:               getEnv("APP_ENV", "development"),
+		Port:                 getEnv("PORT", "8080"),
+		JWTSecret:            getEnv("JWT_SECRET", "promptos-dev-secret-change-me"),
+		JWTExpireHours:       getEnvAsInt("JWT_EXPIRE_HOURS", 72),
+		UploadProvider:       getEnv("UPLOAD_PROVIDER", "local"),
+		UploadDir:            getEnv("UPLOAD_DIR", "./uploads"),
+		UploadBaseURL:        getEnv("UPLOAD_BASE_URL", "http://localhost:8080"),
+		UploadMaxMB:          getEnvAsInt("UPLOAD_MAX_MB", 10),
+		AllowGif:             getEnvAsBool("UPLOAD_ALLOW_GIF", false),
+		R2AccountID:          getEnv("R2_ACCOUNT_ID", ""),
+		R2Endpoint:           getEnv("R2_ENDPOINT", getEnv("S3_ENDPOINT", "")),
+		R2AccessKeyID:        getEnv("R2_ACCESS_KEY_ID", ""),
+		R2SecretKey:          getEnv("R2_SECRET_ACCESS_KEY", ""),
+		R2Bucket:             getEnv("R2_BUCKET", ""),
+		R2PublicURL:          getEnv("R2_PUBLIC_URL", ""),
+		AllowedImageDomains:  splitDomains(getEnv("ALLOWED_IMAGE_DOMAINS", ""), getEnv("R2_PUBLIC_URL", "")),
+		MySQLHost:            getEnv("MYSQL_HOST", "localhost"),
+		MySQLPort:            getEnv("MYSQL_PORT", "3306"),
+		MySQLUser:            getEnv("MYSQL_USER", "root"),
+		MySQLPass:            getEnv("MYSQL_PASSWORD", "root"),
+		MySQLDB:              getEnv("MYSQL_DATABASE", "promptos"),
+		MySQLMigrationUser:   getEnv("MYSQL_MIGRATION_USER", ""),
+		MySQLMigrationPass:   getEnv("MYSQL_MIGRATION_PASSWORD", ""),
+		DBMaxOpenConns:       getEnvAsInt("DB_MAX_OPEN_CONNS", 10),
+		DBMaxIdleConns:       getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+		DBConnMaxLifetimeMin: getEnvAsInt("DB_CONN_MAX_LIFETIME_MINUTES", 30),
+		RedisHost:            getEnv("REDIS_HOST", "localhost"),
+		RedisPort:            getEnv("REDIS_PORT", "6379"),
+		RedisPass:            getEnv("REDIS_PASSWORD", ""),
+		AllowedOrigin:        getEnv("ALLOWED_ORIGIN", "*"),
+		GitHubClientID:       getEnv("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret:   getEnv("GITHUB_CLIENT_SECRET", ""),
+		GitHubOAuthEnabled:   getEnvAsBool("GITHUB_OAUTH_ENABLED", false),
+		GitHubRedirectURI:    getEnv("GITHUB_REDIRECT_URI", ""),
+		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:3000"),
 	}
 }
 
@@ -102,6 +108,14 @@ func (c Config) Validate() error {
 	}
 	if err := validateIntEnv("UPLOAD_MAX_MB", c.UploadMaxMB); err != nil {
 		return err
+	}
+	// Zero means "use the documented code default" for programmatic test
+	// configs; values loaded from the environment are always positive.
+	if c.DBMaxOpenConns < 0 || c.DBMaxIdleConns < 0 || c.DBConnMaxLifetimeMin < 0 {
+		return errors.New("database pool settings must not be negative")
+	}
+	if c.DBMaxOpenConns > 0 && c.DBMaxIdleConns > c.DBMaxOpenConns {
+		return errors.New("DB_MAX_IDLE_CONNS cannot exceed DB_MAX_OPEN_CONNS")
 	}
 
 	if prod && (strings.TrimSpace(c.JWTSecret) == "" || c.JWTSecret == "promptos-dev-secret-change-me") {
