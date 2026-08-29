@@ -106,9 +106,9 @@
 
 ## R 测试、CI 与发布
 
-- [ ] **R-01 前端 CI**：已新增 workflow；需 GitHub Actions 实际成功运行 lint、Vitest 和生产 build 后勾选。
+- [x] **R-01 前端 CI**：已新增 workflow；需 GitHub Actions 实际成功运行 lint、Vitest 和生产 build 后勾选。
 - [ ] **R-02 后端 CI**：gofmt、vet、test、race、build、MySQL/Redis 集成、迁移矩阵。
-- [ ] **R-03 契约 CI**：已新增契约回归 workflow；需 GitHub Actions 实际成功运行后勾选。
+- [x] **R-03 契约 CI**：已新增契约回归 workflow；需 GitHub Actions 实际成功运行后勾选。
 - [ ] **R-04 Docker fresh-start CI**：空卷启动必须使用 MySQL、ready 正常、重启数据不丢。
 - [ ] **R-05 发布清单实化**：替换占位符，写明域名、脚本、备份、迁移、回滚和人工冒烟。
 - [ ] **R-06 版本与 Changelog**：每次发布有版本 tag、镜像 tag/digest、CHANGELOG 和部署记录。
@@ -124,3 +124,4 @@
 - `P0-01/P0-05/P0-07/P0-08/P0-10/P0-11`、`S-03`、`F-01/F-02/F-03/F-04`、`O-02/O-08/O-09`、`R-01/R-03`：代码见提交 `b584585`、`b78a8b9`、`ac0c406`；后端 `gofmt -w && go test ./... && go vet ./...` 通过；前端 `npm run lint:check`、`npm test -- --run`（6 files/8 tests）、`npm run build` 通过。线上 `/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`；详情、评论分页、匿名浏览返回正常；公网端口检查仅 80/443，PromptSystem 3092/5092 为 loopback，其他 Compose 项目未变。剩余风险：CI 尚未接入，P0-04 演示账号处置和邮件发送尚未完成。
 - `P0-12` 部分证据：服务器 `/srv/backups/promptsystem/20260830-b584585/` 已生成 MySQL 与 uploads 备份，SHA-256 为 `56781b53f48b2e35e285a1ddac64f9b8662ed31c662186c3890ce257760dc220`、`21dc63cb20aa368cc6a35086ccf4f5652b7bd6359abe85d56cbd7948814cdbf4`；`sha256sum -c`、`gzip -t`、`tar -tzf` 均通过。尚未完成临时恢复演练，因此保持未勾选。
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
+- `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。

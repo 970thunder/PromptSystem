@@ -51,25 +51,21 @@ func TestMigrationMatrix(t *testing.T) {
 			name: "fresh",
 			db:   dbName + "_matrix_fresh",
 			setup: func(t *testing.T, db *sql.DB) {
-				// Nothing: empty database, all migrations apply.
+				initializeBaselineSchema(t, db, dbName+"_matrix_fresh")
 			},
 		},
 		{
 			name: "baseline",
 			db:   dbName + "_matrix_baseline",
 			setup: func(t *testing.T, db *sql.DB) {
-				// Initialize from the full baseline schema, then re-run the
-				// migration chain to prove migrations are additive/idempotent.
-				schema := readFileOrFail(t, "sql/schema.sql")
-				if _, err := db.Exec(schema); err != nil {
-					t.Fatalf("apply baseline schema.sql: %v", err)
-				}
+				initializeBaselineSchema(t, db, dbName+"_matrix_baseline")
 			},
 		},
 		{
 			name: "partial",
 			db:   dbName + "_matrix_partial",
 			setup: func(t *testing.T, db *sql.DB) {
+				initializeBaselineSchema(t, db, dbName+"_matrix_partial")
 				// Apply only the first half of migrations, then let the chain
 				// finish the rest. This simulates an upgrade from an older
 				// deployment that stopped mid-way.
@@ -125,6 +121,16 @@ func TestMigrationMatrix(t *testing.T) {
 
 			assertMigrationTableComplete(t, db, len(names))
 		})
+	}
+}
+
+func initializeBaselineSchema(t *testing.T, db *sql.DB, databaseName string) {
+	t.Helper()
+	schema := readFileOrFail(t, "sql/schema.sql")
+	schema = strings.ReplaceAll(schema, "CREATE DATABASE IF NOT EXISTS promptos DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", "")
+	schema = strings.ReplaceAll(schema, "USE promptos;", "USE `"+databaseName+"`;")
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("apply baseline schema.sql: %v", err)
 	}
 }
 
