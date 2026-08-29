@@ -66,6 +66,9 @@ func TestMigrationMatrix(t *testing.T) {
 			db:   dbName + "_matrix_partial",
 			setup: func(t *testing.T, db *sql.DB) {
 				initializeBaselineSchema(t, db, dbName+"_matrix_partial")
+				if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(64) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`); err != nil {
+					t.Fatalf("create migration ledger: %v", err)
+				}
 				// Apply only the first half of migrations, then let the chain
 				// finish the rest. This simulates an upgrade from an older
 				// deployment that stopped mid-way.
