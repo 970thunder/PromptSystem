@@ -2,6 +2,8 @@
 
 更新时间：2026-08-30
 
+当前进度：31/81 已完成，50 项待完成（2026-08-30）。
+
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
 ## 当前基线
@@ -132,3 +134,4 @@
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
 - `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。
 - `R-02/R-04`：GitHub Actions `backend-ci` 运行 `33270442024` 成功，包含 gofmt、vet、race、MySQL/Redis 集成、迁移矩阵、build，以及 Docker fresh-start、ready 和 compose 健康检查。安全扫描最新运行 `33270441831` 成功。
+- 最新 CI：提交 `2f9201a` 的 backend-ci `33275544929` 和 security-scan `33275544928` 均成功；backend 包含 gofmt、vet、race、MySQL/Redis 集成、迁移矩阵、build 和 Docker ready，安全扫描包含 npm audit、govulncheck 与 Compose 策略。
