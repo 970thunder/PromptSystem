@@ -164,11 +164,10 @@ export const usePromptStore = defineStore('prompt', () => {
       total.value = promptRes.data.total
       usingMockData.value = false
     } catch {
-      categories.value = mockCategories
-      const filtered = filterMockPrompts(categoryId, currentTag.value)
-      prompts.value = filtered
-      total.value = filtered.length
-      usingMockData.value = true
+      categories.value = []
+      prompts.value = []
+      total.value = 0
+      usingMockData.value = false
     } finally {
       loading.value = false
     }
@@ -232,10 +231,9 @@ export const usePromptStore = defineStore('prompt', () => {
 
       return response.data
     } catch {
-      const prompt = mockPrompts.find((item) => item.id === id) ?? null
-      currentPrompt.value = prompt
-      usingMockData.value = true
-      return prompt
+      currentPrompt.value = null
+      usingMockData.value = false
+      return null
     } finally {
       detailLoading.value = false
     }
@@ -325,7 +323,7 @@ export const usePromptStore = defineStore('prompt', () => {
       const response = await promptApi.getRelatedPrompts(promptId)
       return response.data
     } catch {
-      return getRelatedPrompts(promptId, categoryId)
+      return []
     }
   }
 

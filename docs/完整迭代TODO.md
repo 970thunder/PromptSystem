@@ -85,7 +85,7 @@
 - [x] **F-04 评论工作区**：分页、排序、加载更多、回复、错误重试和真实总数。
 - [x] **F-05 相关推荐**：通过稳定后端查询获取，不依赖当前 Pinia 页缓存。
 - [ ] **F-06 生产能力开关**：OAuth、邮件、Skill、Playground 等未启用能力不可误点。
-- [ ] **F-07 清理演示 fallback**：生产 API 失败显示真实错误，不自动切换成演示数据。
+- [x] **F-07 清理演示 fallback**：生产 API 失败显示真实错误，不自动切换成演示数据。
 - [ ] **F-08 搜索与列表性能**：URL 恢复、取消旧请求、稳定图片尺寸、加载更多与错误恢复。
 - [ ] **F-09 响应式与无障碍**：390/768/1440 px、键盘、焦点、Escape、reduced motion 全部验收。
 - [ ] **F-10 浏览器 E2E**：覆盖首页、导航、搜索、详情、注册登录、评论互动、发布、工作台、主题与移动端。
@@ -127,6 +127,7 @@
 - `P0-12`：备份 `/srv/backups/promptsystem/20260830-demo-removal/` 经 SHA-256、`gzip -t`、`tar -tzf` 校验后，使用临时 MySQL 卷 `promptos_restore_mysql_20260830` 恢复，复核 `users=6,prompts=6,published=6`；上传归档解包成功。上一 release 镜像 `promptsystem-backend:20260829-a9ba2cf` 连接恢复库和临时 Redis 后 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。演练资源由 trap 清理并复核无容器、网络、卷或临时目录残留。以备份开始至恢复 ready 约 50 秒（演练 RTO）；备份时间点为备份命令完成时（RPO 取决于备份间隔，当前尚未配置定时备份）。首次失败原因为演练未注入旧版必需的 OAuth 占位配置，已修正并重跑成功。
 - `R-05`：`docs/RELEASE-CHECKLIST.md` 已写入正式域名、SSH/发布脚本、Compose 项目名、loopback 端口、备份校验、迁移、回滚和人工冒烟要求；未凭空勾选版本 tag/digest。
 - `S-06`：`isSafeInternalPath` 限制长度并拒绝协议相对、编码双斜杠、反斜杠和控制字符；Vitest 覆盖安全/恶意 redirect 变体。
+- `F-07`：API 开关开启时首页/详情/相关推荐/搜索失败不再回退 mock 数据，显示错误或空状态；mock 仅在显式关闭 API 时使用。
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
 - `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。
 - `R-02/R-04`：GitHub Actions `backend-ci` 运行 `33270442024` 成功，包含 gofmt、vet、race、MySQL/Redis 集成、迁移矩阵、build，以及 Docker fresh-start、ready 和 compose 健康检查。安全扫描最新运行 `33270441831` 成功。

@@ -193,6 +193,16 @@ const loadResults = async (append = false) => {
   const requestId = ++latestRequestId
   loading.value = true
   errorMessage.value = ''
+  if (import.meta.env.VITE_ENABLE_PROMPT_API !== 'true') {
+    const fallback = filterMockPrompts()
+    const start = append ? results.value.length : (page.value - 1) * pageSize
+    const nextPage = fallback.slice(start, start + pageSize)
+    results.value = append ? [...results.value, ...nextPage] : nextPage
+    total.value = fallback.length
+    loading.value = false
+    hasLoaded.value = true
+    return
+  }
   try {
     const response = await promptApi.searchPrompts({
       keyword: filters.keyword.trim(),
@@ -218,14 +228,12 @@ const loadResults = async (append = false) => {
     page.value = response.data.page
   } catch {
     if (requestId !== latestRequestId) return
-    // API unavailable: show labeled demo data and surface the failure, never silently imply live results.
-    const fallback = filterMockPrompts()
-    const start = append ? results.value.length : (page.value - 1) * pageSize
-    const nextPage = fallback.slice(start, start + pageSize)
-    results.value = append ? [...results.value, ...nextPage] : nextPage
-    total.value = fallback.length
-    errorMessage.value = '暂时无法连接服务，以下为演示数据。你可以稍后重试。'
-    message.warning('服务暂不可用，已切换到演示数据')
+    if (import.meta.env.VITE_ENABLE_PROMPT_API === 'true') {
+      if (!append) results.value = []
+      total.value = 0
+      errorMessage.value = '暂时无法连接服务，请稍后重试。'
+      message.error('服务暂不可用')
+    }
   } finally {
     if (requestId === latestRequestId) {
       hasLoaded.value = true
