@@ -107,9 +107,9 @@
 ## R 测试、CI 与发布
 
 - [x] **R-01 前端 CI**：已新增 workflow；需 GitHub Actions 实际成功运行 lint、Vitest 和生产 build 后勾选。
-- [ ] **R-02 后端 CI**：gofmt、vet、test、race、build、MySQL/Redis 集成、迁移矩阵。
+- [x] **R-02 后端 CI**：gofmt、vet、test、race、build、MySQL/Redis 集成、迁移矩阵。
 - [x] **R-03 契约 CI**：已新增契约回归 workflow；需 GitHub Actions 实际成功运行后勾选。
-- [ ] **R-04 Docker fresh-start CI**：空卷启动必须使用 MySQL、ready 正常、重启数据不丢。
+- [x] **R-04 Docker fresh-start CI**：空卷启动必须使用 MySQL、ready 正常、重启数据不丢。
 - [ ] **R-05 发布清单实化**：替换占位符，写明域名、脚本、备份、迁移、回滚和人工冒烟。
 - [ ] **R-06 版本与 Changelog**：每次发布有版本 tag、镜像 tag/digest、CHANGELOG 和部署记录。
 - [ ] **R-07 当前版+回滚版**：服务器只保留当前与上一可回滚的小型发布文件和所需镜像。
@@ -125,3 +125,4 @@
 - `P0-12` 部分证据：服务器 `/srv/backups/promptsystem/20260830-b584585/` 已生成 MySQL 与 uploads 备份，SHA-256 为 `56781b53f48b2e35e285a1ddac64f9b8662ed31c662186c3890ce257760dc220`、`21dc63cb20aa368cc6a35086ccf4f5652b7bd6359abe85d56cbd7948814cdbf4`；`sha256sum -c`、`gzip -t`、`tar -tzf` 均通过。尚未完成临时恢复演练，因此保持未勾选。
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
 - `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。
+- `R-02/R-04`：GitHub Actions `backend-ci` 运行 `33270442024` 成功，包含 gofmt、vet、race、MySQL/Redis 集成、迁移矩阵、build，以及 Docker fresh-start、ready 和 compose 健康检查。安全扫描最新运行 `33270441831` 成功。
