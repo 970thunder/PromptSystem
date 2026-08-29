@@ -1,0 +1,42 @@
+name: security-scan
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: npm audit
+        working-directory: src/frontend
+        run: npm ci && npm audit --audit-level=high
+      - uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: '1.25'
+          go-package: ./...
+          work-dir: src/backend
+
+  compose-policy:
+    name: production compose policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: reject production hard-coded secrets and public app ports
+        shell: bash
+        run: |
+          ! grep -nE 'APP_ENV: docker|MYSQL_USER: root|MYSQL_PASSWORD: root|MYSQL_ROOT_PASSWORD: root' deploy/promptsystem/docker-compose.yml
+          grep -q '127.0.0.1:5092:8080' deploy/promptsystem/docker-compose.yml
+          grep -q '127.0.0.1:3092:80' deploy/promptsystem/docker-compose.yml
+          ! grep -nE 'ports:.*(3306|6379|13900|13902)' deploy/promptsystem/docker-compose.yml

@@ -62,5 +62,18 @@
 
 ## 依赖服务
 
-- MySQL 8.4：`mysql_data` 卷，备份策略 <待补：定时 mysqldump 脚本>；
+- MySQL 8.4：`promptsystem_promptsystem_mysql_data` 卷；每次发布前由 `scripts\release.ps1` 串行执行 `mysqldump --single-transaction --routines --events`，压缩后写入 `/srv/backups/promptsystem/<version>/mysql.sql.gz` 并生成 `SHA256SUMS`。
 - Redis 7：缓存，可丢失重建。
+
+### 生产数据库权限
+
+- `promptos_app` 仅用于运行时业务 DML（SELECT/INSERT/UPDATE/DELETE/EXECUTE），不得执行 DDL。
+- `promptos_migrator` 仅由启动迁移阶段使用，拥有 PromptOS 数据库 DDL 权限；两者密码由 `/opt/secrets/promptsystem/app.env` 注入，权限 `600`。
+- 生产 Compose 必须设置 `MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_MIGRATION_USER`、`MYSQL_MIGRATION_PASSWORD`，禁止使用 MySQL root 连接应用。
+
+### 本次发布记录（2026-08-30）
+
+- 版本：`20260830-b584585`；Compose 项目：`promptsystem`。
+- 当前 release：`/srv/releases/promptsystem/20260830-b584585`；上一回滚版本：`20260829-a9ba2cf`。
+- 备份：`/srv/backups/promptsystem/20260830-b584585/`，MySQL 与 uploads 均通过 SHA-256、gzip/tar 完整性校验。
+- 发布验证：`/api/v1/health/ready` 返回 `200`、`storageMode=mysql`、`degraded=false`；HTTPS 首页、详情、评论分页和匿名浏览正常。

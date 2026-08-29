@@ -5,7 +5,10 @@
 ## [Unreleased]
 
 ### Security（计划中）
-- compose 的 `MYSQL_ROOT_PASSWORD` 与 `JWT_SECRET` 改为环境变量注入，消除硬编码 root 密码
+- 生产 compose 的数据库凭据、JWT 和 OAuth 开关改为环境变量注入，应用与迁移数据库账号分离
+- 生产启动在 MySQL/迁移失败时 fail-closed，不再降级到内存存储
+- 验证码改为 HMAC 摘要、Redis 原子消费，生产响应和日志不再暴露验证码
+- 公开用户响应移除邮箱、账号状态和 OAuth 绑定字段
 
 ### Added
 - 首页标题飘带使用已有提示词标题和封面图，支持多行、不同速度和 3D 视觉效果
@@ -18,6 +21,14 @@
 ### Fixed
 - 修复提示词卡片默认链接为空字符串导致无法进入详情页的问题
 - 修复提示词详情页在作者、评论用户数据缺失时渲染异常的问题
+- 修复评论/历史分页响应与前端 DTO 不一致、举报枚举错误和互动无法取消的问题
+
+## [v0.2.0] - 2026-08-30
+
+### Deployment
+- 发布至 `promptsystem.isoumao.top`，Compose 项目 `promptsystem`。
+- 当前 release：`/srv/releases/promptsystem/20260830-b584585`；回滚 release：`20260829-a9ba2cf`。
+- 服务器备份：`/srv/backups/promptsystem/20260830-b584585/`，SHA-256 已记录在总 TODO。
 
 ## [20260829-a9ba2cf] - 2026-08-29
 

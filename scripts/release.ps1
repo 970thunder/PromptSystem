@@ -1,60 +1,114 @@
-# scripts/release.ps1 — PromptOS 发布入口（骨架）
-# 流程：prepare → check → deploy → verify → record（见 E:\Web\GOVERNANCE.md 第 4 节）
-# 用法：powershell -File scripts\release.ps1 -Version v1.0.1
+# PromptOS production release pipeline.
+# Builds locally; the server receives only a compose file and runtime images.
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [switch]$SkipTests   # 仅紧急热修时用，事后必须补跑
+    [string]$Domain = 'promptsystem.isoumao.top',
+    [string]$ServerHost = '103.42.182.205',
+    [string]$ServerUser = 'root',
+    [int]$SshPort = 2680,
+    [string]$SshKey = 'E:\Web\服务器密钥\foxi_103.42.182.205',
+    [string]$ProjectName = 'promptsystem',
+    [switch]$SkipTests,
+    [switch]$SkipDeploy
 )
-$ErrorActionPreference = "Stop"
-Set-Location (Split-Path $PSScriptRoot -Parent)   # 仓库根
+$ErrorActionPreference = 'Stop'
+Set-Location (Split-Path $PSScriptRoot -Parent)
 
-function Fail($m) { Write-Host "x $m" -ForegroundColor Red; exit 1 }
-function Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
+function Step([string]$Message) { Write-Host "==> $Message" -ForegroundColor Cyan }
+function Fail([string]$Message) { throw $Message }
+function Require([string]$Command) { if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) { Fail "缺少命令：$Command" } }
+function Invoke-Checked([string]$Command, [string[]]$Arguments) {
+    & $Command @Arguments
+    if ($LASTEXITCODE -ne 0) { Fail "$Command 执行失败（退出码 $LASTEXITCODE）" }
+}
 
-# ---- 0. 前置检查 ----
-Step "0. 前置检查"
-if (-not (Test-Path "docs\CHANGELOG.md")) { Fail "缺少 docs\CHANGELOG.md（契约文件）" }
+if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z.-]{2,63}$') { Fail '版本只能包含字母、数字、点和连字符' }
+Require git; Require docker; Require npm; Require ssh; Require scp
+if (-not (Test-Path $SshKey)) { Fail "SSH 私钥不存在：$SshKey" }
+if (-not (Select-String -Path 'docs\CHANGELOG.md' -Pattern ([regex]::Escape("[$Version]")) -Quiet)) { Fail "CHANGELOG.md 缺少 [$Version] 条目" }
 $dirty = git status --porcelain
-if ($dirty) { Fail "工作区不干净，先提交或清理：`n$dirty" }
-if (-not (Select-String -Path "docs\CHANGELOG.md" -Pattern ([regex]::Escape($Version)) -Quiet)) {
-    Fail "CHANGELOG 中没有 $Version 条目——先写发布说明再发布"
-}
-Write-Host "OK: git 干净，CHANGELOG 含 $Version"
+if ($dirty) { Fail "工作区不干净，请先提交：`n$dirty" }
 
-# ---- 1. 本地验证 ----
 if (-not $SkipTests) {
-    Step "1. 后端静态检查 + 测试"
+    Step '运行后端静态检查与测试'
     Push-Location src\backend
-    $fmt = gofmt -l .
-    if ($fmt) { Pop-Location; Fail "gofmt 未通过：`n$fmt" }
-    go vet ./...;  if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "go vet 失败" }
-    go test ./...; if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "go test 失败" }
-    Pop-Location
+    try {
+        $formatted = gofmt -l .
+        if ($formatted) { Fail "gofmt 未通过：$formatted" }
+        Invoke-Checked go @('vet', './...')
+        Invoke-Checked go @('test', './...')
+    } finally { Pop-Location }
 
-    Step "1b. 前端构建"
+    Step '运行前端 lint、测试和生产构建'
     Push-Location src\frontend
-    npm run build; if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "前端构建失败" }
-    Pop-Location
+    try {
+        Invoke-Checked npm @('ci')
+        Invoke-Checked npm @('run', 'lint:check')
+        Invoke-Checked npm @('test', '--', '--run')
+        Invoke-Checked npm @('run', 'build')
+    } finally { Pop-Location }
 }
 
-# ---- 2. 服务器备份（保留最近 3 版） ----
-Step "2. 服务器备份"
-# TODO(部署方式确认后填写)：
-#   ssh <server> "mysqldump -u<user> -p ... > /opt/backups/promptos/$Version.sql"
-#   uploads 数据卷一并纳入备份
+$releaseRoot = Join-Path (Get-Location) "temp\release-$Version"
+if (Test-Path $releaseRoot) { Remove-Item -LiteralPath $releaseRoot -Recurse -Force }
+New-Item -ItemType Directory -Path $releaseRoot | Out-Null
+$backendImage = "$ProjectName-backend`:$Version"
+$frontendImage = "$ProjectName-frontend`:$Version"
 
-# ---- 3. 部署 ----
-Step "3. 部署"
-# TODO：二选一确认后填死——
-#   A. 服务器 git pull + docker compose build && docker compose up -d
-#   B. 本地构建镜像按 $Version 打 tag 推送，服务器 compose 引用该 tag（推荐：镜像 tag 即回滚点）
+Step '本机构建生产镜像'
+Invoke-Checked docker @('build', '--pull=false', '-t', $backendImage, 'src/backend')
+Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '-t', $frontendImage, 'src/frontend')
 
-# ---- 4. 健康检查 ----
-Step "4. 健康检查"
-# TODO：curl -fsS https://<域名>/ 与 API 健康端点
-#   失败则回滚：切回上一版镜像 tag / release 目录，必要时恢复数据库备份
+$imageArchive = Join-Path $releaseRoot "${ProjectName}-images-$Version.tar"
+Invoke-Checked docker @('save', '-o', $imageArchive, $backendImage, $frontendImage)
+Require gzip
+Invoke-Checked gzip @('-f', $imageArchive)
+$imageArchive = "$imageArchive.gz"
+$hash = (Get-FileHash $imageArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+Copy-Item deploy\promptsystem\docker-compose.yml (Join-Path $releaseRoot 'docker-compose.yml')
 
-# ---- 5. 记录 ----
-Step "5. 打 tag"
-git tag -a $Version -m "Release $Version"
-Write-Host "完成。请在 CHANGELOG 补'已发布'状态后推送：git push origin master --tags"
+if ($SkipDeploy) {
+    Write-Host "已完成本地发布制品：$releaseRoot（SHA-256 $hash）" -ForegroundColor Green
+    exit 0
+}
+
+$sshArgs = @('-i', $SshKey, '-p', "$SshPort", '-o', 'BatchMode=yes')
+$remote = "$ServerUser@$ServerHost"
+$remoteDir = "/srv/releases/$ProjectName/$Version"
+$backupDir = "/srv/backups/$ProjectName/$Version"
+
+Step '服务器备份 MySQL 与上传卷（串行）'
+$backupCommand = @"
+set -eu
+dir='$backupDir'
+install -d -m 700 "`$dir"
+. /opt/secrets/$ProjectName/app.env
+docker exec promptsystem-mysql sh -c 'mysqldump -uroot -p"`$MYSQL_ROOT_PASSWORD" --single-transaction --routines --events "`$MYSQL_DATABASE"' | gzip -c > "`$dir/mysql.sql.gz"
+docker run --rm --entrypoint sh -v promptsystem_promptsystem_uploads:/data -v "`$dir":/backup mysql:8.4 -c 'tar -czf /backup/uploads.tar.gz -C /data .'
+sha256sum "`$dir/mysql.sql.gz" "`$dir/uploads.tar.gz" > "`$dir/SHA256SUMS"
+sha256sum -c "`$dir/SHA256SUMS"
+gzip -t "`$dir/mysql.sql.gz"
+docker run --rm --entrypoint sh -v "`$dir":/backup mysql:8.4 -c 'tar -tzf /backup/uploads.tar.gz >/dev/null'
+echo BACKUP_VERIFIED
+"@
+& ssh @sshArgs $remote $backupCommand
+if ($LASTEXITCODE -ne 0) { Fail '服务器备份失败，终止发布' }
+
+Step '上传 release 文件和镜像包'
+& ssh @sshArgs $remote "install -d -m 755 '$remoteDir'"
+if ($LASTEXITCODE -ne 0) { Fail '服务器 release 目录创建失败' }
+Invoke-Checked scp ($sshArgs + @($imageArchive, "$remote`:$remoteDir/"))
+Invoke-Checked scp ($sshArgs + @((Join-Path $releaseRoot 'docker-compose.yml'), "$remote`:$remoteDir/docker-compose.yml"))
+
+Step '服务器串行加载镜像并部署原 Compose 项目'
+$deployCommand = "set -eu; cd '$remoteDir'; sha256sum '${ProjectName}-images-$Version.tar.gz' >/tmp/${ProjectName}-$Version.sha256; gzip -dc '${ProjectName}-images-$Version.tar.gz' | docker load; sed -i 's/^PROMPTSYSTEM_VERSION=.*/PROMPTSYSTEM_VERSION=$Version/' /opt/secrets/$ProjectName/app.env; chmod 600 /opt/secrets/$ProjectName/app.env; docker compose -p '$ProjectName' --env-file /opt/secrets/$ProjectName/app.env -f docker-compose.yml config --quiet; docker compose -p '$ProjectName' --env-file /opt/secrets/$ProjectName/app.env -f docker-compose.yml up -d --no-build"
+& ssh @sshArgs $remote $deployCommand
+if ($LASTEXITCODE -ne 0) { Fail "部署失败。请用上一 release '$ProjectName' 项目名回滚，不要删除卷。" }
+
+Step '线上健康检查与 HTTPS 验证'
+$verifyCommand = "set -eu; for i in `$(seq 1 30); do curl -fsS https://$Domain/api/v1/health/ready >/tmp/promptos-ready && break || sleep 2; done; grep -q 'storageMode.*mysql' /tmp/promptos-ready; curl -fsS https://$Domain/ >/dev/null; cat /tmp/promptos-ready"
+& ssh @sshArgs $remote $verifyCommand
+if ($LASTEXITCODE -ne 0) { Fail '健康检查失败，请按 docs/DEPLOYMENT.md 回滚到上一 release' }
+
+Write-Host "发布成功：$Version；镜像归档 SHA-256：$hash；备份目录：$backupDir" -ForegroundColor Green

@@ -1,12 +1,12 @@
-# 发布检查清单 — PromptOS v<版本>（<日期>）
+# 发布检查清单 — PromptOS（版本和日期由 `scripts/release.ps1` 注入）
 
 逐项勾选，全部通过才允许部署。
 
 ## 代码
 
-- [ ] `docs\CHANGELOG.md` 已写本次版本条目
+- [ ] `docs\CHANGELOG.md` 已写本次版本条目并记录镜像 digest
 - [ ] `git status` 干净（无未提交改动、无未跟踪的临时文件）
-- [ ] 已打 tag `v<版本>`
+- [ ] 已打与发布版本完全一致的 tag
 
 ## 质量
 
@@ -18,14 +18,14 @@
 
 ## 安全
 
-- [ ] compose 无硬编码密码：`MYSQL_ROOT_PASSWORD`/`JWT_SECRET` 均为 `${VAR}` 注入
+- [ ] 生产 compose 无硬编码密码：数据库、JWT、Redis、OAuth、SMTP 均从 `/opt/secrets/promptsystem/app.env` 注入
 - [ ] 无真实密钥入库（`git diff` 检查；新配置先进 `.env.docker.example` 占位）
-- [ ] 依赖无高危漏洞（`npm audit` / Go 依赖检查）
+- [ ] 依赖无高危漏洞（`npm audit --audit-level=high` / `govulncheck`；无法联网时记录原因）
 
 ## 部署
 
-- [ ] 服务器当前版本已备份（数据库 dump + uploads，位置：____，保留 3 版）
-- [ ] 发布脚本执行成功（`scripts\release.ps1`）
-- [ ] 健康检查通过：`curl https://<域名>/`
+- [ ] 服务器当前版本已备份（数据库 dump + uploads，脚本输出位置和 SHA-256 已记录，保留 3 版）
+- [ ] 发布脚本执行成功（`scripts\release.ps1 -Version <版本>`）
+- [ ] 健康检查通过：`https://promptsystem.isoumao.top/` 与 `/api/v1/health/ready`
 - [ ] 人工验证：首页 / 登录 / 发布 / 详情页
-- [ ] 回滚步骤确认可用（`docs\DEPLOYMENT.md` 回滚章节）
+- [ ] 回滚步骤确认可用：同一 Compose 项目名切回上一 release，必要时从备份恢复
