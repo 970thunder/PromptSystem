@@ -46,9 +46,9 @@
 
 ## 当前生产发布
 
-- 版本：`20260829-a9ba2cf`（Git `a9ba2cf`）
+- 版本：`20260830-b584585`（Git `b584585`）
 - Compose 项目：`promptsystem`
-- 发布目录：`/srv/releases/promptsystem/20260829-a9ba2cf`
+- 发布目录：`/srv/releases/promptsystem/20260830-b584585`
 - 入口端口：前端 `127.0.0.1:3092`，后端 `127.0.0.1:5092`
 - 数据卷：`promptsystem_promptsystem_mysql_data`、`promptsystem_promptsystem_redis_data`、`promptsystem_promptsystem_uploads`
 - 上传存储：当前使用独立 Docker 本地卷；未复用其他站点的 RustFS 凭据
