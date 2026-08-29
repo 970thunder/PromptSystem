@@ -62,7 +62,7 @@
 
 ## S 安全
 
-- [ ] **S-01 会话撤销**：登出调用后端；密码重置、禁用、注销使旧 token 立即失效。
+- [x] **S-01 会话撤销**：登出调用后端；密码重置、禁用、注销使旧 token 立即失效。
 - [ ] **S-02 JWT 存储策略**：先完成 CSP/XSS 审计，再评估迁移 HttpOnly+Secure+SameSite Cookie。
 - [x] **S-03 GitHub OAuth 开关**：显式 enable 配置；未配置时前端不显示可点击入口，启用时校验 redirect/state/code。
 - [ ] **S-04 CSP**：从 Report-Only 开始制定 Vue 生产 CSP，再切换强制模式。
@@ -128,6 +128,7 @@
 - `R-05`：`docs/RELEASE-CHECKLIST.md` 已写入正式域名、SSH/发布脚本、Compose 项目名、loopback 端口、备份校验、迁移、回滚和人工冒烟要求；未凭空勾选版本 tag/digest。
 - `S-06`：`isSafeInternalPath` 限制长度并拒绝协议相对、编码双斜杠、反斜杠和控制字符；Vitest 覆盖安全/恶意 redirect 变体。
 - `F-07`：API 开关开启时首页/详情/相关推荐/搜索失败不再回退 mock 数据，显示错误或空状态；mock 仅在显式关闭 API 时使用。
+- `S-01`：新增 `TestLogoutRevokesTokenImmediately`，验证登出将 JWT JTI 写入 Redis denylist，旧 token 随后返回 401。
 - `P0-09/A-08/D-01/F-04/F-05/O-03`：本批新增浏览历史分页加载更多与计数、评论失败重试、后端相关推荐查询、可配置 MySQL 连接池、uploads 用户外键迁移、Compose 日志轮转与 no-new-privileges；后端 `go test ./...`、`go vet ./...`，前端 lint、8 tests、生产 build 通过。剩余风险：外键迁移和 Compose 生产配置需在下一次发布窗口实际执行并验收；前端依赖审计仍有 Vite/esbuild 开发依赖风险。
 - `R-01/R-03`：GitHub Actions `frontend-ci` 运行 `33269634855` 成功，包含 lint、8 个 Vitest、生产 build 和契约回归；`security-scan` 运行 `33269955011` 成功，npm audit 与 govulncheck 均通过。`R-02` 等待后端最新运行成功后再勾选。
 - `R-02/R-04`：GitHub Actions `backend-ci` 运行 `33270442024` 成功，包含 gofmt、vet、race、MySQL/Redis 集成、迁移矩阵、build，以及 Docker fresh-start、ready 和 compose 健康检查。安全扫描最新运行 `33270441831` 成功。

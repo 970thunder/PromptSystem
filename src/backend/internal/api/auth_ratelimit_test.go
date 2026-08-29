@@ -278,6 +278,40 @@ func TestProductionCaptchaSendFailureDeletesPendingCode(t *testing.T) {
 	}
 }
 
+func TestLogoutRevokesTokenImmediately(t *testing.T) {
+	s, fc := newTestServer(t)
+	user, found := s.userStore.FindByID(1)
+	if !found {
+		t.Fatal("expected seeded test user")
+	}
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	s.handleLogout(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("logout status = %d", rec.Code)
+	}
+	claims, err := s.tokenManager.Verify(token)
+	if err != nil {
+		t.Fatalf("verify token: %v", err)
+	}
+	if _, ok := fc.store["promptos:jwt:denylist:"+claims.JTI]; !ok {
+		t.Fatal("logout must add token to denylist")
+	}
+	wrapped := s.withAuth(func(w http.ResponseWriter, _ *http.Request) {})
+	check := httptest.NewRecorder()
+	checkReq := httptest.NewRequest(http.MethodGet, "/api/v1/user/info", nil)
+	checkReq.Header.Set("Authorization", "Bearer "+token)
+	wrapped(check, checkReq)
+	if check.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked token status = %d, want 401", check.Code)
+	}
+}
+
 func decodeTestResponse(t *testing.T, rec *httptest.ResponseRecorder, dst any) {
 	t.Helper()
 	if err := json.Unmarshal(rec.Body.Bytes(), dst); err != nil {
