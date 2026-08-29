@@ -84,6 +84,7 @@
         VITE_API_BASE_URL: /api/v1
         VITE_APP_TITLE: PromptOS
         VITE_ENABLE_PROMPT_API: "true"
+        VITE_GITHUB_OAUTH_ENABLED: "false"
     container_name: promptos-frontend
     restart: unless-stopped
     ports:

@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-promptos}
       MYSQL_USER: ${MYSQL_USER:-promptos_app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
     volumes:
       - promptsystem_mysql_data:/var/lib/mysql
     healthcheck:
@@ -40,7 +40,7 @@ services:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_USER: ${MYSQL_USER:-promptos_app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-promptos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
