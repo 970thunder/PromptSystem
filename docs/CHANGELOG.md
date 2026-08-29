@@ -19,6 +19,12 @@
 - 修复提示词卡片默认链接为空字符串导致无法进入详情页的问题
 - 修复提示词详情页在作者、评论用户数据缺失时渲染异常的问题
 
+## [20260829-a9ba2cf] - 2026-08-29
+
+### Deployment
+- 首次部署至 `promptsystem.isoumao.top`。
+- 使用独立 MySQL、Redis、上传卷和 `promptsystem` Compose 项目；生产入口接入 HTTPS nginx 反代。
+
 ## [v0.0.1] - YYYY-MM-DD
 
 - MVP 初始版本（package.json 0.0.1；历史任务编号见 `docs\后端迭代任务清单.md`）

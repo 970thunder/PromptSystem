@@ -6,7 +6,7 @@
 
 | 环境 | 位置 | 地址 | 说明 |
 |---|---|---|---|
-| 生产 | 与其余项目同一台服务器（见 `secrets\shared\` 服务器清单） | https://<域名，待登记> | 已部署，未公开 |
+| 生产 | `103.42.182.205`（SSH `2680`） | https://promptsystem.isoumao.top | PromptSystem 独立 Compose 项目 |
 | 本地 | 开发机 `E:\Web\PromptSystem` | http://localhost:28301–28304 | `start-dev.bat`，端口占用即拒绝启动 |
 
 ## 服务拓扑（docker-compose.yml）
@@ -20,11 +20,11 @@
 
 各服务自带 healthcheck。
 
-## 部署步骤（实际上服务器方式待登记后补全）
+## 部署步骤
 
 1. 本地 `docs\RELEASE-CHECKLIST.md` 全绿；
 2. 服务器备份：mysqldump 全库 + uploads 卷，保留最近 3 版；
-3. <待登记：服务器 `git pull` + `docker compose build && up -d`，还是本地构建镜像推送>；
+3. 本机构建并标记镜像后通过 `docker save`/`docker load` 传输；服务器不编译源码；
 4. 验证：`curl https://<域名>/` + 首页登录/发布冒烟；
 5. 失败回滚：切回上一版镜像/目录 + 恢复数据库备份。
 
@@ -40,7 +40,19 @@
 ## 配置与密钥
 
 - 仓库内只有 `.env.docker.example`（占位符）；真实值本地在 `E:\Web\secrets\promptsystem\`，服务器在 `/opt/secrets/promptsystem/`（chmod 600，不在任何 webroot 下）。
-- ⚠️ 待办（P1）：compose 中 `MYSQL_ROOT_PASSWORD: root` 与默认 `JWT_SECRET` 必须改为 `${VAR}` 注入；当前 compose 无 TLS/反代，生产入口由服务器侧反代承担（方式待登记）。
+- 生产密钥位于服务器 `/opt/secrets/promptsystem/app.env`（权限 `600`），不进入仓库；Compose 通过环境变量注入；
+- 生产入口由现有 nginx 反代，证书由 Certbot webroot 自动续期；
+- 首次新库需要先导入 `src/backend/sql/schema.sql`，之后后端启动时自动运行 `sql/migrations`；
+
+## 当前生产发布
+
+- 版本：`20260829-a9ba2cf`（Git `a9ba2cf`）
+- Compose 项目：`promptsystem`
+- 发布目录：`/srv/releases/promptsystem/20260829-a9ba2cf`
+- 入口端口：前端 `127.0.0.1:3092`，后端 `127.0.0.1:5092`
+- 数据卷：`promptsystem_promptsystem_mysql_data`、`promptsystem_promptsystem_redis_data`、`promptsystem_promptsystem_uploads`
+- 上传存储：当前使用独立 Docker 本地卷；未复用其他站点的 RustFS 凭据
+- 健康检查：`/api/v1/health/ready` 返回 `storageMode=mysql`
 
 ## 回滚
 
