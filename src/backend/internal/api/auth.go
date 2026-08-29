@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -62,8 +61,8 @@ type updateUserRequest struct {
 }
 
 type authResponse struct {
-	Token string           `json:"token"`
-	User  store.PublicUser `json:"user"`
+	Token string            `json:"token"`
+	User  store.PrivateUser `json:"user"`
 }
 
 type followActionResponse struct {
@@ -106,11 +105,10 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("dev email captcha for %s: %s", strings.TrimSpace(payload.Email), code)
 	response := captchaResponse{
 		ExpiresInSeconds: int(timeUntil(expiresAt).Seconds()),
 	}
-	if s.config.AppEnv != "production" {
+	if s.config.IsDevelopment() || s.config.IsTest() {
 		response.DevCode = code
 	}
 
@@ -159,7 +157,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: authResponse{
 			Token: token,
-			User:  store.ToPublicUser(user),
+			User:  store.ToPrivateUser(user),
 		},
 	})
 }
@@ -286,7 +284,7 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: authResponse{
 			Token: token,
-			User:  store.ToPublicUser(user),
+			User:  store.ToPrivateUser(user),
 		},
 	})
 }
@@ -315,10 +313,10 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, apiResponse[store.PublicUser]{
+		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
 			Message: "Success",
-			Data:    store.ToPublicUser(user),
+			Data:    store.ToPrivateUser(user),
 		})
 	case http.MethodPut:
 		var payload updateUserRequest
@@ -333,10 +331,10 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, apiResponse[store.PublicUser]{
+		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
 			Message: "Success",
-			Data:    store.ToPublicUser(user),
+			Data:    store.ToPrivateUser(user),
 		})
 	default:
 		writeMethodNotAllowed(w)

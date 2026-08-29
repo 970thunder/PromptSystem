@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import PromptDetailView from '../PromptDetailView.vue'
 import { usePromptStore } from '@/stores/prompt'
+import { promptApi } from '@/api/promptApi'
 import type { Prompt } from '@/types'
 
 vi.mock('naive-ui', async (importOriginal) => {
@@ -71,6 +72,11 @@ describe('PromptDetailView', () => {
     vi.spyOn(promptStore, 'ensurePromptSeed').mockResolvedValue()
     vi.spyOn(promptStore, 'loadPromptDetail').mockResolvedValue(prompt)
     vi.spyOn(promptStore, 'loadPromptComments').mockResolvedValue([])
+    const recordView = vi.spyOn(promptApi, 'recordPromptView').mockResolvedValue({
+      code: 200,
+      message: 'Success',
+      data: { prompt, applied: true }
+    })
 
     await router.push('/prompt/105')
     await router.isReady()
@@ -92,5 +98,6 @@ describe('PromptDetailView', () => {
     expect(wrapper.text()).toContain('作者')
     expect(wrapper.text()).toContain('社区用户')
     expect(wrapper.text()).toContain('社区反馈')
+    expect(recordView).toHaveBeenCalledWith(prompt.id)
   })
 })

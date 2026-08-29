@@ -1,9 +1,36 @@
 package store
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestPublicUserJSONDoesNotExposePrivateFields(t *testing.T) {
+	user := AuthUser{ID: 1, Username: "Public", Email: "private@example.com", Status: 1, GitHubID: 42}
+	encoded, err := json.Marshal(ToPublicUser(user))
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	text := string(encoded)
+	for _, forbidden := range []string{"email", "status", "hasGitHubBound", "private@example.com"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("public user leaked %q: %s", forbidden, text)
+		}
+	}
+}
+
+func TestPromptAuthorJSONDoesNotExposeEmailOrAccountStatus(t *testing.T) {
+	prompt := Prompt{ID: 1, User: User{ID: 2, Email: "private@example.com", Status: 1}}
+	encoded, err := json.Marshal(prompt)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	text := string(encoded)
+	if strings.Contains(text, "private@example.com") || strings.Contains(text, `"user":{"id":2,"username":"","avatar":"","email"`) {
+		t.Fatalf("prompt author leaked private fields: %s", text)
+	}
+}
 
 func TestUserStorePasswordTooLong(t *testing.T) {
 	userStore := NewUserStore()

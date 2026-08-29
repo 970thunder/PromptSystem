@@ -191,9 +191,13 @@ const handleLike = async () => {
 
   liking.value = true
   try {
-    const response = await promptApi.likePrompt(prompt.value.id)
+    const wasLiked = promptStore.liked
+    const response = wasLiked
+      ? await promptApi.unlikePrompt(prompt.value.id)
+      : await promptApi.likePrompt(prompt.value.id)
     promptStore.mergePrompt(response.data.prompt)
-    message.success(response.data.applied ? '已点赞' : '你已经点过赞了')
+    promptStore.liked = !wasLiked
+    message.success(promptStore.liked ? '已点赞' : '已取消点赞')
   } finally {
     liking.value = false
   }
@@ -210,9 +214,13 @@ const handleFavorite = async () => {
 
   favoriting.value = true
   try {
-    const response = await promptApi.favoritePrompt(prompt.value.id)
+    const wasFavorited = promptStore.favorited
+    const response = wasFavorited
+      ? await promptApi.unfavoritePrompt(prompt.value.id)
+      : await promptApi.favoritePrompt(prompt.value.id)
     promptStore.mergePrompt(response.data.prompt)
-    message.success(response.data.applied ? '已收藏' : '你已经收藏过了')
+    promptStore.favorited = !wasFavorited
+    message.success(promptStore.favorited ? '已收藏' : '已取消收藏')
   } finally {
     favoriting.value = false
   }
@@ -336,7 +344,7 @@ const handleCommentReport = async (comment: Comment) => {
       commentReporting.value = true
       try {
         const response = await promptStore.reportComment(comment.id, {
-          reason: '不当评论',
+          reason: 'abuse',
           detail: comment.content.slice(0, 200)
         })
         message.success(response.applied ? '已提交举报' : '你已经举报过这条评论')
@@ -366,7 +374,7 @@ const handlePromptReport = async () => {
       promptReporting.value = true
       try {
         const response = await promptStore.reportPrompt(current.id, {
-          reason: '不当提示词',
+          reason: 'other',
           detail: current.title.slice(0, 200)
         })
         message.success(response.applied ? '已提交举报' : '你已经举报过这条提示词')
@@ -395,13 +403,26 @@ const loadDetail = async () => {
   }
 
   await promptStore.loadPromptDetail(promptId.value)
-  if (prompt.value && userStore.isLoggedIn) {
+  if (prompt.value) {
     try {
       const response = await promptApi.recordPromptView(prompt.value.id)
       promptStore.mergePrompt(response.data.prompt)
     } catch {
       // Browsing should never block reading a prompt.
     }
+  }
+  if (prompt.value && userStore.isLoggedIn) {
+    try {
+      const response = await promptApi.getInteractionStatus(prompt.value.id)
+      promptStore.liked = response.data.liked
+      promptStore.favorited = response.data.favorited
+    } catch {
+      promptStore.liked = false
+      promptStore.favorited = false
+    }
+  } else {
+    promptStore.liked = false
+    promptStore.favorited = false
   }
   await promptStore.loadPromptComments(promptId.value, commentSort.value)
   await loadFollowStatus()
@@ -594,17 +615,19 @@ watch(commentSort, async () => {
                   <div class="detail-actions">
                     <button
                       class="detail-btn-like"
+                      :class="{ 'detail-btn-like--active': promptStore.liked }"
                       :disabled="liking"
                       @click="handleLike"
                     >
-                      {{ liking ? '点赞中...' : `点赞 · ${prompt.likes.toLocaleString()}` }}
+                      {{ liking ? '处理中...' : `${promptStore.liked ? '已点赞' : '点赞'} · ${prompt.likes.toLocaleString()}` }}
                     </button>
                     <button
                       class="detail-btn-favorite"
+                      :class="{ 'detail-btn-favorite--active': promptStore.favorited }"
                       :disabled="favoriting"
                       @click="handleFavorite"
                     >
-                      {{ favoriting ? '收藏中...' : `收藏 · ${prompt.favorites.toLocaleString()}` }}
+                      {{ favoriting ? '处理中...' : `${promptStore.favorited ? '已收藏' : '收藏'} · ${prompt.favorites.toLocaleString()}` }}
                     </button>
                     <button
                       class="detail-btn-share"
@@ -824,7 +847,7 @@ watch(commentSort, async () => {
                     </button>
                   </div>
                   <div class="detail-comments-count">
-                    {{ comments.length }}
+                    {{ promptStore.commentsTotal }}
                   </div>
                 </div>
               </div>
@@ -985,6 +1008,16 @@ watch(commentSort, async () => {
                   </div>
                 </article>
               </div>
+
+              <button
+                v-if="comments.length < promptStore.commentsTotal"
+                type="button"
+                class="detail-btn-share"
+                :disabled="promptStore.commentsLoadingMore"
+                @click="promptStore.loadMoreComments(promptId, commentSort)"
+              >
+                {{ promptStore.commentsLoadingMore ? '加载中...' : '加载更多评论' }}
+              </button>
             </section>
           </div>
 

@@ -43,6 +43,17 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('userInfo')
   }
 
+  const logoutServer = async () => {
+    if (token.value) {
+      try {
+        await userApi.logout()
+      } catch {
+        // Always clear local credentials even when the API is unavailable.
+      }
+    }
+    logout()
+  }
+
   const markBindPromptPending = (userID: number) => {
     localStorage.setItem(bindPromptPendingKey(userID), '1')
   }
@@ -140,6 +151,7 @@ export const useUserStore = defineStore('user', () => {
     setToken,
     setUserInfo,
     logout,
+    logoutServer,
     shouldPromptBindGitHub,
     markBindPromptShown,
     isLoggedIn,

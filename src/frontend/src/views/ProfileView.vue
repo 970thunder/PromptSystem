@@ -8,7 +8,7 @@ import { mockPrompts } from '@/mock/prompts'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { FollowStatus, Prompt, User } from '@/types'
-import { githubAuthUrl } from '@/utils/authUrl'
+import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 import BackButton from '@/components/navigation/BackButton.vue'
 import AppShell from '@/components/layout/AppShell.vue'
@@ -262,7 +262,7 @@ const loadProfile = async () => {
       ])
       favoritePrompts.value = favoritesRes.data
       likedPrompts.value = likesRes.data
-      historyPrompts.value = historyRes.data
+      historyPrompts.value = historyRes.data.list
       draftPrompts.value = draftsRes.data
     } catch {
       favoritePrompts.value = []
@@ -433,7 +433,7 @@ watch(() => route.params.userId, loadProfile)
             </section>
 
             <section
-              v-if="isOwnerView"
+              v-if="isOwnerView && githubOAuthEnabled"
               class="profile-card"
             >
               <div class="profile-card__title">

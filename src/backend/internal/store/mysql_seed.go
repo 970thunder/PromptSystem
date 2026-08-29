@@ -7,9 +7,12 @@ import (
 	"time"
 )
 
-func SeedMySQLData(db *sql.DB) error {
+func SeedMySQLData(db *sql.DB, includeDemo bool) error {
 	if err := seedCategories(db); err != nil {
 		return err
+	}
+	if !includeDemo {
+		return nil
 	}
 
 	if err := seedUsers(db); err != nil {

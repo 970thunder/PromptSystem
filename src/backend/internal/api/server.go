@@ -49,10 +49,10 @@ type serverDeps struct {
 	storageMode  string
 }
 
-func NewServer(cfg config.Config) http.Handler {
+func NewServer(cfg config.Config) (http.Handler, error) {
 	imageStorage, err := storage.NewImageStorage(cfg)
 	if err != nil {
-		panic(fmt.Sprintf("failed to initialize image storage: %v", err))
+		return nil, fmt.Errorf("initialize image storage: %w", err)
 	}
 
 	userStore := store.UserManager(store.NewUserStore())
@@ -64,8 +64,12 @@ func NewServer(cfg config.Config) http.Handler {
 	db, err := database.OpenMySQL(cfg)
 	if err == nil {
 		if migrateErr := database.RunMigrations(db, ""); migrateErr != nil {
-			log.Printf("failed to run MySQL migrations, falling back to memory store: %v", migrateErr)
-		} else if seedErr := store.SeedMySQLData(db); seedErr == nil {
+			_ = db.Close()
+			if cfg.IsProduction() {
+				return nil, fmt.Errorf("run MySQL migrations: %w", migrateErr)
+			}
+			log.Printf("failed to run MySQL migrations, using development memory store: %v", migrateErr)
+		} else if seedErr := store.SeedMySQLData(db, !cfg.IsProduction()); seedErr == nil {
 			userStore = store.NewMySQLUserStore(db)
 			promptStore = store.NewMySQLPromptStore(db)
 			if s, ok := promptStore.(interface{ SetAllowedImageDomains([]string) }); ok {
@@ -76,10 +80,17 @@ func NewServer(cfg config.Config) http.Handler {
 			storageMode = "mysql"
 			log.Printf("using MySQL-backed user and prompt stores at %s:%s/%s", cfg.MySQLHost, cfg.MySQLPort, cfg.MySQLDB)
 		} else {
-			log.Printf("failed to seed MySQL data, falling back to memory store: %v", seedErr)
+			_ = db.Close()
+			if cfg.IsProduction() {
+				return nil, fmt.Errorf("initialize MySQL reference data: %w", seedErr)
+			}
+			log.Printf("failed to seed MySQL data, using development memory store: %v", seedErr)
 		}
 	} else {
-		log.Printf("failed to connect to MySQL, falling back to memory store: %v", err)
+		if cfg.IsProduction() {
+			return nil, fmt.Errorf("connect to MySQL: %w", err)
+		}
+		log.Printf("failed to connect to MySQL, using development memory store: %v", err)
 	}
 
 	return newServerWithDeps(serverDeps{
@@ -94,7 +105,7 @@ func NewServer(cfg config.Config) http.Handler {
 		uploadStore:  uploadStore,
 		imageStorage: imageStorage,
 		storageMode:  storageMode,
-	})
+	}), nil
 }
 
 // newServerWithDeps assembles the HTTP handler from explicit dependencies. It is

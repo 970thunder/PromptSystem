@@ -45,7 +45,7 @@ const oauthStateTTL = 10 * time.Minute
 const exchangeCodeTTL = 60 * time.Second
 
 func (s *server) oauthCookieSecure() bool {
-	return s.config.AppEnv == "production"
+	return s.config.IsProduction()
 }
 
 func (s *server) githubRedirectURI() string {
@@ -62,7 +62,8 @@ func (s *server) githubRedirectURI() string {
 }
 
 func (s *server) githubConfigured() bool {
-	return strings.TrimSpace(s.config.GitHubClientID) != "" &&
+	return s.config.GitHubOAuthEnabled &&
+		strings.TrimSpace(s.config.GitHubClientID) != "" &&
 		strings.TrimSpace(s.config.GitHubClientSecret) != ""
 }
 
@@ -347,7 +348,7 @@ func (s *server) handleAuthExchange(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: authResponse{
 			Token: token,
-			User:  store.ToPublicUser(user),
+			User:  store.ToPrivateUser(user),
 		},
 	})
 }

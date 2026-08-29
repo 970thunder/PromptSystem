@@ -6,6 +6,7 @@ import type {
   FollowStatus,
   LoginRequest,
   LoginResponse,
+  PageResponse,
   Prompt,
   RegisterRequest,
   ResetPasswordRequest,
@@ -41,8 +42,8 @@ export const userApi = {
     return request.get('/user/likes')
   },
 
-  getHistoryPrompts(): Promise<ApiResponse<Prompt[]>> {
-    return request.get('/user/history')
+  getHistoryPrompts(page = 1, pageSize = 24): Promise<ApiResponse<PageResponse<Prompt>>> {
+    return request.get('/user/history', { params: { page, pageSize } })
   },
 
   getFollowingUsers(): Promise<ApiResponse<User[]>> {

@@ -80,7 +80,7 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 浏览计数接口，**匿名友好**（无需 Bearer 也可调用）。见下方「收藏/浏览/互动」隐私约定。
 
 ### `GET /prompts/{id}/comments`
-评论列表。支持 `sort`（`hot`/`newest`/`oldest`）。
+评论列表。支持 `sort`（`latest`/`popular`/`oldest`），并返回统一分页信封 `{ list, total, page, pageSize }`。
 
 ### `POST /prompts/{id}/comments`（需登录）
 创建评论。请求体：`{ "content": "...", "parentId": null }`。最多两层回复。

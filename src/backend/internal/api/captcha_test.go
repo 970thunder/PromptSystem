@@ -1,9 +1,28 @@
 package api
 
 import (
+	"context"
 	"testing"
 	"time"
 )
+
+func TestRedisCaptchaIsHashedAndSingleUse(t *testing.T) {
+	s, fc := newTestServer(t)
+	code, _, _, err := s.issueRedisCaptcha(context.Background(), "USER@example.com")
+	if err != nil {
+		t.Fatalf("issueRedisCaptcha() error = %v", err)
+	}
+	stored := fc.store["promptos:captcha:email:user@example.com"]
+	if stored == "" || stored == code {
+		t.Fatalf("captcha must be stored as a digest, got %q", stored)
+	}
+	if !s.verifyRedisCaptcha(context.Background(), "user@example.com", code) {
+		t.Fatal("expected captcha to verify")
+	}
+	if s.verifyRedisCaptcha(context.Background(), "user@example.com", code) {
+		t.Fatal("expected captcha to be consumed atomically")
+	}
+}
 
 func TestCaptchaManagerIssueAndVerify(t *testing.T) {
 	base := time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)

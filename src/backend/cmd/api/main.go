@@ -19,9 +19,14 @@ func main() {
 		log.Fatalf("invalid configuration: %v", err)
 	}
 
+	handler, err := api.NewServer(cfg)
+	if err != nil {
+		log.Fatalf("initialize API: %v", err)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.NewServer(cfg),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

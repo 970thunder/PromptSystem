@@ -3,7 +3,7 @@
      非浮层），支持键盘展开/关闭。 -->
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import MegaMenu from './MegaMenu.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import { useUserStore } from '@/stores/user'
@@ -11,6 +11,7 @@ import { useUserStore } from '@/stores/user'
 type NavEntry = 'home' | 'discover' | 'community' | 'workspace'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 // 当前悬停/展开的一级入口；null 表示菜单关闭。
@@ -95,6 +96,12 @@ const currentEntry = computed<NavEntry | null>(() => {
 })
 
 const userInitial = computed(() => userStore.userInfo?.username?.slice(0, 1)?.toUpperCase() ?? 'U')
+
+const handleLogout = async () => {
+  await userStore.logoutServer()
+  closeMenu()
+  await router.push('/')
+}
 
 watch(() => route.fullPath, closeMenu)
 window.addEventListener('promptos:navigation', closeMenu)
@@ -212,6 +219,14 @@ onBeforeUnmount(() => {
         >
           {{ userInitial }}
         </RouterLink>
+        <button
+          v-if="userStore.isLoggedIn"
+          type="button"
+          class="header-link"
+          @click="handleLogout"
+        >
+          退出
+        </button>
         <RouterLink
           v-else
           to="/login"

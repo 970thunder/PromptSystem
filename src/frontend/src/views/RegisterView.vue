@@ -4,7 +4,7 @@ import { useRouter, RouterLink } from 'vue-router'
 import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api/userApi'
-import { githubAuthUrl } from '@/utils/authUrl'
+import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
 import AppShell from '@/components/layout/AppShell.vue'
 
 const router = useRouter()
@@ -226,6 +226,7 @@ onBeforeUnmount(() => {
               </NButton>
 
               <NButton
+                v-if="githubOAuthEnabled"
                 class="auth-card__github"
                 size="large"
                 block

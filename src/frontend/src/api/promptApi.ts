@@ -76,18 +76,30 @@ export const promptApi = {
     return request.post(`/prompts/${id}/like`)
   },
 
+  unlikePrompt(id: number): Promise<ApiResponse<PromptActionResponse>> {
+    return request.delete(`/prompts/${id}/unlike`)
+  },
+
   // Favorite a prompt
   favoritePrompt(id: number): Promise<ApiResponse<PromptActionResponse>> {
     return request.post(`/prompts/${id}/favorite`)
+  },
+
+  unfavoritePrompt(id: number): Promise<ApiResponse<PromptActionResponse>> {
+    return request.delete(`/prompts/${id}/unfavorite`)
+  },
+
+  getInteractionStatus(id: number): Promise<ApiResponse<{ liked: boolean; favorited: boolean }>> {
+    return request.get(`/prompts/${id}/interaction`)
   },
 
   recordPromptView(id: number): Promise<ApiResponse<PromptActionResponse>> {
     return request.post(`/prompts/${id}/view`)
   },
 
-  getPromptComments(id: number, sort?: string): Promise<ApiResponse<Comment[]>> {
+  getPromptComments(id: number, sort?: string, page = 1, pageSize = 20): Promise<ApiResponse<PageResponse<Comment>>> {
     return request.get(`/prompts/${id}/comments`, {
-      params: sort ? { sort } : undefined
+      params: { sort, page, pageSize }
     })
   },
 

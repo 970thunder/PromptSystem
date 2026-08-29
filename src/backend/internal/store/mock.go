@@ -4,11 +4,11 @@ type User struct {
 	ID         int    `json:"id"`
 	Username   string `json:"username"`
 	Avatar     string `json:"avatar"`
-	Email      string `json:"email"`
+	Email      string `json:"-"`
 	Bio        string `json:"bio"`
 	Level      int    `json:"level"`
 	Experience int    `json:"experience"`
-	Status     int    `json:"status"`
+	Status     int    `json:"-"`
 	CreatedAt  string `json:"createdAt"`
 }
 

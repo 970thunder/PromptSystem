@@ -6,6 +6,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-promptos}
+      MYSQL_USER: ${MYSQL_USER:-promptos_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - promptsystem_mysql_data:/var/lib/mysql
     healthcheck:
@@ -33,12 +35,12 @@ services:
     env_file:
       - /opt/secrets/promptsystem/app.env
     environment:
-      APP_ENV: docker
+      APP_ENV: production
       PORT: 8080
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
-      MYSQL_USER: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER:-promptos_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-promptos}
       REDIS_HOST: redis
       REDIS_PORT: 6379

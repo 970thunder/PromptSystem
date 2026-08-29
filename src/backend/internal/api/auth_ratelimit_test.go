@@ -211,7 +211,7 @@ func TestResetPasswordDoesNotRevealRegistration(t *testing.T) {
 	// registered and an unregistered email. The responses must be identical so
 	// the reset flow cannot be used to enumerate registered emails.
 	for _, email := range []string{"astra@example.com", "nobody@example.com"} {
-		fc.store["promptos:captcha:email:"+email] = "123456"
+		fc.store["promptos:captcha:email:"+email] = captchaDigest(s.config.JWTSecret, email, "123456")
 	}
 
 	var messages []string
@@ -231,6 +231,21 @@ func TestResetPasswordDoesNotRevealRegistration(t *testing.T) {
 
 	if messages[0] != messages[1] {
 		t.Fatalf("reset responses differ, revealing registration: %q vs %q", messages[0], messages[1])
+	}
+}
+
+func TestProductionCaptchaResponseDoesNotExposeCode(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.config.AppEnv = "production"
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user/captcha", strings.NewReader(`{"email":"safe@example.com"}`))
+	req.Header.Set("X-Forwarded-For", "10.0.0.50")
+	rec := httptest.NewRecorder()
+	s.handleCaptcha(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "devCode") {
+		t.Fatalf("production captcha response leaked devCode: %s", rec.Body.String())
 	}
 }
 

@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -113,7 +116,8 @@ func (s *server) issueRedisCaptcha(ctx context.Context, email string) (string, t
 		return "", time.Time{}, 0, err
 	}
 	expiresAt := time.Now().Add(captchaTTL)
-	if err := s.cache.Set(ctx, key, code, captchaTTL); err != nil {
+	digest := captchaDigest(s.config.JWTSecret, normalized, code)
+	if err := s.cache.Set(ctx, key, digest, captchaTTL); err != nil {
 		return "", time.Time{}, 0, err
 	}
 	return code, expiresAt, 0, nil
@@ -130,15 +134,18 @@ func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) boo
 	}
 
 	key := "promptos:captcha:email:" + normalized
-	stored, err := s.cache.Get(ctx, key)
+	stored, err := s.cache.GetAndDelete(ctx, key)
 	if err != nil {
 		return false
 	}
-	if stored != strings.TrimSpace(code) {
-		return false
-	}
-	_ = s.cache.Delete(ctx, key)
-	return true
+	expected := captchaDigest(s.config.JWTSecret, normalized, strings.TrimSpace(code))
+	return hmac.Equal([]byte(stored), []byte(expected))
+}
+
+func captchaDigest(secret, email, code string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(email + ":" + code))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func normalizeCaptchaEmail(email string) (string, bool) {

@@ -199,7 +199,6 @@ onMounted(() => {
                 </button>
               </div>
             </div>
-
           </div>
         </section>
 

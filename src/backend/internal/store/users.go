@@ -49,15 +49,19 @@ type AuthUser struct {
 }
 
 type PublicUser struct {
-	ID             int    `json:"id"`
-	Username       string `json:"username"`
-	Avatar         string `json:"avatar"`
+	ID         int    `json:"id"`
+	Username   string `json:"username"`
+	Avatar     string `json:"avatar"`
+	Bio        string `json:"bio"`
+	Level      int    `json:"level"`
+	Experience int    `json:"experience"`
+	CreatedAt  string `json:"createdAt"`
+}
+
+type PrivateUser struct {
+	PublicUser
 	Email          string `json:"email"`
-	Bio            string `json:"bio"`
-	Level          int    `json:"level"`
-	Experience     int    `json:"experience"`
 	Status         int    `json:"status"`
-	CreatedAt      string `json:"createdAt"`
 	HasGitHubBound bool   `json:"hasGitHubBound"`
 }
 
@@ -486,15 +490,21 @@ func (s *UserStore) followStatusLocked(userID, viewerID int) FollowStatus {
 
 func ToPublicUser(user AuthUser) PublicUser {
 	return PublicUser{
-		ID:             user.ID,
-		Username:       user.Username,
-		Avatar:         user.Avatar,
+		ID:         user.ID,
+		Username:   user.Username,
+		Avatar:     user.Avatar,
+		Bio:        user.Bio,
+		Level:      user.Level,
+		Experience: user.Experience,
+		CreatedAt:  user.CreatedAt,
+	}
+}
+
+func ToPrivateUser(user AuthUser) PrivateUser {
+	return PrivateUser{
+		PublicUser:     ToPublicUser(user),
 		Email:          user.Email,
-		Bio:            user.Bio,
-		Level:          user.Level,
-		Experience:     user.Experience,
 		Status:         user.Status,
-		CreatedAt:      user.CreatedAt,
 		HasGitHubBound: user.GitHubID > 0,
 	}
 }

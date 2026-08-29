@@ -46,10 +46,16 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, title: '发布' }
   },
   {
-    path: '/profile/:userId?',
+    path: '/profile',
     name: 'Profile',
     component: () => import('@/views/ProfileView.vue'),
     meta: { requiresAuth: true, title: '个人主页' }
+  },
+  {
+    path: '/profile/:userId',
+    name: 'PublicProfile',
+    component: () => import('@/views/ProfileView.vue'),
+    meta: { title: '个人主页' }
   },
   {
     path: '/search',

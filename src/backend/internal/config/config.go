@@ -36,6 +36,7 @@ type Config struct {
 	AllowedOrigin       string
 	GitHubClientID      string
 	GitHubClientSecret  string
+	GitHubOAuthEnabled  bool
 	GitHubRedirectURI   string
 	FrontendURL         string
 }
@@ -74,6 +75,7 @@ func Load() Config {
 		AllowedOrigin:       getEnv("ALLOWED_ORIGIN", "*"),
 		GitHubClientID:      getEnv("GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret:  getEnv("GITHUB_CLIENT_SECRET", ""),
+		GitHubOAuthEnabled:  getEnvAsBool("GITHUB_OAUTH_ENABLED", false),
 		GitHubRedirectURI:   getEnv("GITHUB_REDIRECT_URI", ""),
 		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),
 	}
@@ -83,8 +85,10 @@ func Load() Config {
 // would leak secrets or misbehave in a non-development environment. It returns
 // the offending variable name so callers can log it without printing values.
 func (c Config) Validate() error {
-	dev := c.AppEnv == "development" || c.AppEnv == "docker" || c.AppEnv == "test"
-	prod := !dev
+	if !c.IsDevelopment() && !c.IsTest() && !c.IsProduction() {
+		return fmt.Errorf("APP_ENV must be one of development, test, or production")
+	}
+	prod := c.IsProduction()
 
 	if err := validatePort(c.Port); err != nil {
 		return err
@@ -105,8 +109,8 @@ func (c Config) Validate() error {
 	if prod && c.AllowedOrigin == "*" {
 		return errors.New("ALLOWED_ORIGIN must be an explicit origin list (not *) in non-development environments")
 	}
-	if prod && (strings.TrimSpace(c.GitHubClientID) == "" || strings.TrimSpace(c.GitHubClientSecret) == "") {
-		return errors.New("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured in non-development environments")
+	if c.GitHubOAuthEnabled && (strings.TrimSpace(c.GitHubClientID) == "" || strings.TrimSpace(c.GitHubClientSecret) == "") {
+		return errors.New("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured when GitHub OAuth is enabled")
 	}
 
 	if strings.Contains(c.AllowedOrigin, "*") && strings.Contains(c.AllowedOrigin, ",") {
@@ -121,6 +125,10 @@ func (c Config) Validate() error {
 
 	return nil
 }
+
+func (c Config) IsDevelopment() bool { return c.AppEnv == "development" }
+func (c Config) IsTest() bool        { return c.AppEnv == "test" }
+func (c Config) IsProduction() bool  { return c.AppEnv == "production" }
 
 // AllowedOrigins returns the parsed comma-separated allowlist. An empty or
 // wildcard list yields an empty slice so callers can treat it as "any origin".

@@ -3,7 +3,7 @@ import { reactive } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
-import { githubAuthUrl } from '@/utils/authUrl'
+import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
 import { isSafeInternalPath } from '@/composables/useBackNavigation'
 import AppShell from '@/components/layout/AppShell.vue'
 
@@ -101,6 +101,7 @@ const handleGitHubLogin = () => {
               </NButton>
 
               <NButton
+                v-if="githubOAuthEnabled"
                 class="auth-card__github"
                 size="large"
                 block
