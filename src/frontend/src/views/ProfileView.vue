@@ -4,7 +4,6 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
-import { mockPrompts } from '@/mock/prompts'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { FollowStatus, Prompt, User } from '@/types'
@@ -162,6 +161,8 @@ const handleSaveProfile = async () => {
     profileUser.value = updated
     syncProfileForm()
     message.success('资料已更新')
+  } catch {
+    message.error('资料保存失败，请稍后重试')
   } finally {
     savingProfile.value = false
   }
@@ -200,6 +201,8 @@ const handleAvatarUpload = async (event: Event) => {
     profileUser.value = updated
     syncProfileForm()
     message.success('头像已更新')
+  } catch {
+    message.error('头像上传失败，请稍后重试')
   } finally {
     uploadingAvatar.value = false
   }
@@ -248,7 +251,8 @@ const loadProfile = async () => {
     })
     prompts.value = response.data.list
   } catch {
-    prompts.value = mockPrompts.filter((prompt) => prompt.userId === viewedUserId.value)
+    prompts.value = []
+    message.error('个人内容加载失败，请稍后重试')
   } finally {
     loading.value = false
   }

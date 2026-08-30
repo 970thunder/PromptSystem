@@ -304,6 +304,8 @@ const handleCoverChange = async (event: Event) => {
     const response = await promptApi.uploadCover(file)
     form.cover = response.data.url
     message.success('封面上传成功')
+  } catch {
+    message.error('封面上传失败，请稍后重试')
   } finally {
     uploading.value = false
     input.value = ''
@@ -344,6 +346,8 @@ const handleGalleryImagesChange = async (event: Event) => {
       }
     }
     message.success('展示图上传成功')
+  } catch {
+    message.error('展示图上传失败，请稍后重试')
   } finally {
     galleryUploading.value = false
     input.value = ''

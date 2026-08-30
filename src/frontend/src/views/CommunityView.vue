@@ -119,6 +119,16 @@ onMounted(() => {
             variant="blocks"
           />
 
+          <PageError
+            v-else-if="promptStore.feedError"
+            kind="error"
+            title="社区内容加载失败"
+            :description="promptStore.feedError"
+            action-label="重新加载"
+            :busy="promptStore.loading"
+            @action="promptStore.loadHomeFeed()"
+          />
+
           <PromptGrid
             v-else-if="workflows.length"
             :prompts="workflows.slice(0, 6)"
@@ -284,14 +294,6 @@ onMounted(() => {
             开始发布 →
           </button>
         </section>
-
-        <div
-          v-if="promptStore.usingMockData"
-          class="community-demo"
-          role="status"
-        >
-          <span>当前为演示数据 / 离线预览，未连接实时服务。</span>
-        </div>
       </div>
     </div>
   </AppShell>

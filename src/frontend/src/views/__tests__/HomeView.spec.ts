@@ -64,4 +64,17 @@ describe('HomeView', () => {
     expect(wrapper.findAll('.home-hero__title-cover').length).toBeGreaterThan(0)
     expect(wrapper.find('.home-hero__title-barrage').text()).not.toContain('#')
   })
+
+  it('默认折叠分类并可展开全部分类', async () => {
+    const wrapper = await mountHome()
+    const toggle = wrapper.find('button[aria-controls="home-category-list"]')
+
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+
+    await toggle.trigger('click')
+
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('#home-category-list').findAll('.home-cat-chip').length).toBeGreaterThan(14)
+  })
 })

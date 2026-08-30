@@ -34,9 +34,9 @@ const canSendCaptcha = computed(
 )
 
 const infoItems = [
-  '密码至少 8 位，并使用 bcrypt 哈希存储。',
-  '注册需要邮箱验证码，开发环境会直接回填验证码。',
-  '未登录访问受保护页面时，将自动跳转到登录页。'
+  '密码至少 8 位，并使用安全哈希存储。',
+  '注册需要邮箱验证码，请查收邮件后填写。',
+  '登录后即可发布、收藏和管理你的提示词。'
 ]
 
 const startCaptchaCountdown = (seconds: number) => {
@@ -62,13 +62,15 @@ const handleSendCaptcha = async () => {
   captchaLoading.value = true
   try {
     const response = await userApi.sendCaptcha(formValue.email.trim())
-    if (response.data.devCode) {
+    if (import.meta.env.DEV && response.data.devCode) {
       formValue.captcha = response.data.devCode
-      message.success(`开发环境验证码已回填：${response.data.devCode}`)
+      message.success(`本地开发验证码已自动填入：${response.data.devCode}`)
     } else {
       message.success('验证码已发送，请查收邮箱')
     }
     startCaptchaCountdown(60)
+  } catch {
+    message.error('验证码发送失败，请稍后重试')
   } finally {
     captchaLoading.value = false
   }
@@ -94,14 +96,17 @@ const handleSubmit = async () => {
     return
   }
 
-  await userStore.register({
-    username: formValue.username.trim(),
-    email: formValue.email.trim(),
-    password: formValue.password,
-    captcha: formValue.captcha.trim()
-  })
-
-  await router.push('/')
+  try {
+    await userStore.register({
+      username: formValue.username.trim(),
+      email: formValue.email.trim(),
+      password: formValue.password,
+      captcha: formValue.captcha.trim()
+    })
+    await router.push('/')
+  } catch {
+    message.error('注册失败，请检查验证码或稍后重试')
+  }
 }
 
 const handleGitHubLogin = () => {
@@ -127,7 +132,7 @@ onBeforeUnmount(() => {
             创建 PromptOS 账号
           </h1>
           <p class="auth-hero__desc">
-            注册成功后将自动登录并建立 JWT 会话。开发环境验证码会直接回填，生产环境可接入真实邮件服务。
+            注册成功后将自动登录。请使用真实邮箱接收验证码，未配置邮件服务时请联系站点管理员。
           </p>
 
           <div class="auth-info-list">

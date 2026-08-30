@@ -1,9 +1,10 @@
 <!-- 文件作用：产品式首页。首屏品牌 + 搜索主 CTA + 标题飘带；下方依次为
      「今日精选」大屏展示（1 张大卡 + 2 张横排小卡）、「最新发布」卡片网格（支持
-     加载更多）、分类/标签发现入口与发布引导。所有内容均来自真实信息流或演示数据。 -->
+     加载更多）、分类/标签发现入口与发布引导。所有内容均来自实时服务（测试环境除外）。 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import AppShell from '@/components/layout/AppShell.vue'
@@ -18,6 +19,8 @@ const userStore = useUserStore()
 const router = useRouter()
 
 const searchKeyword = ref('')
+const categoryExpanded = ref(false)
+const collapsedCategoryCount = 14
 
 // 大屏展示取信息流前三条：1 张主卡 + 2 张小卡；最新发布网格展示其余内容。
 const featured = computed(() => promptStore.prompts[0] ?? null)
@@ -71,7 +74,12 @@ const heroTitleRows = computed(() => {
   return rows
 })
 
-const displayCategories = computed(() => promptStore.categories.slice(0, 14))
+const displayCategories = computed(() => (
+  categoryExpanded.value
+    ? promptStore.categories
+    : promptStore.categories.slice(0, collapsedCategoryCount)
+))
+const hasHiddenCategories = computed(() => promptStore.categories.length > collapsedCategoryCount)
 
 const formatCount = (value: number) => {
   if (value >= 10000) {
@@ -195,7 +203,7 @@ onMounted(() => {
                   class="home-hero__secondary"
                   @click="goPublish"
                 >
-                  或发布你自己的提示词
+                  发布你的提示词
                 </button>
               </div>
             </div>
@@ -237,6 +245,16 @@ onMounted(() => {
             label="正在加载精选内容"
             variant="blocks"
             class="home-showcase__state"
+          />
+
+          <PageError
+            v-else-if="promptStore.feedError"
+            kind="error"
+            title="内容加载失败"
+            :description="promptStore.feedError"
+            action-label="重新加载"
+            :busy="promptStore.loading"
+            @action="promptStore.loadHomeFeed()"
           />
 
           <div
@@ -414,7 +432,10 @@ onMounted(() => {
             </RouterLink>
           </div>
 
-          <div class="home-discover__cats">
+          <div
+            id="home-category-list"
+            class="home-discover__cats"
+          >
             <RouterLink
               v-for="category in displayCategories"
               :key="category.id"
@@ -425,6 +446,26 @@ onMounted(() => {
               <span class="home-cat-chip__count">{{ category.count }}</span>
             </RouterLink>
           </div>
+
+          <button
+            v-if="hasHiddenCategories"
+            type="button"
+            class="home-category-toggle"
+            :aria-expanded="categoryExpanded"
+            aria-controls="home-category-list"
+            :title="categoryExpanded ? '收起分类' : '展开全部分类'"
+            @click="categoryExpanded = !categoryExpanded"
+          >
+            <span>{{ categoryExpanded ? '收起分类' : `展开全部分类（${promptStore.categories.length}）` }}</span>
+            <ChevronUp
+              v-if="categoryExpanded"
+              aria-hidden="true"
+            />
+            <ChevronDown
+              v-else
+              aria-hidden="true"
+            />
+          </button>
 
           <div
             v-if="promptStore.hotTags.length > 0"
@@ -463,14 +504,6 @@ onMounted(() => {
             开始发布 →
           </button>
         </section>
-
-        <div
-          v-if="promptStore.usingMockData"
-          class="home-demo"
-          role="status"
-        >
-          <span>当前为演示数据 / 离线预览，未连接实时服务。</span>
-        </div>
       </div>
     </div>
   </AppShell>
@@ -691,7 +724,7 @@ onMounted(() => {
 }
 
 .home-feature__cta {
-  @apply mt-6 inline-flex min-h-[44px] items-center rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#111111];
+  @apply mt-6 inline-flex min-h-[44px] items-center rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900;
 }
 
 /* 小卡：横排媒体卡，均分右侧高度 */
@@ -761,6 +794,15 @@ onMounted(() => {
   @apply text-xs tabular-nums text-[var(--prompt-text-faint)];
 }
 
+.home-category-toggle {
+  @apply mt-4 inline-flex min-h-[40px] items-center gap-1.5 rounded-full border bg-[var(--prompt-surface-muted)] px-4 py-2 text-sm font-medium text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:bg-[var(--prompt-surface)] hover:text-[var(--prompt-primary)];
+  border-color: var(--prompt-border);
+}
+
+.home-category-toggle svg {
+  @apply h-4 w-4;
+}
+
 .home-discover__tags {
   @apply mt-4 flex flex-wrap gap-2.5;
 }
@@ -792,10 +834,6 @@ onMounted(() => {
   @apply inline-flex min-h-[48px] shrink-0 items-center rounded-full bg-[var(--prompt-primary)] px-7 py-3 text-sm font-semibold text-[var(--prompt-primary-contrast)] transition hover:bg-[var(--prompt-primary-hover)];
 }
 
-.home-demo {
-  @apply mt-8 text-sm text-[var(--prompt-text-faint)];
-}
-
 @media (prefers-reduced-motion: reduce) {
   .home-feature__img,
   .home-side-card__thumb img,
@@ -814,6 +852,7 @@ onMounted(() => {
   .home-search,
   .home-search__submit,
   .home-cat-chip,
+  .home-category-toggle,
   .home-tag-chip,
   .home-side-card,
   .home-publish__cta,

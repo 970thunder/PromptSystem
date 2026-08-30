@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
+import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
 import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
 import { isSafeInternalPath } from '@/composables/useBackNavigation'
@@ -10,6 +10,7 @@ import AppShell from '@/components/layout/AppShell.vue'
 const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
+const message = useMessage()
 
 const formValue = reactive({
   email: '',
@@ -17,9 +18,13 @@ const formValue = reactive({
 })
 
 const handleSubmit = async () => {
-  await userStore.login(formValue)
-  const redirect = isSafeInternalPath(route.query.redirect)
-  await router.push(redirect)
+  try {
+    await userStore.login({ email: formValue.email.trim(), password: formValue.password })
+    const redirect = isSafeInternalPath(route.query.redirect)
+    await router.push(redirect)
+  } catch {
+    message.error('登录失败，请检查邮箱和密码后重试')
+  }
 }
 
 const handleGitHubLogin = () => {

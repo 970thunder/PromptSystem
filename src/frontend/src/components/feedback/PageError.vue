@@ -70,7 +70,8 @@ const emit = defineEmits<{
 }
 
 .page-feedback--error {
-  @apply border-amber-200 bg-amber-50;
+  background-color: var(--prompt-error-bg);
+  border-color: color-mix(in srgb, var(--prompt-error) 35%, transparent);
 }
 
 .page-feedback__title {
@@ -78,7 +79,7 @@ const emit = defineEmits<{
 }
 
 .page-feedback--error .page-feedback__title {
-  @apply text-amber-900;
+  color: var(--prompt-error);
 }
 
 .page-feedback__desc {

@@ -3,16 +3,9 @@
     image: mysql:8.4
     container_name: promptos-mysql
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
     environment:
-      MYSQL_ROOT_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:-promptos-dev-root-change-me}
       MYSQL_DATABASE: promptos
-      MYSQL_USER: ${PROMPTOS_MYSQL_USER:-promptos_app}
-      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:-promptos-local-password}
     ports:
       - "${PROMPTOS_MYSQL_PORT:-3306}:3306"
     volumes:
@@ -28,11 +21,6 @@
     image: redis:7-alpine
     container_name: promptos-redis
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: 5m
-        max-file: "3"
     ports:
       - "${PROMPTOS_REDIS_PORT:-6379}:6379"
     volumes:
@@ -48,17 +36,10 @@
       context: ./src/backend
     container_name: promptos-backend
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
     environment:
-      APP_ENV: development
+      APP_ENV: docker
       PORT: 8080
-      JWT_SECRET: ${PROMPTOS_JWT_SECRET:-change-this-jwt-secret}
+      JWT_SECRET: ${PROMPTOS_JWT_SECRET:-promptos-dev-jwt-change-me}
       JWT_EXPIRE_HOURS: ${PROMPTOS_JWT_EXPIRE_HOURS:-72}
       UPLOAD_PROVIDER: ${PROMPTOS_UPLOAD_PROVIDER:-local}
       UPLOAD_DIR: /app/uploads
@@ -74,12 +55,9 @@
       R2_PUBLIC_URL: ${PROMPTOS_R2_PUBLIC_URL:-}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
-      MYSQL_USER: ${PROMPTOS_MYSQL_USER:-promptos_app}
-      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:-promptos-local-password}
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:-promptos-dev-root-change-me}
       MYSQL_DATABASE: promptos
-      DB_MAX_OPEN_CONNS: ${PROMPTOS_DB_MAX_OPEN_CONNS:-10}
-      DB_MAX_IDLE_CONNS: ${PROMPTOS_DB_MAX_IDLE_CONNS:-5}
-      DB_CONN_MAX_LIFETIME_MINUTES: ${PROMPTOS_DB_CONN_MAX_LIFETIME_MINUTES:-30}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       ALLOWED_ORIGIN: http://localhost:3000
@@ -87,11 +65,6 @@
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:8080/api/v1/auth/github/callback}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      SMTP_HOST: ${PROMPTOS_SMTP_HOST:-}
-      SMTP_PORT: ${PROMPTOS_SMTP_PORT:-587}
-      SMTP_USER: ${PROMPTOS_SMTP_USER:-}
-      SMTP_PASSWORD: ${PROMPTOS_SMTP_PASSWORD:-}
-      SMTP_FROM: ${PROMPTOS_SMTP_FROM:-}
     ports:
       - "${PROMPTOS_BACKEND_PORT:-8080}:8080"
     volumes:
@@ -109,16 +82,8 @@
         VITE_API_BASE_URL: /api/v1
         VITE_APP_TITLE: PromptOS
         VITE_ENABLE_PROMPT_API: "true"
-        VITE_GITHUB_OAUTH_ENABLED: "false"
     container_name: promptos-frontend
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: 5m
-        max-file: "3"
     ports:
       - "${PROMPTOS_FRONTEND_PORT:-3000}:80"
     depends_on:

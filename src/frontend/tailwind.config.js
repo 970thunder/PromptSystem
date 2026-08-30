@@ -9,17 +9,17 @@ export default {
     extend: {
       colors: {
         brand: {
-          ink: '#111111',
-          muted: '#555555',
-          subtle: '#777777',
-          line: 'rgba(0, 0, 0, 0.1)',
+          ink: '#0F172A',
+          muted: '#475569',
+          subtle: '#64748B',
+          line: 'rgba(37, 99, 235, 0.14)',
         },
         surface: {
-          page: '#f5f3ee',
-          card: '#ffffff',
-          soft: '#faf8f4',
-          wash: '#f6f4ef',
-          inverse: '#111111',
+          page: '#F6F9FF',
+          card: '#FFFFFF',
+          soft: '#EEF5FF',
+          wash: '#EAF2FF',
+          inverse: '#0F172A',
         },
         accent: {
           success: '#22a06b',
@@ -35,14 +35,9 @@ export default {
         },
         // Glassmorphism accent
         glass: {
-          primary: '#111111',
-          secondary: '#333333',
-          accent: '#f5f3ee',
-        },
-        warm: {
-          page: '#f5f3ee',
-          surface: '#faf8f4',
-          muted: '#f6f4ef',
+          primary: '#2563EB',
+          secondary: '#1D4ED8',
+          accent: '#EEF5FF',
         },
         // Neutral
         neutral: {

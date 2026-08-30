@@ -6,6 +6,12 @@
 
 PromptOS：AI Prompt & Skill 社区平台 MVP（feed、详情、登录注册、发布、搜索、点赞/收藏/评论）。前端 Vue3+TS+Vite+Tailwind（`src\frontend`），后端 Go net/http + MySQL + Redis（`src\backend`）。已部署服务器，未公开。
 
+| 项目快照 | 当前值 |
+|---|---|
+| 当前 Phase | PromptOS 1.0 内容社区上线重构 |
+| 当前聚焦模块 | MVP 全页面与功能质量修复 |
+| 任务清单 | `TODO.md`（以代码和测试结果为准） |
+
 ## 常用命令
 
 | 用途 | 命令 |
@@ -18,7 +24,7 @@ PromptOS：AI Prompt & Skill 社区平台 MVP（feed、详情、登录注册、�
 
 ## 已知问题（接到相关任务时优先处理）
 
-- **前端零测试且不在 CI**——新增前端功能时必须至少补一条组件/冒烟测试。
+- 前端测试已接入本地 Vitest；新增前端功能时必须至少补一条组件/冒烟测试，并在 CI 中执行构建与测试。
 - `docker-compose.yml` 硬编码 `MYSQL_ROOT_PASSWORD: root` 与默认 `JWT_SECRET`——任何触碰 compose 或安全相关的任务必须改为环境变量注入。
 - `.grok\`、`.workbuddy\` 已加入 .gitignore，勿提交。
 

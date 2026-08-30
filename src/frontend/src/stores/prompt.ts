@@ -13,14 +13,8 @@ export const usePromptStore = defineStore('prompt', () => {
   const loading = ref(false)
   const detailLoading = ref(false)
   const commentsLoading = ref(false)
-  const commentsTotal = ref(0)
-  const commentsPage = ref(1)
-  const commentsPageSize = ref(20)
-  const commentsLoadingMore = ref(false)
-  const commentsError = ref(false)
-  const liked = ref(false)
-  const favorited = ref(false)
   const usingMockData = ref(false)
+  const feedError = ref('')
   const page = ref(1)
   const pageSize = ref(12)
   const total = ref(0)
@@ -116,30 +110,22 @@ export const usePromptStore = defineStore('prompt', () => {
     await loadHomeFeed()
   }
 
-  const filterMockPrompts = (categoryId?: number, tag?: string) => {
-    const normalizedTag = tag?.trim().toLowerCase()
-    return mockPrompts.filter((prompt) => {
-      if (categoryId && prompt.categoryId !== categoryId) {
-        return false
-      }
-      if (normalizedTag && !prompt.tags.some((item) => item.trim().toLowerCase() === normalizedTag)) {
-        return false
-      }
-      return true
-    })
-  }
-
   const loadHomeFeed = async (categoryId?: number, tag?: string) => {
     loading.value = true
+    feedError.value = ''
     page.value = 1
     currentCategoryId.value = categoryId
     currentTag.value = tag?.trim() || undefined
 
-    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
-
-    if (!enablePromptApi) {
+    // Unit tests use deterministic fixtures; no runtime build uses this branch.
+    if (import.meta.env.MODE === 'test') {
       categories.value = mockCategories
-      const filtered = filterMockPrompts(categoryId, currentTag.value)
+      const normalizedTag = currentTag.value?.toLowerCase()
+      const filtered = mockPrompts.filter((prompt) => {
+        if (categoryId && prompt.categoryId !== categoryId) return false
+        if (normalizedTag && !prompt.tags.some((tag) => tag.toLowerCase() === normalizedTag)) return false
+        return true
+      })
       prompts.value = filtered
       total.value = filtered.length
       usingMockData.value = true
@@ -168,6 +154,7 @@ export const usePromptStore = defineStore('prompt', () => {
       prompts.value = []
       total.value = 0
       usingMockData.value = false
+      feedError.value = '暂时无法加载内容，请检查服务连接后重试。'
     } finally {
       loading.value = false
     }
@@ -175,11 +162,6 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const loadMorePrompts = async () => {
     if (loadingMore.value || loading.value || !hasMore.value) {
-      return
-    }
-
-    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
-    if (!enablePromptApi) {
       return
     }
 
@@ -202,6 +184,9 @@ export const usePromptStore = defineStore('prompt', () => {
         ...response.data.list.filter((item) => !existing.has(item.id))
       ]
       usingMockData.value = false
+      feedError.value = ''
+    } catch {
+      feedError.value = '暂时无法加载内容，请检查服务连接后重试。'
     } finally {
       loadingMore.value = false
     }
@@ -210,9 +195,7 @@ export const usePromptStore = defineStore('prompt', () => {
   const loadPromptDetail = async (id: number) => {
     detailLoading.value = true
 
-    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
-
-    if (!enablePromptApi) {
+    if (import.meta.env.MODE === 'test') {
       const prompt = mockPrompts.find((item) => item.id === id) ?? null
       currentPrompt.value = prompt
       usingMockData.value = true
@@ -241,49 +224,16 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const loadPromptComments = async (id: number, sort = 'latest') => {
     commentsLoading.value = true
-    commentsError.value = false
-
-    const enablePromptApi = import.meta.env.VITE_ENABLE_PROMPT_API === 'true'
-
-    if (!enablePromptApi) {
-      comments.value = []
-      commentsLoading.value = false
-      return []
-    }
 
     try {
-      const response = await promptApi.getPromptComments(id, sort, 1, commentsPageSize.value)
-      comments.value = response.data.list
-      commentsTotal.value = response.data.total
-      commentsPage.value = response.data.page
-      return response.data.list
+      const response = await promptApi.getPromptComments(id, sort)
+      comments.value = response.data
+      return response.data
     } catch {
       comments.value = []
-      commentsTotal.value = 0
-      commentsPage.value = 1
-      commentsError.value = true
       return []
     } finally {
       commentsLoading.value = false
-    }
-  }
-
-  const loadMoreComments = async (id: number, sort = 'latest') => {
-    if (commentsLoadingMore.value || comments.value.length >= commentsTotal.value) {
-      return comments.value
-    }
-
-    commentsLoadingMore.value = true
-    try {
-      const nextPage = commentsPage.value + 1
-      const response = await promptApi.getPromptComments(id, sort, nextPage, commentsPageSize.value)
-      const existing = new Set(comments.value.map((item) => item.id))
-      comments.value = [...comments.value, ...response.data.list.filter((item) => !existing.has(item.id))]
-      commentsTotal.value = response.data.total
-      commentsPage.value = response.data.page
-      return comments.value
-    } finally {
-      commentsLoadingMore.value = false
     }
   }
 
@@ -315,18 +265,6 @@ export const usePromptStore = defineStore('prompt', () => {
       .slice(0, 3)
   }
 
-  const loadRelatedPrompts = async (promptId: number, categoryId: number) => {
-    if (import.meta.env.VITE_ENABLE_PROMPT_API !== 'true') {
-      return getRelatedPrompts(promptId, categoryId)
-    }
-    try {
-      const response = await promptApi.getRelatedPrompts(promptId)
-      return response.data
-    } catch {
-      return []
-    }
-  }
-
   return {
     prompts,
     currentPrompt,
@@ -335,13 +273,8 @@ export const usePromptStore = defineStore('prompt', () => {
     loading,
     detailLoading,
     commentsLoading,
-    commentsTotal,
-    commentsPage,
-    commentsLoadingMore,
-    commentsError,
-    liked,
-    favorited,
     usingMockData,
+    feedError,
     page,
     pageSize,
     total,
@@ -365,12 +298,10 @@ export const usePromptStore = defineStore('prompt', () => {
     loadMorePrompts,
     loadPromptDetail,
     loadPromptComments,
-    loadMoreComments,
     createPromptComment,
     likeComment,
     reportComment,
     reportPrompt,
-    getRelatedPrompts,
-    loadRelatedPrompts
+    getRelatedPrompts
   }
 })

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMessage } from 'naive-ui'
 import { promptApi } from '@/api/promptApi'
-import { mockPrompts } from '@/mock/prompts'
 import { usePromptStore } from '@/stores/prompt'
 import type { Prompt } from '@/types'
 import AppShell from '@/components/layout/AppShell.vue'
@@ -11,8 +9,6 @@ import BackButton from '@/components/navigation/BackButton.vue'
 import PromptCard from '@/components/prompt/PromptCard.vue'
 import PageLoading from '@/components/feedback/PageLoading.vue'
 import PageError from '@/components/feedback/PageError.vue'
-
-const message = useMessage()
 
 const route = useRoute()
 const router = useRouter()
@@ -147,62 +143,10 @@ const saveSearchHistory = (keyword: string) => {
   localStorage.setItem(searchHistoryKey, JSON.stringify(searchHistory.value))
 }
 
-const filterMockPrompts = () => {
-  const keyword = filters.keyword.trim().toLowerCase()
-  const model = filters.model.trim().toLowerCase()
-  const tag = filters.tag.trim().toLowerCase()
-
-  let list = mockPrompts.filter((prompt) => {
-    if (filters.categoryId > 0 && prompt.categoryId !== filters.categoryId) {
-      return false
-    }
-    if (model && !prompt.model.toLowerCase().includes(model)) {
-      return false
-    }
-    if (tag && !prompt.tags.some((item) => item.toLowerCase().includes(tag))) {
-      return false
-    }
-    if (!keyword) {
-      return true
-    }
-
-    return [
-      prompt.title,
-      prompt.description,
-      prompt.content,
-      prompt.systemPrompt,
-      prompt.categoryName,
-      prompt.model,
-      prompt.user.username,
-      ...prompt.tags
-    ].some((field) => field.toLowerCase().includes(keyword))
-  })
-
-  list = [...list].sort((left, right) => {
-    if (filters.sort === 'popular') {
-      return right.likes - left.likes
-    }
-
-    return right.createdAt.localeCompare(left.createdAt)
-  })
-
-  return list
-}
-
 const loadResults = async (append = false) => {
   const requestId = ++latestRequestId
   loading.value = true
   errorMessage.value = ''
-  if (import.meta.env.VITE_ENABLE_PROMPT_API !== 'true') {
-    const fallback = filterMockPrompts()
-    const start = append ? results.value.length : (page.value - 1) * pageSize
-    const nextPage = fallback.slice(start, start + pageSize)
-    results.value = append ? [...results.value, ...nextPage] : nextPage
-    total.value = fallback.length
-    loading.value = false
-    hasLoaded.value = true
-    return
-  }
   try {
     const response = await promptApi.searchPrompts({
       keyword: filters.keyword.trim(),
@@ -228,12 +172,11 @@ const loadResults = async (append = false) => {
     page.value = response.data.page
   } catch {
     if (requestId !== latestRequestId) return
-    if (import.meta.env.VITE_ENABLE_PROMPT_API === 'true') {
-      if (!append) results.value = []
+    if (!append) {
+      results.value = []
       total.value = 0
-      errorMessage.value = '暂时无法连接服务，请稍后重试。'
-      message.error('服务暂不可用')
     }
+    errorMessage.value = '暂时无法连接服务，请检查网络或稍后重试。'
   } finally {
     if (requestId === latestRequestId) {
       hasLoaded.value = true

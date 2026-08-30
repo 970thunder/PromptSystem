@@ -59,13 +59,15 @@ const handleSendCaptcha = async () => {
   captchaLoading.value = true
   try {
     const response = await userApi.sendCaptcha(formValue.email.trim())
-    if (response.data.devCode) {
+    if (import.meta.env.DEV && response.data.devCode) {
       formValue.captcha = response.data.devCode
-      message.success(`开发环境验证码已回填：${response.data.devCode}`)
+      message.success(`本地开发验证码已自动填入：${response.data.devCode}`)
     } else {
       message.success('验证码已发送，请查收邮箱')
     }
     startCaptchaCountdown(60)
+  } catch {
+    message.error('验证码发送失败，请稍后重试')
   } finally {
     captchaLoading.value = false
   }
@@ -98,6 +100,8 @@ const handleSubmit = async () => {
     })
     message.success('密码已重置，请使用新密码登录')
     await router.push('/login')
+  } catch {
+    message.error('密码重置失败，请检查验证码或稍后重试')
   } finally {
     submitLoading.value = false
   }
@@ -122,7 +126,7 @@ onBeforeUnmount(() => {
             找回 PromptOS 密码
           </h1>
           <p class="auth-hero__desc">
-            使用邮箱验证码重置密码。开发环境会直接回填验证码，便于本地验证完整账号恢复流程。
+            使用邮箱验证码重置密码。验证码仅发送到账号绑定的邮箱。
           </p>
 
           <div class="auth-info-list">

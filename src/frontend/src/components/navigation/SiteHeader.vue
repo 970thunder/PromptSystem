@@ -33,12 +33,6 @@ const openMenu = (entry: NavEntry, focus = false) => {
   document.documentElement.dataset.menuOpen = 'true'
 }
 
-// 鼠标进入顶栏任意位置即展开当前上下文对应的超级菜单；之后在入口间
-// 移动时切换 activeEntry，离开顶栏（包含菜单）后再关闭。
-const expandFromEntry = (entry: NavEntry) => {
-  openMenu(entry)
-}
-
 const scheduleClose = () => {
   if (closeTimer.value !== null) {
     return
@@ -117,7 +111,6 @@ onBeforeUnmount(() => {
   <header
     class="site-header"
     :class="{ 'site-header--menu-open': open }"
-    @mouseenter="expandFromEntry(currentEntry ?? 'discover')"
     @mouseleave="scheduleClose"
   >
     <div class="site-header__bar">

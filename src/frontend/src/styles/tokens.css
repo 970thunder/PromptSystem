@@ -3,25 +3,25 @@
    theme colors. */
 :root,
 html[data-mode='light'] {
-  --prompt-bg: #f5f3ee;
+  --prompt-bg: #f6f9ff;
   --prompt-surface: #ffffff;
-  --prompt-surface-muted: #faf8f4;
-  --prompt-text: #111111;
-  --prompt-text-muted: #555555;
-  --prompt-text-faint: #777777;
-  --prompt-border: rgba(0, 0, 0, 0.1);
-  --prompt-border-strong: rgba(0, 0, 0, 0.18);
-  --prompt-primary: #111111;
-  --prompt-primary-hover: #333333;
+  --prompt-surface-muted: #eef5ff;
+  --prompt-text: #0f172a;
+  --prompt-text-muted: #475569;
+  --prompt-text-faint: #64748b;
+  --prompt-border: rgba(37, 99, 235, 0.14);
+  --prompt-border-strong: rgba(37, 99, 235, 0.34);
+  --prompt-primary: #2563eb;
+  --prompt-primary-hover: #1d4ed8;
   --prompt-primary-contrast: #ffffff;
   --prompt-focus: #2563eb;
   --prompt-success: #22a06b;
-  --prompt-warning: #b7791f;
-  --prompt-warning-bg: rgba(183, 121, 31, 0.08);
-  --prompt-error: #c0392b;
-  --prompt-error-bg: rgba(192, 57, 43, 0.08);
-  --prompt-shadow-1: 0 16px 40px rgba(15, 23, 42, 0.06);
-  --prompt-shadow-2: 0 20px 48px rgba(15, 23, 42, 0.1);
+  --prompt-warning: #b45309;
+  --prompt-warning-bg: rgba(245, 158, 11, 0.1);
+  --prompt-error: #dc2626;
+  --prompt-error-bg: rgba(239, 68, 68, 0.1);
+  --prompt-shadow-1: 0 16px 40px rgba(15, 23, 42, 0.08);
+  --prompt-shadow-2: 0 20px 48px rgba(15, 23, 42, 0.12);
   --prompt-radius-sm: 12px;
   --prompt-radius: 16px;
   --prompt-radius-lg: 24px;
