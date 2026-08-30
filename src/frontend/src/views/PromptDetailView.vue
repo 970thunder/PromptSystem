@@ -413,7 +413,7 @@ const loadDetail = async () => {
     detailError.value = '提示词不存在，或暂时无法加载。'
     return
   }
-  if (prompt.value && userStore.isLoggedIn) {
+  if (prompt.value) {
     try {
       const response = await promptApi.recordPromptView(prompt.value.id)
       promptStore.mergePrompt(response.data.prompt)

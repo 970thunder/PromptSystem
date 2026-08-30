@@ -13,6 +13,11 @@ export const usePromptStore = defineStore('prompt', () => {
   const loading = ref(false)
   const detailLoading = ref(false)
   const commentsLoading = ref(false)
+  const commentsTotal = ref(0)
+  const commentsPage = ref(1)
+  const commentsPageSize = ref(20)
+  const commentsLoadingMore = ref(false)
+  const commentsError = ref(false)
   const usingMockData = ref(false)
   const feedError = ref('')
   const page = ref(1)
@@ -224,16 +229,44 @@ export const usePromptStore = defineStore('prompt', () => {
 
   const loadPromptComments = async (id: number, sort = 'latest') => {
     commentsLoading.value = true
+    commentsError.value = false
 
     try {
-      const response = await promptApi.getPromptComments(id, sort)
-      comments.value = response.data
-      return response.data
+      const response = await promptApi.getPromptComments(id, sort, 1, commentsPageSize.value)
+      comments.value = response.data.list
+      commentsTotal.value = response.data.total
+      commentsPage.value = response.data.page
+      return response.data.list
     } catch {
       comments.value = []
+      commentsTotal.value = 0
+      commentsPage.value = 1
+      commentsError.value = true
       return []
     } finally {
       commentsLoading.value = false
+    }
+  }
+
+  const loadMoreComments = async (id: number, sort = 'latest') => {
+    if (commentsLoadingMore.value || comments.value.length >= commentsTotal.value) {
+      return comments.value
+    }
+
+    commentsLoadingMore.value = true
+    try {
+      const nextPage = commentsPage.value + 1
+      const response = await promptApi.getPromptComments(id, sort, nextPage, commentsPageSize.value)
+      const existing = new Set(comments.value.map((item) => item.id))
+      comments.value = [
+        ...comments.value,
+        ...response.data.list.filter((item) => !existing.has(item.id))
+      ]
+      commentsTotal.value = response.data.total
+      commentsPage.value = response.data.page
+      return comments.value
+    } finally {
+      commentsLoadingMore.value = false
     }
   }
 
@@ -273,6 +306,10 @@ export const usePromptStore = defineStore('prompt', () => {
     loading,
     detailLoading,
     commentsLoading,
+    commentsTotal,
+    commentsPage,
+    commentsLoadingMore,
+    commentsError,
     usingMockData,
     feedError,
     page,
@@ -298,6 +335,7 @@ export const usePromptStore = defineStore('prompt', () => {
     loadMorePrompts,
     loadPromptDetail,
     loadPromptComments,
+    loadMoreComments,
     createPromptComment,
     likeComment,
     reportComment,
