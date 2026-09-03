@@ -40,3 +40,5 @@ jobs:
           grep -q '127.0.0.1:5092:8080' deploy/promptsystem/docker-compose.yml
           grep -q '127.0.0.1:3092:80' deploy/promptsystem/docker-compose.yml
           ! grep -nE 'ports:.*(3306|6379|13900|13902)' deploy/promptsystem/docker-compose.yml
+          grep -q 'cap_drop:' deploy/promptsystem/docker-compose.yml
+          grep -q 'read_only: true' deploy/promptsystem/docker-compose.yml

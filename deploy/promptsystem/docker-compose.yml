@@ -44,6 +44,13 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    pids_limit: 128
+    mem_limit: 768m
     logging:
       driver: json-file
       options:
@@ -87,6 +94,20 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # nginx master binds port 80 as root; retain only that capability. The
+    # image itself remains otherwise capability-free and its root filesystem is
+    # read-only, with runtime directories provided by tmpfs.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,nosuid,size=16m
+      - /var/run:rw,nosuid,size=1m
+    pids_limit: 64
+    mem_limit: 256m
     logging:
       driver: json-file
       options:

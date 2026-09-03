@@ -42,6 +42,7 @@
 - 仓库内只有 `.env.docker.example`（占位符）；真实值本地在 `E:\Web\secrets\promptsystem\`，服务器在 `/opt/secrets/promptsystem/`（chmod 600，不在任何 webroot 下）。
 - 生产密钥位于服务器 `/opt/secrets/promptsystem/app.env`（权限 `600`），不进入仓库；Compose 通过环境变量注入；
 - 生产入口由现有 nginx 反代，证书由 Certbot webroot 自动续期；
+- 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；确认无误后再切换强制 `Content-Security-Policy`，不得直接放宽为 `*`。
 - 首次新库不需要人工导入 SQL：backend 检测到当前数据库无表时自动应用 `src/backend/sql/schema.sql` 基线，随后通过 `schema_migrations` 执行全部 `sql/migrations`。已有卷和部分迁移库只执行未记录的迁移，不会覆盖数据；
 
 ## 当前生产发布
@@ -70,6 +71,8 @@
 - `promptos_app` 仅用于运行时业务 DML（SELECT/INSERT/UPDATE/DELETE/EXECUTE），不得执行 DDL。
 - `promptos_migrator` 仅由启动迁移阶段使用，拥有 PromptOS 数据库 DDL 权限；两者密码由 `/opt/secrets/promptsystem/app.env` 注入，权限 `600`。
 - 生产 Compose 必须设置 `MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_MIGRATION_USER`、`MYSQL_MIGRATION_PASSWORD`，禁止使用 MySQL root 连接应用。
+
+生产 Compose 的 backend 使用非 root 镜像用户、`no-new-privileges`、`cap_drop: ALL`、只读根文件系统、`/tmp` tmpfs、PID 及内存上限；frontend nginx 仅保留绑定 80 端口所需的 `NET_BIND_SERVICE`，其余能力丢弃并使用只读根文件系统。更新时必须先执行 `docker compose -f deploy/promptsystem/docker-compose.yml config`，再在低峰串行重启；MySQL/Redis 不得套用应用容器的只读策略。
 
 ### 低内存数据完整性审计
 

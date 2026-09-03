@@ -28,6 +28,7 @@
 - 增加低内存友好的一次性多态目标完整性审计命令，输出 JSON 并以退出码驱动定时任务告警
 - 增加个人数据导出、浏览历史清除和账号注销 API；个人中心提供对应操作入口
 - 增加低内存友好的 Prometheus `/metrics` 端点、Prompt 计数审计和维护命令
+- 生产 Compose 增加最小 capability、只读根文件系统、tmpfs 及 PID/内存上限；前端 nginx 增加 CSP Report-Only
 
 ### Changed
 - 列表、搜索、详情和评论请求支持 AbortController 与请求序号，取消旧请求并丢弃过期响应，避免快速导航或筛选时状态回退
