@@ -76,7 +76,7 @@ jobs:
             VITE_GITHUB_OAUTH_ENABLED=false
 
       - name: scan backend image
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: promptsystem-backend:ci
           format: table
@@ -86,7 +86,7 @@ jobs:
           exit-code: '1'
 
       - name: scan frontend image
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: promptsystem-frontend:ci
           format: table
