@@ -33,6 +33,12 @@ func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, e
 	email = strings.TrimSpace(strings.ToLower(email))
 	username = strings.TrimSpace(username)
 
+	if username == "" {
+		return AuthUser{}, ErrInvalidUser
+	}
+	if err := ValidateUserProfile(username, ""); err != nil {
+		return AuthUser{}, err
+	}
 	if !IsValidEmail(email) {
 		return AuthUser{}, ErrInvalidEmail
 	}
@@ -263,6 +269,9 @@ func (s *MySQLUserStore) UpdateProfile(id int, username, bio, avatar string) (Au
 	username = strings.TrimSpace(username)
 	bio = strings.TrimSpace(bio)
 	avatar = strings.TrimSpace(avatar)
+	if err := ValidateUserProfile(username, bio); err != nil {
+		return AuthUser{}, err
+	}
 
 	if username == "" {
 		username = current.Username

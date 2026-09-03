@@ -638,6 +638,12 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_IMAGE_URL", Message: "Invalid image URL"}
 	case errors.Is(err, store.ErrInvalidReportReason):
 		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_REPORT_REASON", Message: "Invalid report reason"}
+	case errors.Is(err, store.ErrInvalidContent):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_CONTENT", Message: "Content contains invalid characters"}
+	case errors.Is(err, store.ErrContentTooLong):
+		apiErr = &apiError{Status: http.StatusRequestEntityTooLarge, Code: "CONTENT_TOO_LONG", Message: "Content exceeds the allowed length"}
+	case errors.Is(err, store.ErrUnsafeContent):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "UNSAFE_CONTENT", Message: "Content does not meet platform safety rules"}
 	default:
 		apiErr = &apiError{Status: http.StatusInternalServerError, Code: "INTERNAL_ERROR", Message: "Internal server error"}
 	}

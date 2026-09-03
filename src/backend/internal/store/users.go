@@ -123,6 +123,12 @@ func (s *UserStore) Register(username, email, password string) (AuthUser, error)
 	email = strings.TrimSpace(strings.ToLower(email))
 	username = strings.TrimSpace(username)
 
+	if username == "" {
+		return AuthUser{}, ErrInvalidUser
+	}
+	if err := ValidateUserProfile(username, ""); err != nil {
+		return AuthUser{}, err
+	}
 	if !IsValidEmail(email) {
 		return AuthUser{}, ErrInvalidEmail
 	}
@@ -411,6 +417,9 @@ func (s *UserStore) UpdateProfile(id int, username, bio, avatar string) (AuthUse
 	username = strings.TrimSpace(username)
 	bio = strings.TrimSpace(bio)
 	avatar = strings.TrimSpace(avatar)
+	if err := ValidateUserProfile(username, bio); err != nil {
+		return AuthUser{}, err
+	}
 
 	if username != "" {
 		user.Username = username

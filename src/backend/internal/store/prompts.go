@@ -839,6 +839,9 @@ func NormalizePromptTags(tags []string) ([]string, error) {
 		if tagValue == "" {
 			return nil, ErrInvalidTag
 		}
+		if containsDisallowedControl(tagValue) {
+			return nil, ErrInvalidTag
+		}
 		if len([]rune(tagValue)) > MaxPromptTagLength {
 			return nil, ErrInvalidTag
 		}

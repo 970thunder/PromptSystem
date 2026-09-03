@@ -1,7 +1,11 @@
 // Package store 测试社区内容审核规则，防止发布链路绕过基础安全校验。
 package store
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestModerationRejectsUnsafePromptContent(t *testing.T) {
 	input := CreatePromptInput{
@@ -37,5 +41,29 @@ func TestModerationRejectsUnsafeCommentContent(t *testing.T) {
 	err := ValidateCommentModeration("这里包含 javascript:alert(1)")
 	if err == nil {
 		t.Fatal("expected moderation error")
+	}
+	if !errors.Is(err, ErrUnsafeContent) {
+		t.Fatalf("expected unsafe content sentinel, got %v", err)
+	}
+}
+
+func TestModerationRejectsControlsAndOversizedFields(t *testing.T) {
+	err := ValidateCommentModeration("hello\x00world")
+	if !errors.Is(err, ErrInvalidContent) {
+		t.Fatalf("expected invalid content sentinel, got %v", err)
+	}
+
+	err = ValidatePromptModeration(CreatePromptInput{Title: strings.Repeat("x", MaxPromptTitle+1)})
+	if !errors.Is(err, ErrContentTooLong) {
+		t.Fatalf("expected content too long sentinel, got %v", err)
+	}
+}
+
+func TestModerationRejectsEventAttributesAndProfileBounds(t *testing.T) {
+	if err := ValidatePromptModeration(CreatePromptInput{Content: `<div onClick = "alert(1)">x</div>`}); !errors.Is(err, ErrUnsafeContent) {
+		t.Fatalf("expected event attribute rejection, got %v", err)
+	}
+	if err := ValidateUserProfile(strings.Repeat("名", MaxUsernameRunes+1), ""); !errors.Is(err, ErrContentTooLong) {
+		t.Fatalf("expected username length rejection, got %v", err)
 	}
 }

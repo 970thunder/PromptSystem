@@ -289,6 +289,14 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "WEAK_PASSWORD", Message: "Password must be at least 8 characters"})
 		case errors.Is(err, store.ErrPasswordTooLong):
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_PASSWORD", Message: "Password must be 72 bytes or fewer"})
+		case errors.Is(err, store.ErrInvalidUser):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_USER", Message: "Username is invalid"})
+		case errors.Is(err, store.ErrInvalidContent):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_CONTENT", Message: "Profile contains invalid characters"})
+		case errors.Is(err, store.ErrContentTooLong):
+			writeJSON(w, http.StatusRequestEntityTooLarge, apiResponse[any]{Code: http.StatusRequestEntityTooLarge, ErrorCode: "CONTENT_TOO_LONG", Message: "Profile field is too long"})
+		case errors.Is(err, store.ErrUnsafeContent):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "UNSAFE_CONTENT", Message: "Profile does not meet platform safety rules"})
 		default:
 			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Register failed"})
 		}
@@ -349,7 +357,7 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 		user, err := s.userStore.UpdateProfile(userID, payload.Username, payload.Bio, payload.Avatar)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "User not found"})
+			writeStoreError(w, err)
 			return
 		}
 

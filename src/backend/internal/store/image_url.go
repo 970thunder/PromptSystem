@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"unicode"
 )
 
 // uploadPathPrefix is the URL path prefix under which locally uploaded images
@@ -25,7 +26,7 @@ var ErrInvalidImageURL = errors.New("invalid image url")
 // only originate from untrusted input and must never reach persisted fields.
 func ValidateImageURL(image string, allowedHTTPSDomains []string) error {
 	raw := strings.TrimSpace(image)
-	if raw == "" {
+	if raw == "" || len([]rune(raw)) > 1024 || strings.IndexFunc(raw, unicode.IsControl) >= 0 {
 		return ErrInvalidImageURL
 	}
 	if strings.HasPrefix(raw, uploadPathPrefix) {
