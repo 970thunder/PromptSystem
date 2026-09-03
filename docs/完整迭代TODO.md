@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：39/81 已完成，42 项待完成（2026-09-04）。
+当前进度：40/81 已完成，41 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -69,7 +69,7 @@
 ## D 数据
 
 - [x] **D-01 上传所有者约束**：`uploads.owner_id` 建立用户引用或等价强校验。
-- [ ] **D-02 多态目标完整性**：likes/favorites/reports/comments 写入前校验目标，并定期扫描孤儿记录。
+- [x] **D-02 多态目标完整性**：likes/favorites/reports/comments 写入前校验目标，并定期扫描孤儿记录。
 - [ ] **D-03 删除生命周期**：统一 Prompt、评论、用户、举报和上传的禁用/软删/回收规则。
 - [ ] **D-04 上传垃圾回收**：草稿删除、替换图片、发布失败和注销产生的未引用对象延迟回收。
 - [ ] **D-05 汇总计数审计**：定期核对 views/likes/favorites 与明细表，并对偏差告警。
@@ -168,3 +168,4 @@
 - `A-09`：MySQL 评论列表按规范化 `latest`/`oldest`/`popular` 在 `LIMIT/OFFSET` 前排序，新增根评论时间与热度复合索引并保持 `schema.sql`/增量迁移一致；集成测试验证热门结果不会被分页截断，并用 `EXPLAIN FORMAT=JSON` 断言 `idx_target_parent_likes` 计划候选。GitHub Actions backend `33788170152` 全部通过，生产尚未发布。
 - `A-03`：新增 `runPromptManagerContract` 共享契约测试，内存和 MySQL 均覆盖创建与标签规范化、分页总数、互动幂等、浏览历史去重、删除隐藏及非所有者更新权限；修正 MySQL 非所有者更新返回 `ErrPromptForbidden` 的语义。生产尚未发布，真实 MySQL 由 backend CI 集成作业验证。
 - `D-09`：新增 `docs/数据字典.md`，按当前 `schema.sql` 记录全部 12 张表的字段、状态枚举、索引、外键、多态目标约束、软删/级联和上传保留策略，并明确迁移与审计入口；`docker compose config --quiet`、`git diff --check` 通过。生产尚未发布。
+- `D-02`：新增 `AuditMySQLPolymorphicIntegrity` 只读审计、`promptos-integrity-audit` 一次性命令和真实 MySQL 回归测试，扫描 comments/likes/favorites/reports 的未知 `target_type` 与孤儿目标；既有写入路径已在事务前校验公开 Prompt/Comment 目标。审计发现问题退出 `1`，连接或执行失败退出非 `0`，无异常退出 `0`，不自动修改数据。命令随 backend 镜像发布，部署文档给出带 `flock` 的 systemd timer/cron 串行执行方式，适配无 Swap 服务器。`gofmt`、`go test ./...`、`go vet ./...`、API/审计二进制构建、前端 lint/Vitest/build、`docker compose config --quiet` 和 `git diff --check` 通过；本机 Docker build 因 Docker Desktop 无法访问 Docker Hub 未完成，需在 CI 或具备镜像缓存的发布机验证。生产尚未部署，告警接收端仍未配置。

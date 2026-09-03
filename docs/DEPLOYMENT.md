@@ -71,6 +71,27 @@
 - `promptos_migrator` 仅由启动迁移阶段使用，拥有 PromptOS 数据库 DDL 权限；两者密码由 `/opt/secrets/promptsystem/app.env` 注入，权限 `600`。
 - 生产 Compose 必须设置 `MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_MIGRATION_USER`、`MYSQL_MIGRATION_PASSWORD`，禁止使用 MySQL root 连接应用。
 
+### 低内存数据完整性审计
+
+`backend` 镜像同时提供一次性命令 `/usr/local/bin/promptos-integrity-audit`，用于扫描
+`comments`、`likes`、`favorites` 和 `reports` 的未知 `target_type` 与孤儿目标。命令只读数据库，
+输出一行 JSON；审计无异常时退出 `0`，发现异常或无法连接数据库时退出非 `0`。它不自动删除数据，
+异常记录必须由人工核对后通过迁移或受审查的修复脚本处理。
+
+服务器约 7.7 GiB 内存且无 Swap，使用 systemd timer 或 cron 每日低峰串行执行，不要与备份、镜像
+load、迁移、恢复演练或其他高内存任务并行。示例（沿用生产 Compose 项目名和密钥）：
+
+```bash
+cd /srv/releases/promptsystem/<current>
+flock -n /run/lock/promptsystem-integrity-audit.lock \
+  docker compose -p promptsystem --env-file /opt/secrets/promptsystem/app.env \
+  run --rm --no-deps backend /usr/local/bin/promptos-integrity-audit
+```
+
+将标准输出和标准错误接入现有 systemd journal；timer 失败时必须触发服务器现有告警接收端，
+并在发布记录中保留执行时间、JSON 结果和退出码。若告警接收端尚未配置，该项保持未验收，
+不得用本地运行或 CI 通过替代生产证据。
+
 ### 本次发布记录（2026-08-30）
 
 - 版本：`20260830-b584585`；Compose 项目：`promptsystem`。

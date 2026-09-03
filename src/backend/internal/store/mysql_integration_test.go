@@ -282,3 +282,44 @@ func TestMySQLCommentPopularSortsBeforePagination(t *testing.T) {
 		t.Fatalf("popular comment plan does not expose idx_target_parent_likes: %s", plan)
 	}
 }
+
+func TestMySQLPolymorphicIntegrityAuditDetectsUnsupportedAndOrphanRows(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+	users := NewMySQLUserStore(db)
+	suffix := time.Now().UnixNano()
+	user, err := users.Register(fmt.Sprintf("integrity_%d", suffix), fmt.Sprintf("integrity-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	missingID := int(suffix % 2000000000)
+	if _, err := db.Exec(`INSERT INTO comments (target_type, target_id, user_id, content) VALUES ('prompt', ?, ?, 'orphan')`, missingID, user.ID); err != nil {
+		t.Fatalf("insert orphan comment: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO likes (user_id, target_type, target_id) VALUES (?, 'unknown', ?)`, user.ID, missingID); err != nil {
+		t.Fatalf("insert unsupported like: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO favorites (user_id, target_type, target_id) VALUES (?, 'prompt', ?)`, user.ID, missingID); err != nil {
+		t.Fatalf("insert orphan favorite: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO reports (user_id, target_type, target_id, reason) VALUES (?, 'unknown', ?, 'other')`, user.ID, missingID); err != nil {
+		t.Fatalf("insert unsupported report: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM comments WHERE user_id = ? AND target_id = ?", user.ID, missingID)
+		_, _ = db.Exec("DELETE FROM likes WHERE user_id = ? AND target_id = ?", user.ID, missingID)
+		_, _ = db.Exec("DELETE FROM favorites WHERE user_id = ? AND target_id = ?", user.ID, missingID)
+		_, _ = db.Exec("DELETE FROM reports WHERE user_id = ? AND target_id = ?", user.ID, missingID)
+	})
+
+	report, err := AuditMySQLPolymorphicIntegrity(db)
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	if report.OrphanComments < 1 || report.OrphanFavorites < 1 || report.UnsupportedLikes < 1 || report.UnsupportedReports < 1 {
+		t.Fatalf("audit report = %+v, want each injected violation", report)
+	}
+	if report.Total() < 4 {
+		t.Fatalf("audit total = %d, want at least 4", report.Total())
+	}
+}
