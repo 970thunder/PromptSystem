@@ -17,6 +17,9 @@ type Config struct {
 	UploadDir            string
 	UploadBaseURL        string
 	UploadMaxMB          int
+	UploadMaxConcurrent  int
+	UploadDailyQuotaMB   int
+	UploadTotalQuotaMB   int
 	AllowGif             bool
 	R2AccountID          string
 	R2Endpoint           string
@@ -66,6 +69,9 @@ func Load() Config {
 		UploadDir:            getEnv("UPLOAD_DIR", "./uploads"),
 		UploadBaseURL:        getEnv("UPLOAD_BASE_URL", "http://localhost:8080"),
 		UploadMaxMB:          getEnvAsInt("UPLOAD_MAX_MB", 10),
+		UploadMaxConcurrent:  getEnvAsInt("UPLOAD_MAX_CONCURRENT", 4),
+		UploadDailyQuotaMB:   getEnvAsInt("UPLOAD_DAILY_QUOTA_MB", 100),
+		UploadTotalQuotaMB:   getEnvAsInt("UPLOAD_TOTAL_QUOTA_MB", 2048),
 		AllowGif:             getEnvAsBool("UPLOAD_ALLOW_GIF", false),
 		R2AccountID:          getEnv("R2_ACCOUNT_ID", ""),
 		R2Endpoint:           getEnv("R2_ENDPOINT", getEnv("S3_ENDPOINT", "")),
@@ -118,6 +124,15 @@ func (c Config) Validate() error {
 	}
 	if err := validateIntEnv("UPLOAD_MAX_MB", c.UploadMaxMB); err != nil {
 		return err
+	}
+	if c.UploadMaxConcurrent < 0 {
+		return errors.New("UPLOAD_MAX_CONCURRENT must not be negative")
+	}
+	if c.UploadDailyQuotaMB < 0 {
+		return errors.New("UPLOAD_DAILY_QUOTA_MB must not be negative")
+	}
+	if c.UploadTotalQuotaMB < 0 {
+		return errors.New("UPLOAD_TOTAL_QUOTA_MB must not be negative")
 	}
 	// Zero means "use the documented code default" for programmatic test
 	// configs; values loaded from the environment are always positive.

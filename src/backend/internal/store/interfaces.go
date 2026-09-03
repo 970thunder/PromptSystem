@@ -147,6 +147,9 @@ type UploadManager interface {
 	// TrashUnreferenced flips unreferenced uploads older than olderThan to
 	// trashed in one call, returning the keys that were transitioned.
 	TrashUnreferenced(olderThan time.Time) ([]string, error)
+	// ActiveUploadBytes returns the persisted bytes for uploads that have not
+	// been trashed. It is used to enforce the configured storage capacity.
+	ActiveUploadBytes() (int64, error)
 }
 
 // Clock abstracts time.Now for testability of time-based logic.

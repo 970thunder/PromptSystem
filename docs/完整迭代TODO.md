@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：47/81 已完成，34 项待完成（2026-09-04）。
+当前进度：48/81 已完成，33 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -93,7 +93,7 @@
 - [x] **S-06 重定向安全**：站内 redirect 覆盖双斜杠、反斜杠、协议相对和编码变体。
 - [x] **S-07 分维度限流**：登录、注册、验证码、重置、评论、举报、搜索、上传按 IP/账号/用户限制。
 - [x] **S-08 内容安全**：Prompt/评论/用户名/标签/Markdown/URL 统一长度、控制字符和脚本校验。
-- [ ] **S-09 上传安全与配额**：MIME、解码、像素、格式、并发、单用户日配额和总容量限制。
+- [x] **S-09 上传安全与配额**：MIME、解码、像素、格式、并发、单用户日配额和总容量限制。
 - [ ] **S-10 Redis 隔离**：独立网络、ACL/密码，禁止公网访问。
 - [x] **S-11 容器加固**：非 root、`no-new-privileges`、`cap_drop`、可行的只读根文件系统、资源与日志限制。
 - [ ] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
@@ -174,4 +174,5 @@
 - `S-11`：生产 Compose 为 backend/frontend 增加 `no-new-privileges`、最小 Linux capabilities、只读根文件系统、tmpfs、PID/内存上限，并保留现有日志轮转和 loopback 端口边界；security workflow 增加策略断言。生产尚未重启验证，前端 nginx 的 `NET_BIND_SERVICE` 例外需在下一发布窗口用 `config`、启动和 HTTPS 冒烟验收。
 - `S-08`：`src/backend/internal/store/moderation.go` 统一校验 Prompt、评论、用户名和简介的 UTF-8、控制字符、长度及脚本/危险 URL 片段；标签和图片 URL 同步拒绝控制字符与超长值。内存/MySQL 写入路径共用规则，API 将校验错误映射为稳定 `errorCode`。新增边界回归测试；`gofmt -l .`、`go test ./...`、`go vet ./...`、`git diff --check` 通过。生产尚未发布，CSP 强制模式和浏览器渲染验证仍由 `S-04`/`F-10` 负责。
 - `A-04`：将 `SearchView` 的 API 直连、AbortController、请求序号、分页、去重、错误和 loading 状态收敛到 `src/frontend/src/stores/prompt.ts`；视图仅保留路由、筛选和展示职责，卸载时由 Store 统一取消搜索。新增搜索分页去重与旧请求响应隔离回归测试；前端 `npm test -- --run`（7 files/16 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过。生产尚未发布。
+- `S-09`：上传入口保留整请求/单文件大小限制、真实 MIME/扩展名一致性、标准解码和 20MP 像素上限，并新增 `UPLOAD_MAX_CONCURRENT` 并发槽、`UPLOAD_DAILY_QUOTA_MB` 用户日配额和 `UPLOAD_TOTAL_QUOTA_MB` 总容量；Redis 实现按用户/UTC 日期原子字节计数，开发/测试无 Redis 时使用进程内计数，数据库已用量与进程内预留量共同防止并发超卖。新增 `ActiveUploadBytes` Store 契约、Redis `IncrementBy`、配额/并发回归测试；`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过。生产尚未发布，RustFS 独立 bucket 和跨故障域副本仍由 `D-12/D-13` 负责。
 - 线上只读核验（2026-09-04）：服务器 `free -h` 显示总内存 7.7 GiB、可用约 3.3 GiB、Swap 0；`df -h /` 显示 58G 总量、28G 已用、30G 可用（48%）。`docker compose ls` 确认 `promptsystem` 使用 `/srv/releases/promptsystem/20260830-b584585/docker-compose.yml`，仅保留 `20260830-b584585` 与 `20260829-a9ba2cf` 两个 release 目录；frontend/backend 仍分别绑定 `127.0.0.1:3092/5092`，公网入口为 80/443，其他 Compose 项目保持运行。线上 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。RustFS 转发服务 active，当前实测 bridge 监听为 `172.21.0.1:13902`、隧道为 `127.0.0.1:13900`；总说明中的旧 `172.17.0.1` 已修正。当前线上容器仍是旧发布策略（`ReadonlyRootfs=false`、未设置 cap/pids 限制），故 `S-11` 生产验收、`D-12/D-13` RustFS 迁移和所有告警/timer 项目保持未完成。

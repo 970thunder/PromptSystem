@@ -125,3 +125,16 @@ func (s *MemoryUploadStore) TrashUnreferenced(olderThan time.Time) ([]string, er
 	}
 	return keys, nil
 }
+
+// ActiveUploadBytes reports the size of uploads that still occupy storage.
+func (s *MemoryUploadStore) ActiveUploadBytes() (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var total int64
+	for _, rec := range s.uploads {
+		if rec.Status != UploadStatusTrashed {
+			total += rec.Size
+		}
+	}
+	return total, nil
+}

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -17,6 +19,16 @@ import (
 )
 
 var errInvalidUploadOwnership = errors.New("invalid upload ownership")
+var errUploadConcurrency = errors.New("upload concurrency limit reached")
+var errUploadDailyQuota = errors.New("upload daily quota exceeded")
+var errUploadTotalQuota = errors.New("upload total quota exceeded")
+var errUploadQuotaUnavailable = errors.New("upload quota unavailable")
+
+const (
+	defaultUploadMaxConcurrent = 4
+	defaultUploadDailyQuotaMB  = 100
+	defaultUploadTotalQuotaMB  = 2048
+)
 
 type uploadImageResponse struct {
 	URL       string `json:"url"`
@@ -80,6 +92,10 @@ func (s *server) handleImageUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
+	if !s.acquireUploadSlot(w) {
+		return
+	}
+	defer s.releaseUploadSlot()
 
 	maxBytes := int64(s.config.UploadMaxMB) * 1024 * 1024
 
@@ -153,7 +169,7 @@ func (s *server) handleImageUpload(w http.ResponseWriter, r *http.Request) {
 	// cannot be decoded by the standard library, so we accept its RIFF/WEBP
 	// magic (validated in detectImageFormat) and rely on the byte-size limit.
 	if format != "webp" {
-		cfg, _, decErr := image.DecodeConfig(strings.NewReader(string(data)))
+		cfg, _, decErr := image.DecodeConfig(bytes.NewReader(data))
 		if decErr != nil {
 			writeJSON(w, http.StatusBadRequest, apiResponse[any]{
 				Code:      http.StatusBadRequest,
@@ -179,6 +195,26 @@ func (s *server) handleImageUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	releaseQuota, err := s.reserveUploadQuota(r.Context(), userID, int64(len(data)))
+	if err != nil {
+		status := http.StatusServiceUnavailable
+		errorCode := "UPLOAD_QUOTA_UNAVAILABLE"
+		message := "Upload quota is temporarily unavailable"
+		switch {
+		case errors.Is(err, errUploadDailyQuota):
+			status = http.StatusTooManyRequests
+			errorCode = "UPLOAD_DAILY_QUOTA_EXCEEDED"
+			message = "Daily upload quota exceeded"
+		case errors.Is(err, errUploadTotalQuota):
+			status = http.StatusInsufficientStorage
+			errorCode = "UPLOAD_CAPACITY_EXCEEDED"
+			message = "Upload storage capacity reached"
+		}
+		writeJSON(w, status, apiResponse[any]{Code: status, ErrorCode: errorCode, Message: message})
+		return
+	}
+	defer releaseQuota()
 
 	objectKey := storage.BuildObjectKey(userID, string(store.UploadPurposePromptImage), header.Filename, expected.mime)
 	url, err := s.imageStorage.Save(r.Context(), objectKey, expected.mime, data)
@@ -223,6 +259,112 @@ func (s *server) handleImageUpload(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	uploadSucceeded = true
+}
+
+func (s *server) acquireUploadSlot(w http.ResponseWriter) bool {
+	s.uploadOnce.Do(func() {
+		limit := s.config.UploadMaxConcurrent
+		if limit <= 0 {
+			limit = defaultUploadMaxConcurrent
+		}
+		s.uploadSlots = make(chan struct{}, limit)
+	})
+	select {
+	case s.uploadSlots <- struct{}{}:
+		return true
+	default:
+		w.Header().Set("Retry-After", "1")
+		writeJSON(w, http.StatusTooManyRequests, apiResponse[any]{
+			Code: http.StatusTooManyRequests, ErrorCode: "UPLOAD_CONCURRENCY_LIMITED", Message: "Too many uploads in progress",
+		})
+		return false
+	}
+}
+
+func (s *server) releaseUploadSlot() {
+	select {
+	case <-s.uploadSlots:
+	default:
+	}
+}
+
+type uploadQuotaCounter interface {
+	IncrementBy(context.Context, string, int64, time.Duration) (int64, time.Duration, error)
+}
+
+func (s *server) reserveUploadQuota(ctx context.Context, userID int, size int64) (func(), error) {
+	if size <= 0 {
+		return nil, errUploadTotalQuota
+	}
+	totalLimit := s.config.UploadTotalQuotaMB
+	if totalLimit <= 0 {
+		totalLimit = defaultUploadTotalQuotaMB
+	}
+	totalBytes := int64(totalLimit) * 1024 * 1024
+
+	// Keep a process-local reservation across the storage write and metadata
+	// insert. This closes the race where concurrent requests all pass the
+	// persisted SUM check before either one has recorded its upload.
+	s.uploadQuotaMu.Lock()
+	persisted, err := s.activeUploadBytes()
+	if err != nil {
+		s.uploadQuotaMu.Unlock()
+		return nil, errUploadQuotaUnavailable
+	}
+	if persisted+s.uploadReservedBytes+size > totalBytes {
+		s.uploadQuotaMu.Unlock()
+		return nil, errUploadTotalQuota
+	}
+	s.uploadReservedBytes += size
+	s.uploadQuotaMu.Unlock()
+
+	release := func() {
+		s.uploadQuotaMu.Lock()
+		s.uploadReservedBytes -= size
+		if s.uploadReservedBytes < 0 {
+			s.uploadReservedBytes = 0
+		}
+		s.uploadQuotaMu.Unlock()
+	}
+
+	dailyLimit := s.config.UploadDailyQuotaMB
+	if dailyLimit <= 0 {
+		dailyLimit = defaultUploadDailyQuotaMB
+	}
+	dailyBytes := int64(dailyLimit) * 1024 * 1024
+	dayKey := fmt.Sprintf("%d:%s", userID, time.Now().UTC().Format("2006-01-02"))
+	if counter, ok := s.cache.(uploadQuotaCounter); ok {
+		used, _, err := counter.IncrementBy(ctx, "promptos:quota:upload:daily:"+dayKey, size, 25*time.Hour)
+		if err != nil {
+			release()
+			return nil, errUploadQuotaUnavailable
+		}
+		if used > dailyBytes {
+			release()
+			return nil, errUploadDailyQuota
+		}
+	} else {
+		s.uploadQuotaMu.Lock()
+		if s.uploadDailyUsage == nil {
+			s.uploadDailyUsage = make(map[string]int64)
+		}
+		used := s.uploadDailyUsage[dayKey] + size
+		if used > dailyBytes {
+			s.uploadQuotaMu.Unlock()
+			release()
+			return nil, errUploadDailyQuota
+		}
+		s.uploadDailyUsage[dayKey] = used
+		s.uploadQuotaMu.Unlock()
+	}
+	return release, nil
+}
+
+func (s *server) activeUploadBytes() (int64, error) {
+	if s.uploadStore == nil {
+		return 0, nil
+	}
+	return s.uploadStore.ActiveUploadBytes()
 }
 
 // detectImageFormat inspects the leading bytes to determine the real image

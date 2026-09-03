@@ -155,6 +155,22 @@ func (s *MySQLUploadStore) TrashUnreferenced(olderThan time.Time) ([]string, err
 	return keys, nil
 }
 
+// ActiveUploadBytes reports the size of uploads that still occupy storage.
+func (s *MySQLUploadStore) ActiveUploadBytes() (int64, error) {
+	var total sql.NullInt64
+	if err := s.db.QueryRow(`
+		SELECT COALESCE(SUM(size), 0)
+		FROM uploads
+		WHERE status <> ?
+	`, string(UploadStatusTrashed)).Scan(&total); err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Int64, nil
+}
+
 func scanUploadRow(scan func(dest ...any) error) (UploadRecord, error) {
 	var (
 		rec       UploadRecord

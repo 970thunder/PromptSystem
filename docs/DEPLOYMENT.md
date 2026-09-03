@@ -68,6 +68,15 @@
 - MySQL 8.4：`promptsystem_promptsystem_mysql_data` 卷；每次发布前由 `scripts\release.ps1` 串行执行 `mysqldump --single-transaction --routines --events`，压缩后写入 `/srv/backups/promptsystem/<version>/mysql.sql.gz` 并生成 `SHA256SUMS`。
 - Redis 7：缓存，可丢失重建。
 
+### 上传配额与低内存预算
+
+生产 backend 通过 `UPLOAD_MAX_MB`、`UPLOAD_MAX_CONCURRENT`、`UPLOAD_DAILY_QUOTA_MB` 和
+`UPLOAD_TOTAL_QUOTA_MB` 限制单文件大小、同时解码数、单用户 UTC 日用量和所有未回收对象的总量。
+默认值分别为 `10`、`4`、`100` 和 `2048`；服务器约 7.7 GiB 内存且无 Swap，调整并发上限前必须
+确认发布后的可用内存仍不少于 2 GiB。日配额使用 Redis 原子字节计数；总容量以 `uploads` 表未
+`trashed` 记录加进程内上传预留量核算，避免并发请求超卖。Redis 不可用时生产请求保护保持
+fail-closed，开发/测试仅使用进程内计数用于回归。
+
 ### 生产数据库权限
 
 - `promptos_app` 仅用于运行时业务 DML（SELECT/INSERT/UPDATE/DELETE/EXECUTE），不得执行 DDL。

@@ -124,6 +124,43 @@ func (c *redisCache) Increment(ctx context.Context, key string, window time.Dura
 	return count, time.Duration(ttlSeconds) * time.Second, nil
 }
 
+// IncrementBy atomically increments a quota counter by delta and sets its TTL
+// on first use. It is intentionally an optional capability so lightweight
+// test/development cache implementations can continue using the Cache API.
+func (c *redisCache) IncrementBy(ctx context.Context, key string, delta int64, window time.Duration) (int64, time.Duration, error) {
+	if c == nil || c.client == nil {
+		return 0, 0, errors.New("cache not available")
+	}
+	if delta <= 0 || window <= 0 {
+		return 0, 0, errors.New("cache quota increment must be positive")
+	}
+	result, err := c.client.Eval(ctx, `
+		local count = redis.call('INCRBY', KEYS[1], ARGV[1])
+		if count == tonumber(ARGV[1]) then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+		local ttl = redis.call('TTL', KEYS[1])
+		return {count, ttl}
+	`, []string{key}, delta, int64(window/time.Second)).Result()
+	if err != nil {
+		return 0, 0, err
+	}
+	values, ok := result.([]interface{})
+	if !ok || len(values) != 2 {
+		return 0, 0, errors.New("invalid quota response")
+	}
+	count, ok := values[0].(int64)
+	if !ok {
+		return 0, 0, errors.New("invalid quota count")
+	}
+	ttlSeconds, ok := values[1].(int64)
+	if !ok {
+		return 0, 0, errors.New("invalid quota ttl")
+	}
+	if ttlSeconds < 0 {
+		ttlSeconds = 0
+	}
+	return count, time.Duration(ttlSeconds) * time.Second, nil
+}
+
 func (c *redisCache) Delete(ctx context.Context, key string) error {
 	if c == nil || c.client == nil {
 		return errors.New("cache not available")

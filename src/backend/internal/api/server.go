@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sync"
 	"time"
 
 	"promptos-backend/internal/auth"
@@ -20,20 +21,25 @@ import (
 )
 
 type server struct {
-	config       config.Config
-	tokenManager *auth.TokenManager
-	captcha      *captchaManager
-	githubClient *http.Client
-	cache        cache.Cache
-	userStore    store.UserManager
-	promptStore  store.PromptManager
-	commentStore store.CommentManager
-	uploadStore  store.UploadManager
-	imageStorage storage.ImageStorage
-	emailSender  emailSender
-	storageMode  string
-	metrics      *metrics
-	readyCheck   func(context.Context) map[string]bool
+	config              config.Config
+	tokenManager        *auth.TokenManager
+	captcha             *captchaManager
+	githubClient        *http.Client
+	cache               cache.Cache
+	userStore           store.UserManager
+	promptStore         store.PromptManager
+	commentStore        store.CommentManager
+	uploadStore         store.UploadManager
+	imageStorage        storage.ImageStorage
+	emailSender         emailSender
+	storageMode         string
+	metrics             *metrics
+	readyCheck          func(context.Context) map[string]bool
+	uploadSlots         chan struct{}
+	uploadOnce          sync.Once
+	uploadQuotaMu       sync.Mutex
+	uploadReservedBytes int64
+	uploadDailyUsage    map[string]int64
 }
 
 // serverDeps carries the pluggable dependencies of the API server. NewServer
@@ -141,21 +147,29 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 // the single wiring point for both production (NewServer) and tests.
 func newServerWithDeps(deps serverDeps) http.Handler {
 	s := &server{
-		config:       deps.config,
-		tokenManager: deps.tokenManager,
-		captcha:      deps.captcha,
-		githubClient: deps.githubClient,
-		cache:        deps.cache,
-		userStore:    deps.userStore,
-		promptStore:  deps.promptStore,
-		commentStore: deps.commentStore,
-		uploadStore:  deps.uploadStore,
-		imageStorage: deps.imageStorage,
-		emailSender:  deps.emailSender,
-		storageMode:  deps.storageMode,
-		metrics:      newMetrics(),
-		readyCheck:   deps.readyCheck,
+		config:           deps.config,
+		tokenManager:     deps.tokenManager,
+		captcha:          deps.captcha,
+		githubClient:     deps.githubClient,
+		cache:            deps.cache,
+		userStore:        deps.userStore,
+		promptStore:      deps.promptStore,
+		commentStore:     deps.commentStore,
+		uploadStore:      deps.uploadStore,
+		imageStorage:     deps.imageStorage,
+		emailSender:      deps.emailSender,
+		storageMode:      deps.storageMode,
+		metrics:          newMetrics(),
+		readyCheck:       deps.readyCheck,
+		uploadDailyUsage: make(map[string]int64),
 	}
+	s.uploadOnce.Do(func() {
+		limit := s.config.UploadMaxConcurrent
+		if limit <= 0 {
+			limit = 4
+		}
+		s.uploadSlots = make(chan struct{}, limit)
+	})
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/health/live", s.handleHealthLive)
