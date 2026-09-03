@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 )
@@ -152,6 +153,52 @@ func (s *MySQLUploadStore) TrashUnreferenced(olderThan time.Time) ([]string, err
 	); err != nil {
 		return nil, err
 	}
+	return keys, nil
+}
+
+func (s *MySQLUploadStore) UnreferenceUploadsByOwner(ownerID int, referencedKeys []string) ([]string, error) {
+	query := `SELECT object_key FROM uploads WHERE owner_id = ? AND status = ?`
+	args := []any{ownerID, string(UploadStatusReferenced)}
+	if len(referencedKeys) > 0 {
+		placeholders := make([]string, len(referencedKeys))
+		for i, key := range referencedKeys {
+			placeholders[i] = "?"
+			args = append(args, key)
+		}
+		query += ` AND object_key NOT IN (` + strings.Join(placeholders, ",") + `)`
+	}
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(keys))
+	updateArgs := []any{string(UploadStatusPending), ownerID, string(UploadStatusReferenced)}
+	for i, key := range keys {
+		placeholders[i] = "?"
+		updateArgs = append(updateArgs, key)
+	}
+	_, err = s.db.Exec(`UPDATE uploads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE owner_id = ? AND status = ? AND object_key IN (`+strings.Join(placeholders, ",")+")", updateArgs...)
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(keys)
 	return keys, nil
 }
 

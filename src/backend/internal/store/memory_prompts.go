@@ -1,5 +1,10 @@
 package store
 
+import (
+	"sort"
+	"strings"
+)
+
 type MemoryPromptStore struct{}
 
 func NewMemoryPromptStore() *MemoryPromptStore {
@@ -152,6 +157,28 @@ func (s *MemoryPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {
 
 func (s *MemoryPromptStore) ListUserPrompts(userID int) ([]Prompt, error) {
 	return ListUserPrompts(userID), nil
+}
+
+func (s *MemoryPromptStore) ListReferencedUploadKeys(userID int) ([]string, error) {
+	prompts, err := s.ListUserPrompts(userID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	for _, prompt := range prompts {
+		for _, raw := range append([]string{prompt.Cover}, prompt.Images...) {
+			key := strings.TrimPrefix(strings.TrimSpace(raw), "/uploads/")
+			if key != strings.TrimSpace(raw) && key != "" {
+				seen[key] = struct{}{}
+			}
+		}
+	}
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 func (s *MemoryPromptStore) ClearUserHistory(userID int) error {

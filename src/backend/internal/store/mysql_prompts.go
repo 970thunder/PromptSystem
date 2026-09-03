@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 )
@@ -911,6 +912,31 @@ func (s *MySQLPromptStore) ListUserPrompts(userID int) ([]Prompt, error) {
 	defer rows.Close()
 
 	return scanPromptRows(rows)
+}
+
+func (s *MySQLPromptStore) ListReferencedUploadKeys(userID int) ([]string, error) {
+	prompts, err := s.ListUserPrompts(userID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	for _, prompt := range prompts {
+		for _, raw := range append([]string{prompt.Cover}, prompt.Images...) {
+			trimmed := strings.TrimSpace(raw)
+			if strings.HasPrefix(trimmed, "/uploads/") {
+				key := strings.Trim(strings.TrimPrefix(trimmed, "/uploads/"), "/")
+				if key != "" {
+					seen[key] = struct{}{}
+				}
+			}
+		}
+	}
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 // ClearUserHistory permanently removes only the requesting user's browsing

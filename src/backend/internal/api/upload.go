@@ -391,5 +391,5 @@ func detectImageFormat(data []byte) string {
 // referenced so cleanup cannot remove objects that are now in use. It returns a
 // stable error when a reference is missing, owned by another user, or trashed.
 func (s *server) validateUploadOwnership(userID int, cover string, images []string) error {
-	return s.getPromptService().ValidateAndMarkUploadOwnership(userID, cover, images)
+	return s.getPromptService().ValidateUploadOwnership(userID, cover, images)
 }

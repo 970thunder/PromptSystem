@@ -87,9 +87,10 @@ func (s *PromptService) interact(ctx context.Context, operation func() (store.Pr
 	return prompt, applied, err
 }
 
-// ValidateAndMarkUploadOwnership verifies all local upload references before a
-// prompt write and transitions valid pending records to referenced.
-func (s *PromptService) ValidateAndMarkUploadOwnership(userID int, cover string, images []string) error {
+// ValidateUploadOwnership verifies all local upload references before a
+// prompt write. It does not mutate lifecycle state, so a failed prompt write
+// cannot accidentally protect a temporary object from garbage collection.
+func (s *PromptService) ValidateUploadOwnership(userID int, cover string, images []string) error {
 	if s.uploads == nil {
 		return nil
 	}
@@ -99,7 +100,6 @@ func (s *PromptService) ValidateAndMarkUploadOwnership(userID int, cover string,
 	}
 	candidates = append(candidates, images...)
 
-	keys := make([]string, 0, len(candidates))
 	for _, raw := range candidates {
 		url := strings.TrimSpace(raw)
 		if !strings.HasPrefix(url, "/uploads/") {
@@ -116,12 +116,54 @@ func (s *PromptService) ValidateAndMarkUploadOwnership(userID int, cover string,
 		if !found || record.OwnerID != userID || record.Status == store.UploadStatusTrashed {
 			return ErrInvalidUploadOwnership
 		}
-		keys = append(keys, objectKey)
-	}
-	if len(keys) > 0 {
-		return s.uploads.MarkUploadsReferenced(keys, userID)
 	}
 	return nil
+}
+
+func (s *PromptService) MarkUploadsReferenced(userID int, cover string, images []string) error {
+	if s.uploads == nil {
+		return nil
+	}
+	keys := uploadKeys(cover, images)
+	return s.uploads.MarkUploadsReferenced(keys, userID)
+}
+
+func (s *PromptService) ReconcileUploads(userID int) error {
+	if s.uploads == nil {
+		return nil
+	}
+	keys, err := s.prompts.ListReferencedUploadKeys(userID)
+	if err != nil {
+		return err
+	}
+	_, err = s.uploads.UnreferenceUploadsByOwner(userID, keys)
+	return err
+}
+
+func uploadKeys(cover string, images []string) []string {
+	candidates := make([]string, 0, len(images)+1)
+	if cover != "" {
+		candidates = append(candidates, cover)
+	}
+	candidates = append(candidates, images...)
+	keys := make([]string, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	for _, raw := range candidates {
+		trimmed := strings.TrimSpace(raw)
+		if !strings.HasPrefix(trimmed, "/uploads/") {
+			continue
+		}
+		key := strings.Trim(strings.TrimPrefix(trimmed, "/uploads/"), "/")
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 // CommentService keeps comment interactions and reports out of HTTP handlers.

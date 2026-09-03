@@ -36,14 +36,39 @@ func TestPromptServiceValidatesAndMarksUploadOwnership(t *testing.T) {
 	}
 	s := NewPromptService(nil, uploads, nil)
 
-	if err := s.ValidateAndMarkUploadOwnership(1, "/uploads/prompt_image/1/cover.png", nil); err != nil {
+	if err := s.ValidateUploadOwnership(1, "/uploads/prompt_image/1/cover.png", nil); err != nil {
 		t.Fatalf("owner validation error = %v", err)
+	}
+	if err := s.MarkUploadsReferenced(1, "/uploads/prompt_image/1/cover.png", nil); err != nil {
+		t.Fatalf("mark upload reference error = %v", err)
 	}
 	record, found, err := uploads.FindUpload("prompt_image/1/cover.png")
 	if err != nil || !found || record.Status != store.UploadStatusReferenced {
 		t.Fatalf("upload after validation = %#v found=%v err=%v, want referenced", record, found, err)
 	}
-	if err := s.ValidateAndMarkUploadOwnership(2, "/uploads/prompt_image/1/cover.png", nil); !errors.Is(err, ErrInvalidUploadOwnership) {
+	if err := s.ValidateUploadOwnership(2, "/uploads/prompt_image/1/cover.png", nil); !errors.Is(err, ErrInvalidUploadOwnership) {
 		t.Fatalf("other owner error = %v, want ErrInvalidUploadOwnership", err)
+	}
+}
+
+func TestPromptServiceReconcilesReplacedUploadReferences(t *testing.T) {
+	uploads := store.NewMemoryUploadStore()
+	oldKey := "prompt_image/91/old.png"
+	newKey := "prompt_image/91/new.png"
+	for _, key := range []string{oldKey, newKey} {
+		if _, err := uploads.RecordUpload(store.UploadRecord{OwnerID: 91, ObjectKey: key, Status: store.UploadStatusReferenced}); err != nil {
+			t.Fatalf("record upload %s: %v", key, err)
+		}
+	}
+	if _, err := uploads.UnreferenceUploadsByOwner(91, []string{newKey}); err != nil {
+		t.Fatalf("unreference old upload: %v", err)
+	}
+	old, found, err := uploads.FindUpload(oldKey)
+	if err != nil || !found || old.Status != store.UploadStatusPending {
+		t.Fatalf("old upload = %#v found=%v err=%v, want pending", old, found, err)
+	}
+	newRecord, found, err := uploads.FindUpload(newKey)
+	if err != nil || !found || newRecord.Status != store.UploadStatusReferenced {
+		t.Fatalf("new upload = %#v found=%v err=%v, want referenced", newRecord, found, err)
 	}
 }

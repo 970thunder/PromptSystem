@@ -61,6 +61,9 @@ type PromptManager interface {
 	// ListUserPrompts returns the caller's non-deleted prompts, including drafts,
 	// for the personal data export flow.
 	ListUserPrompts(userID int) ([]Prompt, error)
+	// ListReferencedUploadKeys returns local upload object keys currently used
+	// by the user's retained prompts (published or drafts).
+	ListReferencedUploadKeys(userID int) ([]string, error)
 	// ClearUserHistory permanently removes only the caller's browsing history.
 	ClearUserHistory(userID int) error
 }
@@ -147,6 +150,10 @@ type UploadManager interface {
 	// TrashUnreferenced flips unreferenced uploads older than olderThan to
 	// trashed in one call, returning the keys that were transitioned.
 	TrashUnreferenced(olderThan time.Time) ([]string, error)
+	// UnreferenceUploadsByOwner moves previously referenced objects that are no
+	// longer present in the owner's retained Prompt references back to pending;
+	// the delayed cleanup task then deletes them after its safety window.
+	UnreferenceUploadsByOwner(ownerID int, referencedKeys []string) ([]string, error)
 	// ActiveUploadBytes returns the persisted bytes for uploads that have not
 	// been trashed. It is used to enforce the configured storage capacity.
 	ActiveUploadBytes() (int64, error)

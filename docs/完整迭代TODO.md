@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：50/81 已完成，31 项待完成（2026-09-04）。
+当前进度：51/81 已完成，30 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -70,7 +70,7 @@
 
 - [x] **D-01 上传所有者约束**：`uploads.owner_id` 建立用户引用或等价强校验。
 - [x] **D-02 多态目标完整性**：likes/favorites/reports/comments 写入前校验目标，并定期扫描孤儿记录。
-- [ ] **D-03 删除生命周期**：统一 Prompt、评论、用户、举报和上传的禁用/软删/回收规则。
+- [x] **D-03 删除生命周期**：统一 Prompt、评论、用户、举报和上传的禁用/软删/回收规则。
 - [ ] **D-04 上传垃圾回收**：草稿删除、替换图片、发布失败和注销产生的未引用对象延迟回收。
 - [x] **D-05 汇总计数审计**：定期核对 views/likes/favorites 与明细表，并对偏差告警。
 - [ ] **D-06 事务一致性**：发布、互动、评论、举报、关注的明细与汇总在同一事务或有明确补偿。
@@ -177,4 +177,5 @@
 - `S-09`：上传入口保留整请求/单文件大小限制、真实 MIME/扩展名一致性、标准解码和 20MP 像素上限，并新增 `UPLOAD_MAX_CONCURRENT` 并发槽、`UPLOAD_DAILY_QUOTA_MB` 用户日配额和 `UPLOAD_TOTAL_QUOTA_MB` 总容量；Redis 实现按用户/UTC 日期原子字节计数，开发/测试无 Redis 时使用进程内计数，数据库已用量与进程内预留量共同防止并发超卖。新增 `ActiveUploadBytes` Store 契约、Redis `IncrementBy`、配额/并发回归测试；`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过。生产尚未发布，RustFS 独立 bucket 和跨故障域副本仍由 `D-12/D-13` 负责。
 - `A-05`：新增 `docs/api-contract.schema.json` 作为 v1 共享 DTO 的 JSON Schema，`scripts/generate-api-contract.mjs` 生成 `src/frontend/src/types/api-contract.generated.ts`；前端 `User`、`Prompt`、`Comment`、分页和响应信封类型改为生成类型别名。新增 `npm run contract:check`，CI 在契约回归前验证生成文件无漂移；Schema 变更会触发前端 workflow。`npm run contract:check`、`npm test -- --run`（7 files/16 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过。生产尚未发布。
 - `A-02`：新增 `src/backend/internal/service` 业务层；`AuthService` 统一认证、账户导出/注销、关注和 JWT 撤销，`PromptService` 统一发布/更新/删除、互动、举报、浏览、上传引用校验及内容缓存失效，`CommentService` 统一评论创建、点赞和举报。API handler 仅保留 HTTP 解析、鉴权、限流和稳定错误映射；正式装配与直接构造的测试 server 均通过惰性 accessor 使用同一 Service。新增 Service 回归测试；`go test ./...`、`go vet ./...`、`gofmt -l .`、`git diff --check` 通过。生产尚未发布。
+- `D-03`：明确并实现 Prompt 上传引用生命周期：上传先为 `pending`，Prompt 写入成功后才转 `referenced`；Prompt 更新/删除后按该用户保留的发布内容和草稿实际引用集合，将不再使用的旧对象退回 `pending`，交由延迟回收。评论/举报继续保留软删和审计记录，禁用用户内容不公开，账户注销沿用禁用/匿名化策略。新增 `ListReferencedUploadKeys`、`UnreferenceUploadsByOwner` 及内存/MySQL 实现和回归测试；`go test ./...` 通过。生产尚未发布。
 - 线上只读核验（2026-09-04）：服务器 `free -h` 显示总内存 7.7 GiB、可用约 3.3 GiB、Swap 0；`df -h /` 显示 58G 总量、28G 已用、30G 可用（48%）。`docker compose ls` 确认 `promptsystem` 使用 `/srv/releases/promptsystem/20260830-b584585/docker-compose.yml`，仅保留 `20260830-b584585` 与 `20260829-a9ba2cf` 两个 release 目录；frontend/backend 仍分别绑定 `127.0.0.1:3092/5092`，公网入口为 80/443，其他 Compose 项目保持运行。线上 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。RustFS 转发服务 active，当前实测 bridge 监听为 `172.21.0.1:13902`、隧道为 `127.0.0.1:13900`；总说明中的旧 `172.17.0.1` 已修正。当前线上容器仍是旧发布策略（`ReadonlyRootfs=false`、未设置 cap/pids 限制），故 `S-11` 生产验收、`D-12/D-13` RustFS 迁移和所有告警/timer 项目保持未完成。

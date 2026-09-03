@@ -32,6 +32,7 @@
 - 生产 Compose 增加最小 capability、只读根文件系统、tmpfs 及 PID/内存上限；前端 nginx 增加 CSP Report-Only
 
 ### Changed
+- Prompt 图片引用改为显式生命周期：写入成功后才标记 `referenced`，更新或删除后不再使用的旧对象回到 `pending`，由延迟回收任务安全清理
 - 新增 `internal/service` 业务层，集中认证/会话、Prompt 互动与缓存失效、举报和上传引用校验；API handler 不再直接编排这些跨 Store 业务操作
 - 上传增加可配置的并发槽、单用户 UTC 日字节配额和总容量配额；Redis 使用原子字节计数，数据库已用量与进程内预留量共同防止并发超卖
 - 搜索页的数据请求、取消、竞态保护、分页去重和错误状态收敛到 Prompt Store，视图只负责路由筛选与展示

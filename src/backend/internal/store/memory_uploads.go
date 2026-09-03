@@ -1,6 +1,7 @@
 package store
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -124,6 +125,29 @@ func (s *MemoryUploadStore) TrashUnreferenced(olderThan time.Time) ([]string, er
 		}
 	}
 	return keys, nil
+}
+
+func (s *MemoryUploadStore) UnreferenceUploadsByOwner(ownerID int, referencedKeys []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keep := make(map[string]struct{}, len(referencedKeys))
+	for _, key := range referencedKeys {
+		keep[key] = struct{}{}
+	}
+	var changed []string
+	for key, rec := range s.uploads {
+		if rec.OwnerID != ownerID || rec.Status != UploadStatusReferenced {
+			continue
+		}
+		if _, ok := keep[key]; ok {
+			continue
+		}
+		rec.Status = UploadStatusPending
+		s.uploads[key] = rec
+		changed = append(changed, key)
+	}
+	sort.Strings(changed)
+	return changed, nil
 }
 
 // ActiveUploadBytes reports the size of uploads that still occupy storage.
