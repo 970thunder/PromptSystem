@@ -28,6 +28,73 @@ jobs:
           go-package: ./...
           work-dir: src/backend
 
+  secrets:
+    name: secret scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+
+  image-scan:
+    name: runtime image vulnerability scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/backend
+          load: true
+          tags: promptsystem-backend:ci
+          pull: true
+
+      - name: build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/frontend
+          load: true
+          tags: promptsystem-frontend:ci
+          pull: true
+          build-args: |
+            VITE_API_BASE_URL=/api/v1
+            VITE_APP_TITLE=PromptOS
+            VITE_ENABLE_PROMPT_API=true
+            VITE_GITHUB_OAUTH_ENABLED=false
+
+      - name: scan backend image
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: promptsystem-backend:ci
+          format: table
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: scan frontend image
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: promptsystem-frontend:ci
+          format: table
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
   compose-policy:
     name: production compose policy
     runs-on: ubuntu-latest
