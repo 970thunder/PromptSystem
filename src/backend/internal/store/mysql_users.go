@@ -205,6 +205,15 @@ func (s *MySQLUserStore) DeleteAccount(id int) error {
 	`, id, id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`
+		UPDATE skills s
+		SET s.likes = GREATEST(0, s.likes - (SELECT COUNT(*) FROM likes l WHERE l.user_id = ? AND l.target_type = 'skill' AND l.target_id = s.id)),
+		    s.favorites = GREATEST(0, s.favorites - (SELECT COUNT(*) FROM favorites f WHERE f.user_id = ? AND f.target_type = 'skill' AND f.target_id = s.id))
+		WHERE EXISTS (SELECT 1 FROM likes l WHERE l.user_id = ? AND l.target_type = 'skill' AND l.target_id = s.id)
+		   OR EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.target_type = 'skill' AND f.target_id = s.id)
+	`, id, id, id, id); err != nil {
+		return err
+	}
 
 	if _, err := tx.Exec(`DELETE FROM view_histories WHERE user_id = ?`, id); err != nil {
 		return err
