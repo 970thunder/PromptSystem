@@ -12,7 +12,8 @@ import (
 // TestMigrationMatrix verifies all three database start states converge to the
 // same final schema and that migrations are idempotent:
 //
-//  1. fresh: an empty database that runs every migration in order.
+//  1. fresh: an empty database that receives the baseline through the same
+//     RunMigrations entry point, then runs every migration in order.
 //  2. baseline: a database initialized from sql/schema.sql, then re-run through
 //     the migration chain (additive migrations only).
 //  3. partial: a database that has applied only the first half of the
@@ -48,11 +49,9 @@ func TestMigrationMatrix(t *testing.T) {
 		setup func(t *testing.T, db *sql.DB)
 	}{
 		{
-			name: "fresh",
-			db:   dbName + "_matrix_fresh",
-			setup: func(t *testing.T, db *sql.DB) {
-				initializeBaselineSchema(t, db, dbName+"_matrix_fresh")
-			},
+			name:  "fresh",
+			db:    dbName + "_matrix_fresh",
+			setup: func(t *testing.T, db *sql.DB) {},
 		},
 		{
 			name: "baseline",

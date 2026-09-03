@@ -11,7 +11,9 @@ Rules:
 1. Apply files in filename order.
 2. Never edit an old migration after it has been used in a shared environment.
 3. Put new schema changes in a new numbered file.
-4. Keep `schema.sql` aligned with the latest schema for fresh installs.
+4. Keep `schema.sql` aligned with the latest schema. It is applied automatically
+   by the backend only when the configured database has no tables; operators do
+   not manually import it during a normal deployment.
 
 Example:
 
@@ -30,4 +32,6 @@ Current files:
 - `0007_view_histories.sql`
 - `0008_prompt_images.sql`
 
-The Go backend runs pending migrations automatically on startup when MySQL is available (`schema_migrations` table). Docker images include `sql/migrations` at `/app/sql/migrations`.
+The Go backend applies the baseline automatically for a truly empty database,
+then runs pending migrations on startup using the `schema_migrations` table.
+Docker images include both `sql/schema.sql` and `sql/migrations` at `/app/sql`.

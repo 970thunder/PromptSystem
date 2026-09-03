@@ -51,13 +51,16 @@ Available MVP APIs:
 
 ## Database
 
-Initialize the local database with:
+The backend initializes a truly empty configured database from
+`src/backend/sql/schema.sql` and then applies pending files from
+`src/backend/sql/migrations/` through the `schema_migrations` ledger. No manual
+SQL import is needed for a normal local or production startup. Existing or
+partially migrated databases only receive migrations that are not already
+recorded.
 
-```bash
-mysql -u root -p < src/backend/sql/schema.sql
-```
-
-If you already have an existing database created from an older schema, apply incremental SQL files from `src/backend/sql/migrations/` in filename order. For example:
+For an existing database where an operator must run one migration manually,
+apply incremental SQL files from `src/backend/sql/migrations/` in filename
+order. For example:
 
 ```bash
 mysql -u root -p promptos < src/backend/sql/migrations/0001_prompts_cover_and_params.sql
@@ -112,7 +115,7 @@ Contributor and AI coding conventions (stack, directories, API style) are define
 ## Environment Naming
 
 - Frontend env vars use the `VITE_` prefix, for example `VITE_API_BASE_URL` and `VITE_APP_TITLE`.
-- The home feed prefers live prompt APIs and falls back to mock content if the backend is unavailable.
+- The home feed uses live prompt APIs; API failures are shown as an actionable error state.
 - Backend runtime config is environment-driven for local runs and Docker Compose.
 - Passwords are hashed with `bcrypt`, and protected API routes require a bearer JWT.
 - Prompt cover uploads validate image MIME type and file size before storing the file.

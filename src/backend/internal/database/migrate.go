@@ -23,6 +23,15 @@ func RunMigrations(db *sql.DB, dir string) error {
 		return fmt.Errorf("migrations path %q is not a directory", dir)
 	}
 
+	// A new MySQL database has no tables yet, while the historical migration
+	// chain starts with ALTER TABLE statements. Apply the checked-in baseline
+	// exactly once for that empty-database case, then let the same migration
+	// ledger drive every subsequent upgrade. Existing or partially migrated
+	// databases are never overwritten.
+	if err := ensureBaselineSchema(db, dir); err != nil {
+		return err
+	}
+
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version VARCHAR(64) PRIMARY KEY,
@@ -73,6 +82,30 @@ func RunMigrations(db *sql.DB, dir string) error {
 		}
 	}
 
+	return nil
+}
+
+func ensureBaselineSchema(db *sql.DB, migrationsDir string) error {
+	var tableCount int
+	if err := db.QueryRow(`
+		SELECT COUNT(*)
+		FROM information_schema.tables
+		WHERE table_schema = DATABASE()
+	`).Scan(&tableCount); err != nil {
+		return fmt.Errorf("inspect database schema: %w", err)
+	}
+	if tableCount != 0 {
+		return nil
+	}
+
+	schemaPath := filepath.Join(filepath.Dir(migrationsDir), "schema.sql")
+	body, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("read baseline schema %q: %w", schemaPath, err)
+	}
+	if err := execMigrationSQL(db, string(body)); err != nil {
+		return fmt.Errorf("apply baseline schema %q: %w", schemaPath, err)
+	}
 	return nil
 }
 
@@ -127,6 +160,13 @@ func splitSQLStatements(script string) []string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		// schema.sql is also used as the baseline for a database that the
+		// Compose entrypoint has already created. Do not require the migration
+		// account to have the global CREATE DATABASE privilege just to keep an
+		// existing database in place.
+		if strings.HasPrefix(strings.ToUpper(trimmed), "CREATE DATABASE IF NOT EXISTS ") {
 			continue
 		}
 		if strings.EqualFold(trimmed, "USE promptos;") || strings.EqualFold(trimmed, "USE promptos") {

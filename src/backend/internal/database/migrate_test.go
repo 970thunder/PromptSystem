@@ -4,6 +4,7 @@ import "testing"
 
 func TestSplitSQLStatementsSkipsCommentsAndUse(t *testing.T) {
 	script := `-- header
+CREATE DATABASE IF NOT EXISTS promptos DEFAULT CHARACTER SET utf8mb4;
 USE promptos;
 
 ALTER TABLE users ADD COLUMN github_id BIGINT NULL;

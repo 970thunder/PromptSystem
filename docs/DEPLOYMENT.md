@@ -13,7 +13,7 @@
 
 | 服务 | 镜像 | 端口 | 数据卷 |
 |---|---|---|---|
-| mysql | mysql:8.4 | 3306（`PROMPTOS_*_PORT` 可覆盖） | mysql_data + `sql\schema.sql` 初始化 |
+| mysql | mysql:8.4 | 3306（`PROMPTOS_*_PORT` 可覆盖） | mysql_data；由 backend 启动入口初始化基线并执行迁移 |
 | redis | redis:7-alpine | 6379 | redis_data |
 | backend | 本地构建（Go） | 8080 | uploads_data |
 | frontend | 本地构建（nginx） | 3000→80 | — |
@@ -42,7 +42,7 @@
 - 仓库内只有 `.env.docker.example`（占位符）；真实值本地在 `E:\Web\secrets\promptsystem\`，服务器在 `/opt/secrets/promptsystem/`（chmod 600，不在任何 webroot 下）。
 - 生产密钥位于服务器 `/opt/secrets/promptsystem/app.env`（权限 `600`），不进入仓库；Compose 通过环境变量注入；
 - 生产入口由现有 nginx 反代，证书由 Certbot webroot 自动续期；
-- 首次新库需要先导入 `src/backend/sql/schema.sql`，之后后端启动时自动运行 `sql/migrations`；
+- 首次新库不需要人工导入 SQL：backend 检测到当前数据库无表时自动应用 `src/backend/sql/schema.sql` 基线，随后通过 `schema_migrations` 执行全部 `sql/migrations`。已有卷和部分迁移库只执行未记录的迁移，不会覆盖数据；
 
 ## 当前生产发布
 
