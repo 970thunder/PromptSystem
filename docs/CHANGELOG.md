@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
+- 修复 MySQL 大小写不敏感排序规则下标签迁移未执行大小写更新的问题，改用二进制比较并补充 CI 失败回归
 - 统一 API 错误模型：存储层改用 sentinel error，错误响应始终带稳定 `errorCode`；未知内部错误返回 `500 INTERNAL_ERROR`，不泄露 SQL 或内部错误文本
 - 统一数据库初始化入口：backend 对真正空库自动应用 `schema.sql` 基线后运行迁移，开发 Compose 不再隐式挂载 schema；迁移矩阵新增真实空库场景并通过幂等验证
 - 开发 Compose 为 MySQL 显式创建与 backend 配套的 `promptos_app` 账号，避免新卷因账号缺失误降级到内存存储

@@ -21,4 +21,4 @@ JOIN prompt_tags keep_row
 
 UPDATE prompt_tags
 SET tag = LOWER(TRIM(REGEXP_REPLACE(tag, '[[:space:]]+', ' ')))
-WHERE tag <> LOWER(TRIM(REGEXP_REPLACE(tag, '[[:space:]]+', ' ')));
+WHERE BINARY tag <> BINARY LOWER(TRIM(REGEXP_REPLACE(tag, '[[:space:]]+', ' ')));
