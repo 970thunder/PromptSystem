@@ -324,7 +324,7 @@ func (s *server) handleAuthExchange(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	user, found := s.userStore.FindByID(userID)
+	user, found := s.getAuthService().FindByID(userID)
 	if !found || user.Status != 1 || user.SessionVer != sessionVersion {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 			Code:      401,
