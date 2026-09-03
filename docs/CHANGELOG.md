@@ -25,6 +25,7 @@
 ### Added
 - 管理审核边界：新增管理员角色、举报审核、Prompt 下架、用户禁用和追加式哈希链审计 API；管理员 actor 只取自会话，生产角色配置与真实审核验收仍待完成
 - 补齐 Report/AuditEvent 共享 API 契约，并让 Playwright E2E 使用确定性 mock 读取路径；Vitest 排除 Playwright suite，桌面/移动 smoke 共 4 项通过
+- 增加 `release-artifacts` GitHub Actions 制品构建和 `release.ps1 -ImageArchivePath` 校验入口；服务器只接收 CI 生成的镜像归档，不在生产机编译
 - 新增 `docs/api-contract.schema.json` 共享 DTO Schema 和生成器，前端核心 User/Prompt/Comment/分页类型由生成文件提供，CI 增加生成结果漂移检查
 - 首页标题飘带使用已有提示词标题和封面图，支持多行、不同速度和 3D 视觉效果
 - 增加首页、提示词卡片与详情页冒烟测试
@@ -42,7 +43,7 @@
 - 在迭代清单中单列当前功能缺失、架构/数据/安全风险和服务器前置条件，明确 Skill/Playground、SMTP、管理员审核、RustFS、定时备份、线上旧 release 等未完成边界
 - 发布脚本增加镜像归档 SHA-256 强校验、加载后清理和健康后 `current` 指针切换，降低无 Swap/小根盘服务器的发布残留风险
 
-## [20260904-ba8ff40] - 2026-09-04
+## [v0.3.0] - 2026-09-04
 
 ### Release Candidate
 - 管理审核与审计链代码、共享契约和浏览器 smoke 已通过本机验证；本次发布候选关闭邮件认证，等待真实 SMTP 配置后再开放注册/找回密码

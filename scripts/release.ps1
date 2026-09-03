@@ -10,6 +10,7 @@ param(
     [string]$SshKey = 'E:\Web\服务器密钥\foxi_103.42.182.205',
     [string]$ProjectName = 'promptsystem',
     [bool]$EmailAuthEnabled = $true,
+    [string]$ImageArchivePath = '',
     [switch]$SkipTests,
     [switch]$SkipDeploy
 )
@@ -57,18 +58,33 @@ New-Item -ItemType Directory -Path $releaseRoot | Out-Null
 $backendImage = "$ProjectName-backend`:$Version"
 $frontendImage = "$ProjectName-frontend`:$Version"
 
-Step '本机构建生产镜像'
-Invoke-Checked docker @('build', '--pull=false', '-t', $backendImage, 'src/backend')
-$emailArg = if ($EmailAuthEnabled) { 'true' } else { 'false' }
-Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', "VITE_EMAIL_AUTH_ENABLED=$emailArg", '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
-
 $imageArchive = Join-Path $releaseRoot "${ProjectName}-images-$Version.tar"
-Invoke-Checked docker @('save', '-o', $imageArchive, $backendImage, $frontendImage)
-Require gzip
-Invoke-Checked gzip @('-f', $imageArchive)
-$imageArchive = "$imageArchive.gz"
-$hash = (Get-FileHash $imageArchive -Algorithm SHA256).Hash.ToLowerInvariant()
 Copy-Item deploy\promptsystem\docker-compose.yml (Join-Path $releaseRoot 'docker-compose.yml')
+
+if ([string]::IsNullOrWhiteSpace($ImageArchivePath)) {
+    Step '本机构建生产镜像'
+    Invoke-Checked docker @('build', '--pull=false', '-t', $backendImage, 'src/backend')
+    $emailArg = if ($EmailAuthEnabled) { 'true' } else { 'false' }
+    Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', "VITE_EMAIL_AUTH_ENABLED=$emailArg", '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
+
+    Invoke-Checked docker @('save', '-o', $imageArchive, $backendImage, $frontendImage)
+    Require gzip
+    Invoke-Checked gzip @('-f', $imageArchive)
+    $imageArchive = "$imageArchive.gz"
+} else {
+    Step '校验 CI 生产镜像归档'
+    $sourceArchive = (Resolve-Path -LiteralPath $ImageArchivePath -ErrorAction Stop).Path
+    if ($sourceArchive -notmatch '\.tar\.gz$') { Fail 'ImageArchivePath 必须是 .tar.gz 镜像归档' }
+    Invoke-Checked docker @('load', '--input', $sourceArchive)
+    $loadedImages = @(& docker image inspect $backendImage $frontendImage --format '{{.Id}}' 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $loadedImages.Count -ne 2) {
+        Fail "CI 归档未包含预期镜像：$backendImage 和 $frontendImage"
+    }
+    Copy-Item -LiteralPath $sourceArchive -Destination "$imageArchive.gz"
+    $imageArchive = "$imageArchive.gz"
+}
+
+$hash = (Get-FileHash $imageArchive -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($SkipDeploy) {
     Write-Host "已完成本地发布制品：$releaseRoot（SHA-256 $hash）" -ForegroundColor Green

@@ -1,0 +1,78 @@
+name: release-artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Immutable image/release version, e.g. 20260904-ba8ff40'
+        required: true
+        type: string
+      email_auth_enabled:
+        description: 'Enable email auth in the frontend build'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build immutable release images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/backend
+          load: true
+          pull: true
+          tags: promptsystem-backend:${{ inputs.version }}
+
+      - name: build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/frontend
+          load: true
+          pull: true
+          tags: promptsystem-frontend:${{ inputs.version }}
+          build-args: |
+            VITE_API_BASE_URL=/api/v1
+            VITE_APP_TITLE=PromptOS
+            VITE_ENABLE_PROMPT_API=true
+            VITE_EMAIL_AUTH_ENABLED=${{ inputs.email_auth_enabled }}
+            VITE_GITHUB_OAUTH_ENABLED=false
+            VITE_SKILL_ENABLED=false
+            VITE_PLAYGROUND_ENABLED=false
+            VITE_CREATOR_ACADEMY_ENABLED=false
+            VITE_MARKETPLACE_ENABLED=false
+
+      - name: export and fingerprint images
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-artifact
+          docker save "promptsystem-backend:${VERSION}" "promptsystem-frontend:${VERSION}" \
+            | gzip -c > "release-artifact/promptsystem-images-${VERSION}.tar.gz"
+          sha256sum "release-artifact/promptsystem-images-${VERSION}.tar.gz" \
+            > release-artifact/SHA256SUMS
+          docker image inspect "promptsystem-backend:${VERSION}" "promptsystem-frontend:${VERSION}" \
+            --format '{{.RepoTags}} {{.Id}}' > release-artifact/IMAGE_IDS
+          printf 'version=%s\ncommit=%s\n' "$VERSION" "$GITHUB_SHA" > release-artifact/RELEASE
+
+      - name: upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptsystem-release-${{ inputs.version }}
+          path: release-artifact
+          if-no-files-found: error
+          retention-days: 7
