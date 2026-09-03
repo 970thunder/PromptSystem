@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
+import { Download, Eraser, UserRoundX } from 'lucide-vue-next'
 import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
@@ -33,6 +34,9 @@ const historyPrompts = ref<Prompt[]>([])
 const historyTotal = ref(0)
 const historyPage = ref(1)
 const historyLoadingMore = ref(false)
+const exportingData = ref(false)
+const clearingHistory = ref(false)
+const deletingAccount = ref(false)
 const followingUsers = ref<User[]>([])
 const followerUsers = ref<User[]>([])
 const followStatus = ref<FollowStatus | null>(null)
@@ -362,6 +366,81 @@ const handleBindGitHub = () => {
   window.location.href = githubAuthUrl()
 }
 
+const handleExportData = async () => {
+  if (!isOwnerView.value || exportingData.value) {
+    return
+  }
+
+  exportingData.value = true
+  try {
+    const response = await userApi.exportData()
+    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `promptos-data-${userStore.userInfo?.id ?? 'account'}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    message.success('数据导出已开始')
+  } catch {
+    message.error('数据导出失败，请稍后重试')
+  } finally {
+    exportingData.value = false
+  }
+}
+
+const handleClearHistory = () => {
+  if (!isOwnerView.value || clearingHistory.value) {
+    return
+  }
+
+  dialog.warning({
+    title: '清空浏览记录',
+    content: '这会永久删除你的浏览历史，但不会影响 Prompt 的累计浏览数。',
+    positiveText: '清空记录',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      clearingHistory.value = true
+      try {
+        await userApi.clearHistory()
+        historyPrompts.value = []
+        historyTotal.value = 0
+        historyPage.value = 1
+        message.success('浏览记录已清空')
+      } catch {
+        message.error('浏览记录清空失败，请稍后重试')
+      } finally {
+        clearingHistory.value = false
+      }
+    }
+  })
+}
+
+const handleDeleteAccount = () => {
+  if (!isOwnerView.value || deletingAccount.value) {
+    return
+  }
+
+  dialog.warning({
+    title: '注销账号',
+    content: '账号会立即失效，个人标识会被匿名化，已发布内容按保留策略留存且不再公开。此操作不可撤销。',
+    positiveText: '确认注销',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      deletingAccount.value = true
+      try {
+        await userApi.deleteAccount()
+        userStore.logout()
+        await router.replace('/')
+      } catch {
+        message.error('账号注销失败，请稍后重试')
+      } finally {
+        deletingAccount.value = false
+      }
+    }
+  })
+}
+
 const handlePublishClick = async () => {
   if (!userStore.isLoggedIn) {
     await router.push('/login?redirect=/publish')
@@ -532,6 +611,53 @@ watch(() => route.params.userId, loadProfile)
                   @click="handleSaveProfile"
                 >
                   {{ savingProfile ? '保存中...' : '保存资料' }}
+                </button>
+              </div>
+            </section>
+
+            <section
+              v-if="isOwnerView"
+              class="profile-card"
+            >
+              <div class="profile-card__title">
+                账户数据
+              </div>
+              <div class="profile-account-actions">
+                <button
+                  type="button"
+                  class="profile-account-action"
+                  :disabled="exportingData"
+                  @click="handleExportData"
+                >
+                  <Download
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  {{ exportingData ? '准备导出...' : '导出我的数据' }}
+                </button>
+                <button
+                  type="button"
+                  class="profile-account-action"
+                  :disabled="clearingHistory || historyTotal === 0"
+                  @click="handleClearHistory"
+                >
+                  <Eraser
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  {{ clearingHistory ? '清理中...' : '清空浏览记录' }}
+                </button>
+                <button
+                  type="button"
+                  class="profile-account-action profile-account-action--danger"
+                  :disabled="deletingAccount"
+                  @click="handleDeleteAccount"
+                >
+                  <UserRoundX
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  {{ deletingAccount ? '注销中...' : '注销账号' }}
                 </button>
               </div>
             </section>
@@ -844,6 +970,35 @@ watch(() => route.params.userId, loadProfile)
 
 .profile-summary {
   @apply mt-4 space-y-3 text-sm text-[var(--prompt-text-faint)];
+}
+
+.profile-account-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-account-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border, #d9dde5);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text, #1f2937);
+  cursor: pointer;
+}
+
+.profile-account-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.profile-account-action--danger {
+  border-color: #e3a4a4;
+  color: #a12b2b;
 }
 
 .profile-bind-status {

@@ -32,6 +32,8 @@ type server struct {
 	imageStorage storage.ImageStorage
 	emailSender  emailSender
 	storageMode  string
+	metrics      *metrics
+	readyCheck   func(context.Context) map[string]bool
 }
 
 // serverDeps carries the pluggable dependencies of the API server. NewServer
@@ -50,6 +52,7 @@ type serverDeps struct {
 	imageStorage storage.ImageStorage
 	emailSender  emailSender
 	storageMode  string
+	readyCheck   func(context.Context) map[string]bool
 }
 
 func NewServer(cfg config.Config) (http.Handler, error) {
@@ -63,6 +66,8 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 	commentStore := store.CommentManager(store.NewMemoryCommentStore())
 	uploadStore := store.UploadManager(store.NewMemoryUploadStore())
 	storageMode := "memory"
+	runtimeCache := cache.New(cfg)
+	var readyCheck func(context.Context) map[string]bool
 
 	migrationCfg := cfg
 	if cfg.MySQLMigrationUser != "" {
@@ -94,6 +99,11 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 				commentStore = store.NewMySQLCommentStore(db)
 				uploadStore = store.NewMySQLUploadStore(db)
 				storageMode = "mysql"
+				readyCheck = func(ctx context.Context) map[string]bool {
+					mysqlOK := db.PingContext(ctx) == nil
+					redisOK := runtimeCache == nil || runtimeCache.Ping(ctx) == nil
+					return map[string]bool{"mysql": mysqlOK, "redis": redisOK}
+				}
 				log.Printf("using MySQL-backed stores at %s:%s/%s", cfg.MySQLHost, cfg.MySQLPort, cfg.MySQLDB)
 			}
 		} else {
@@ -115,7 +125,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
 		captcha:      newCaptchaManager(),
 		githubClient: newGitHubClient(),
-		cache:        cache.New(cfg),
+		cache:        runtimeCache,
 		userStore:    userStore,
 		promptStore:  promptStore,
 		commentStore: commentStore,
@@ -123,6 +133,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		imageStorage: imageStorage,
 		emailSender:  newSMTPEmailSender(cfg),
 		storageMode:  storageMode,
+		readyCheck:   readyCheck,
 	}), nil
 }
 
@@ -142,11 +153,14 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		imageStorage: deps.imageStorage,
 		emailSender:  deps.emailSender,
 		storageMode:  deps.storageMode,
+		metrics:      newMetrics(),
+		readyCheck:   deps.readyCheck,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 	mux.HandleFunc("/api/v1/health/live", s.handleHealthLive)
 	mux.HandleFunc("/api/v1/health/ready", s.handleHealthReady)
+	mux.HandleFunc("/metrics", s.handleMetrics)
 	mux.HandleFunc("/api/v1/categories", s.handleCategories)
 	mux.HandleFunc("/api/v1/home/summary", s.handleHomeSummary)
 	mux.HandleFunc("/api/v1/prompts", s.handlePrompts)
@@ -169,12 +183,14 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	mux.HandleFunc("/api/v1/user/password/reset", s.handleResetPassword)
 	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
+	mux.HandleFunc("/api/v1/user/data-export", s.withAuth(s.handleUserDataExport))
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))
 	mux.HandleFunc("/api/v1/user/likes", s.withAuth(s.handleUserLikes))
 	// History list is served by the paginated handler in prompt_handlers.go
 	// (handleUserHistoryList) which returns a pageResponse consistent with
 	// parsePageParams and excludes soft-deleted prompts.
 	mux.HandleFunc("/api/v1/user/history", s.withAuth(s.handleUserHistoryList))
+	mux.HandleFunc("/api/v1/user/account", s.withAuth(s.handleDeleteAccount))
 	mux.HandleFunc("/api/v1/user/drafts", s.withAuth(s.handleUserDrafts))
 	mux.HandleFunc("/api/v1/user/prompts/", s.withAuth(s.handleUserPromptDetail))
 	mux.HandleFunc("/api/v1/user/following", s.withAuth(s.handleUserFollowing))
@@ -193,7 +209,7 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 				next.ServeHTTP(w, r.WithContext(ctx))
 			})
 		},
-		func(next http.Handler) http.Handler { return withAccessLog(logger, next) },
+		func(next http.Handler) http.Handler { return s.withAccessLog(logger, next) },
 		withSecurityHeaders,
 		s.withCORS,
 	)

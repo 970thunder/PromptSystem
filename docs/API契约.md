@@ -10,7 +10,7 @@
 - 认证：受保护接口使用 `Authorization: Bearer <token>`。
 - 分页：`page`（默认 1，`>=1`）、`pageSize`（默认 12，`1..100`）。非法值返回 `400`。
 - 请求体：单个 JSON 值，未知字段被拒绝，超限返回 `413 BODY_TOO_LARGE`。
-- 错误码示例：`AUTH_INVALID_CREDENTIALS`、`AUTH_TOKEN_MISSING`、`AUTH_TOKEN_INVALID`、`AUTH_TOKEN_EXPIRED`、`AUTH_TOKEN_REVOKED`、`AUTH_USER_DISABLED`、`USER_NOT_FOUND`、`CANNOT_FOLLOW_SELF`、`PROMPT_NOT_FOUND`、`PROMPT_FORBIDDEN`、`COMMENT_NOT_FOUND`、`COMMENT_PARENT_NOT_FOUND`、`COMMENT_PARENT_MISMATCH`、`INVALID_COMMENT_CONTENT`、`INVALID_REPORT_REASON`、`REPORT_DETAIL_TOO_LONG`、`INVALID_CATEGORY`、`INVALID_TAG`、`INVALID_PAGE`、`INVALID_PAGE_SIZE`、`INVALID_JSON`、`ORIGIN_NOT_ALLOWED`、`INVALID_UPLOAD_OWNERSHIP`、`INVALID_IMAGE_FORMAT`、`IMAGE_REQUIRED`、`IMAGE_TOO_LARGE`、`REQUEST_TOO_LARGE`、`INTERNAL_ERROR`。
+- 错误码示例：`AUTH_INVALID_CREDENTIALS`、`AUTH_TOKEN_MISSING`、`AUTH_TOKEN_INVALID`、`AUTH_TOKEN_EXPIRED`、`AUTH_TOKEN_REVOKED`、`AUTH_USER_DISABLED`、`USER_NOT_FOUND`、`CANNOT_FOLLOW_SELF`、`PROMPT_NOT_FOUND`、`PROMPT_FORBIDDEN`、`COMMENT_NOT_FOUND`、`COMMENT_PARENT_NOT_FOUND`、`COMMENT_PARENT_MISMATCH`、`INVALID_COMMENT_CONTENT`、`INVALID_REPORT_REASON`、`REPORT_DETAIL_TOO_LONG`、`INVALID_CATEGORY`、`INVALID_TAG`、`INVALID_PAGE`、`INVALID_PAGE_SIZE`、`INVALID_JSON`、`ORIGIN_NOT_ALLOWED`、`INVALID_UPLOAD_OWNERSHIP`、`INVALID_IMAGE_FORMAT`、`IMAGE_REQUIRED`、`IMAGE_TOO_LARGE`、`REQUEST_TOO_LARGE`、`HISTORY_CLEAR_FAILED`、`DATA_EXPORT_FAILED`、`INTERNAL_ERROR`。
 - 内部错误不直接暴露给客户端：`err.Error()` / SQL 细节不会出现在响应里，业务错误统一走稳定 `errorCode` + 展示用 `message`。
 
 ## 健康检查
@@ -137,6 +137,15 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 
 ### `GET /user/history`（需登录）
 当前用户浏览历史，**分页返回**（`page`/`pageSize`，同全局约定），响应为 `{ list, total, page, pageSize }`。只返回**本人**历史（用户 ID 取自鉴权上下文，不接受第三方 userId 参数），且**软删除（已下架）的 Prompt 不会出现**在结果中。新增/刷新浏览见下方隐私约定。
+
+### `DELETE /user/history`（需登录）
+清空当前用户的浏览历史。只删除 `view_histories` 中本人的记录，不回退 Prompt 的累计浏览计数。成功返回 `{ "cleared": true }`。
+
+### `GET /user/data-export`（需登录）
+导出当前用户可访问的账户数据，返回 `exportedAt`、安全用户 DTO、本人保留的 Prompt（含草稿）、收藏、点赞和浏览历史。响应不包含密码哈希、GitHub 绑定 ID 或邮箱以外的认证材料；导出频率受用户维度限流。
+
+### `DELETE /user/account`（需登录）
+注销当前账户。账户转为 disabled，密码、GitHub 绑定和直接标识被匿名化，`session_version` 递增使所有旧 JWT 立即失效；个人点赞、收藏、举报、关注和浏览历史清理。本人 Prompt 和评论记录按保留策略留存，但因作者已禁用而不再公开。成功返回 `{ "deleted": true }`；该操作可安全重试。
 
 ### `GET|POST|DELETE /users/{id}/follow`、`GET /users/{id}/follow-status`（需登录）
 关注/取关/关注状态。

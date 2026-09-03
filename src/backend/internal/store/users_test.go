@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -166,5 +167,58 @@ func TestUserStoreUpsertGitHubUserBindsExistingEmailAccount(t *testing.T) {
 	}
 	if authUser.ID != registered.ID {
 		t.Fatalf("expected email login to keep same user %d, got %d", registered.ID, authUser.ID)
+	}
+}
+
+func TestUserStoreDeleteAccountAnonymizesAndRevokes(t *testing.T) {
+	userStore := NewUserStore()
+	user, err := userStore.Register("Delete Me", "delete-me@example.com", "StrongPass123!")
+	if err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	prompt, err := CreatePrompt(CreatePromptInput{
+		Title:      "retained prompt",
+		Content:    "content",
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		Tags:       []string{"privacy"},
+		User:       User{ID: user.ID, Username: user.Username, Email: user.Email, Status: 1},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePrompt() error = %v", err)
+	}
+	if _, _, err := LikePrompt(prompt.ID, user.ID); err != nil {
+		t.Fatalf("LikePrompt() error = %v", err)
+	}
+	if _, _, err := FavoritePrompt(prompt.ID, user.ID); err != nil {
+		t.Fatalf("FavoritePrompt() error = %v", err)
+	}
+	if _, _, err := RecordPromptView(prompt.ID, user.ID); err != nil {
+		t.Fatalf("RecordPromptView() error = %v", err)
+	}
+
+	if err := userStore.DeleteAccount(user.ID); err != nil {
+		t.Fatalf("DeleteAccount() error = %v", err)
+	}
+	deleted, found := userStore.FindByID(user.ID)
+	if !found || deleted.Status != 0 || deleted.PasswordHash != "" || deleted.GitHubID != 0 {
+		t.Fatalf("account was not disabled and scrubbed: found=%v user=%+v", found, deleted)
+	}
+	if deleted.Email != "deleted+"+strconv.Itoa(user.ID)+"@invalid.promptos.local" {
+		t.Fatalf("unexpected anonymized email: %q", deleted.Email)
+	}
+	if _, err := userStore.Authenticate("delete-me@example.com", "StrongPass123!"); err == nil {
+		t.Fatal("disabled account must not authenticate")
+	}
+	if _, found := FindPromptByID(prompt.ID); found {
+		t.Fatal("prompt owned by disabled account must not remain public")
+	}
+	if got := ListUserHistoryPrompts(user.ID); len(got) != 0 {
+		t.Fatalf("expected history to be cleared, got %d rows", len(got))
+	}
+	if err := userStore.DeleteAccount(user.ID); err != nil {
+		t.Fatalf("repeated DeleteAccount() should be idempotent: %v", err)
 	}
 }

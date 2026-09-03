@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：40/81 已完成，41 项待完成（2026-09-04）。
+当前进度：44/81 已完成，37 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -63,7 +63,7 @@
 - [x] **A-08 数据库连接池**：配置最大/空闲连接与生命周期，并采集连接池指标。
 - [x] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
 - [ ] **A-10 轻量后台任务**：上传回收、数据审计、备份校验优先使用 systemd timer/cron，不新增高内存常驻套件。
-- [ ] **A-11 可观测性**：提供请求、错误、延迟、数据库、Redis、上传和任务指标。
+- [x] **A-11 可观测性**：提供请求、错误、延迟、数据库、Redis、上传和任务指标。
 - [ ] **A-12 发布架构自动化**：本机构建、镜像校验、上传、迁移、切换、验证和回滚脚本化；服务器不编译。
 
 ## D 数据
@@ -72,12 +72,12 @@
 - [x] **D-02 多态目标完整性**：likes/favorites/reports/comments 写入前校验目标，并定期扫描孤儿记录。
 - [ ] **D-03 删除生命周期**：统一 Prompt、评论、用户、举报和上传的禁用/软删/回收规则。
 - [ ] **D-04 上传垃圾回收**：草稿删除、替换图片、发布失败和注销产生的未引用对象延迟回收。
-- [ ] **D-05 汇总计数审计**：定期核对 views/likes/favorites 与明细表，并对偏差告警。
+- [x] **D-05 汇总计数审计**：定期核对 views/likes/favorites 与明细表，并对偏差告警。
 - [ ] **D-06 事务一致性**：发布、互动、评论、举报、关注的明细与汇总在同一事务或有明确补偿。
 - [x] **D-07 标签规范化**：统一大小写、空白、长度和唯一性；热门标签由后端聚合。
 - [x] **D-08 公开查询边界**：草稿、删除内容、禁用用户内容不能出现在首页和搜索。
 - [x] **D-09 数据字典**：记录全部表、字段、状态值、索引、外键和保留期限。
-- [ ] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
+- [x] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
 - [ ] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。
 - [ ] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。
 - [ ] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。
@@ -91,7 +91,7 @@
 - [ ] **S-04 CSP**：从 Report-Only 开始制定 Vue 生产 CSP，再切换强制模式。
 - [ ] **S-05 CORS/CSRF**：生产仅允许正式域名；Cookie 会话启用 CSRF 防护。
 - [x] **S-06 重定向安全**：站内 redirect 覆盖双斜杠、反斜杠、协议相对和编码变体。
-- [ ] **S-07 分维度限流**：登录、注册、验证码、重置、评论、举报、搜索、上传按 IP/账号/用户限制。
+- [x] **S-07 分维度限流**：登录、注册、验证码、重置、评论、举报、搜索、上传按 IP/账号/用户限制。
 - [ ] **S-08 内容安全**：Prompt/评论/用户名/标签/Markdown/URL 统一长度、控制字符和脚本校验。
 - [ ] **S-09 上传安全与配额**：MIME、解码、像素、格式、并发、单用户日配额和总容量限制。
 - [ ] **S-10 Redis 隔离**：独立网络、ACL/密码，禁止公网访问。
@@ -169,3 +169,5 @@
 - `A-03`：新增 `runPromptManagerContract` 共享契约测试，内存和 MySQL 均覆盖创建与标签规范化、分页总数、互动幂等、浏览历史去重、删除隐藏及非所有者更新权限；修正 MySQL 非所有者更新返回 `ErrPromptForbidden` 的语义。生产尚未发布，真实 MySQL 由 backend CI 集成作业验证。
 - `D-09`：新增 `docs/数据字典.md`，按当前 `schema.sql` 记录全部 12 张表的字段、状态枚举、索引、外键、多态目标约束、软删/级联和上传保留策略，并明确迁移与审计入口；`docker compose config --quiet`、`git diff --check` 通过。生产尚未发布。
 - `D-02`：新增 `AuditMySQLPolymorphicIntegrity` 只读审计、`promptos-integrity-audit` 一次性命令和真实 MySQL 回归测试，扫描 comments/likes/favorites/reports 的未知 `target_type` 与孤儿目标；既有写入路径已在事务前校验公开 Prompt/Comment 目标。审计发现问题退出 `1`，连接或执行失败退出非 `0`，无异常退出 `0`，不自动修改数据。命令随 backend 镜像发布，部署文档给出带 `flock` 的 systemd timer/cron 串行执行方式，适配无 Swap 服务器。`gofmt`、`go test ./...`、`go vet ./...`、API/审计二进制构建、前端 lint/Vitest/build、`docker compose config --quiet` 和 `git diff --check` 通过；GitHub Actions backend `33790437831` 的 Linux race、真实 MySQL、迁移矩阵和 Docker health 全部通过，security `33790437800` 通过。生产尚未部署，告警接收端仍未配置；本机 Docker build 因 Docker Desktop 无法访问 Docker Hub 未完成。
+- `D-10`：新增 `GET /api/v1/user/data-export`、`DELETE /api/v1/user/history` 和 `DELETE /api/v1/user/account`；内存/MySQL Store 均支持本人 Prompt 导出、历史清除和事务化注销。注销禁用账户、清除密码/GitHub 绑定、匿名化用户名/邮箱、递增 `session_version`，清理个人点赞/收藏/举报/关注/浏览明细并修正 Prompt/评论计数；保留 Prompt/评论记录以满足审计和外键保留策略，禁用作者内容不再公开。个人中心增加导出、清空浏览记录和注销入口。`go test ./...`、MySQL `TestMySQLDeleteAccountAnonymizesAndClearsPersonalRows`、前端 `npm run lint:check`、`npm test -- --run`（7 files/14 tests）和 `npm run build` 通过。生产尚未发布，注销后上传对象仍由 `D-04` 延迟回收任务负责，真实 SMTP/告警/RustFS 依赖项目保持未验收。
+- `A-11/D-05/S-07`：新增轻量 Prometheus `/metrics` 端点，记录 HTTP 请求/错误/平均延迟、上传、任务和 MySQL/Redis/上传依赖状态；新增只读 Prompt 计数审计并纳入低峰维护命令；登录、注册、验证码、重置、评论、举报、搜索、互动和上传按 IP/邮箱/用户分维度限流，生产 Redis 不可用时 fail-closed。新增限流与 metrics 回归测试。后端 `go test ./...`、`go vet ./...`、三个二进制构建和前端全量校验通过；生产 timer/告警尚未配置，故 `A-10/O-01` 仍待服务器验收。

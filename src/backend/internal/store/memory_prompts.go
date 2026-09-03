@@ -149,3 +149,12 @@ func (s *MemoryPromptStore) ListUserHistoryPage(userID, page, pageSize int) ([]P
 func (s *MemoryPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {
 	return ListUserDraftPrompts(userID), nil
 }
+
+func (s *MemoryPromptStore) ListUserPrompts(userID int) ([]Prompt, error) {
+	return ListUserPrompts(userID), nil
+}
+
+func (s *MemoryPromptStore) ClearUserHistory(userID int) error {
+	ClearUserHistory(userID)
+	return nil
+}

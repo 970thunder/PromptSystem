@@ -217,6 +217,97 @@ func TestMySQLPublicQueriesExcludeDisabledAuthors(t *testing.T) {
 	}
 }
 
+func TestMySQLDeleteAccountAnonymizesAndClearsPersonalRows(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+	users := NewMySQLUserStore(db)
+	suffix := time.Now().UnixNano()
+	user, err := users.Register(fmt.Sprintf("delete_%d", suffix), fmt.Sprintf("delete-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	other, err := users.Register(fmt.Sprintf("delete_other_%d", suffix), fmt.Sprintf("delete-other-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register other: %v", err)
+	}
+	prompts := NewMySQLPromptStore(db)
+	prompt, err := prompts.Create(CreatePromptInput{
+		Title:      fmt.Sprintf("delete account prompt %d", suffix),
+		Content:    "retained content",
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		Tags:       []string{"privacy"},
+		User:       User{ID: user.ID, Username: user.Username, Email: user.Email, Status: 1},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+	defer func() {
+		_, _ = db.Exec("DELETE FROM likes WHERE user_id = ? OR target_id = ?", user.ID, prompt.ID)
+		_, _ = db.Exec("DELETE FROM favorites WHERE user_id = ? OR target_id = ?", user.ID, prompt.ID)
+		_, _ = db.Exec("DELETE FROM view_histories WHERE user_id = ? OR prompt_id = ?", user.ID, prompt.ID)
+		_, _ = db.Exec("DELETE FROM follows WHERE follower_id IN (?, ?) OR following_id IN (?, ?)", user.ID, other.ID, user.ID, other.ID)
+		_, _ = db.Exec("DELETE FROM prompt_tags WHERE prompt_id = ?", prompt.ID)
+		_, _ = db.Exec("DELETE FROM prompts WHERE id = ?", prompt.ID)
+		_, _ = db.Exec("DELETE FROM users WHERE id IN (?, ?)", user.ID, other.ID)
+	}()
+
+	if _, _, err := prompts.Like(prompt.ID, user.ID); err != nil {
+		t.Fatalf("like: %v", err)
+	}
+	if _, _, err := prompts.Favorite(prompt.ID, user.ID); err != nil {
+		t.Fatalf("favorite: %v", err)
+	}
+	if _, _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	if _, _, err := users.Follow(other.ID, user.ID); err != nil {
+		t.Fatalf("follow: %v", err)
+	}
+	beforeVersion := user.SessionVer
+	if err := users.DeleteAccount(user.ID); err != nil {
+		t.Fatalf("DeleteAccount: %v", err)
+	}
+	deleted, found := users.FindByID(user.ID)
+	if !found || deleted.Status != 0 || deleted.PasswordHash != "" || deleted.GitHubID != 0 {
+		t.Fatalf("account was not scrubbed: found=%v user=%+v", found, deleted)
+	}
+	if deleted.Username != fmt.Sprintf("deleted-user-%d", user.ID) || deleted.Email != fmt.Sprintf("deleted+%d@invalid.promptos.local", user.ID) {
+		t.Fatalf("unexpected anonymized identity: %+v", deleted)
+	}
+	if deleted.SessionVer != beforeVersion+1 {
+		t.Fatalf("session version = %d, want %d", deleted.SessionVer, beforeVersion+1)
+	}
+	if _, err := users.Authenticate(user.Email, "StrongPass123!"); err == nil {
+		t.Fatal("disabled account must not authenticate")
+	}
+	var likes, favorites, history, follows int
+	if err := db.QueryRow("SELECT likes FROM prompts WHERE id = ?", prompt.ID).Scan(&likes); err != nil {
+		t.Fatalf("prompt likes: %v", err)
+	}
+	if err := db.QueryRow("SELECT favorites FROM prompts WHERE id = ?", prompt.ID).Scan(&favorites); err != nil {
+		t.Fatalf("prompt favorites: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM view_histories WHERE user_id = ?", user.ID).Scan(&history); err != nil {
+		t.Fatalf("history rows: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM follows WHERE follower_id = ? OR following_id = ?", user.ID, user.ID).Scan(&follows); err != nil {
+		t.Fatalf("follow rows: %v", err)
+	}
+	if likes != 0 || favorites != 0 || history != 0 || follows != 0 {
+		t.Fatalf("personal rows remain: likes=%d favorites=%d history=%d follows=%d", likes, favorites, history, follows)
+	}
+	if _, found, err := prompts.FindByID(prompt.ID); err != nil {
+		t.Fatalf("find retained prompt: %v", err)
+	} else if found {
+		t.Fatal("disabled author's prompt must not be publicly visible")
+	}
+	if err := users.DeleteAccount(user.ID); err != nil {
+		t.Fatalf("repeated DeleteAccount should be idempotent: %v", err)
+	}
+}
+
 func TestMySQLCommentPopularSortsBeforePagination(t *testing.T) {
 	dsn := testMySQLDSN(t)
 	db := openTestMySQL(t, dsn)
@@ -321,5 +412,55 @@ func TestMySQLPolymorphicIntegrityAuditDetectsUnsupportedAndOrphanRows(t *testin
 	}
 	if report.Total() < 4 {
 		t.Fatalf("audit total = %d, want at least 4", report.Total())
+	}
+}
+
+func TestMySQLPromptCounterAuditDetectsDrift(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+	users := NewMySQLUserStore(db)
+	suffix := time.Now().UnixNano()
+	user, err := users.Register(fmt.Sprintf("counter_%d", suffix), fmt.Sprintf("counter-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	prompts := NewMySQLPromptStore(db)
+	prompt, err := prompts.Create(CreatePromptInput{
+		Title:      fmt.Sprintf("counter audit prompt %d", suffix),
+		Content:    "content",
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		Tags:       []string{"counter"},
+		User:       User{ID: user.ID, Username: user.Username, Email: user.Email, Status: 1},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+	if _, _, err := prompts.Like(prompt.ID, user.ID); err != nil {
+		t.Fatalf("like: %v", err)
+	}
+	if _, _, err := prompts.RecordView(prompt.ID, 0); err != nil {
+		t.Fatalf("anonymous view: %v", err)
+	}
+	if _, _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
+		t.Fatalf("logged-in view: %v", err)
+	}
+	cleanReport, err := AuditMySQLPromptCounters(db)
+	if err != nil {
+		t.Fatalf("clean counter audit: %v", err)
+	}
+	if cleanReport.Total() != 0 {
+		t.Fatalf("clean counter audit report = %+v, want no drift", cleanReport)
+	}
+	if _, err := db.Exec("UPDATE prompts SET likes = 0 WHERE id = ?", prompt.ID); err != nil {
+		t.Fatalf("inject counter drift: %v", err)
+	}
+	report, err := AuditMySQLPromptCounters(db)
+	if err != nil {
+		t.Fatalf("counter audit: %v", err)
+	}
+	if report.LikeDrift < 1 || report.Total() < 1 {
+		t.Fatalf("counter audit report = %+v, want like drift", report)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"promptos-backend/internal/store"
 )
@@ -118,6 +119,9 @@ func (s *server) handlePrompts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
+	if !s.enforceRateLimits(r.Context(), w, "search", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}) {
+		return
+	}
 	query := r.URL.Query()
 	page, pageSize, err := parsePageParams(stringPageParams{Page: query.Get("page"), PageSize: query.Get("pageSize")})
 	if err != nil {
@@ -159,6 +163,9 @@ func (s *server) handlePromptList(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlePromptSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "search", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}) {
 		return
 	}
 
@@ -529,6 +536,22 @@ func (s *server) handleUserDrafts(w http.ResponseWriter, r *http.Request) {
 // is returned (userID comes from the auth context) and soft-deleted prompts are
 // excluded by the store.
 func (s *server) handleUserHistoryList(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		userID, ok := userIDFromContext(r.Context())
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_TOKEN_MISSING", Message: "Unauthorized"})
+			return
+		}
+		if !s.enforceRateLimits(r.Context(), w, "history_clear", rateLimitRule{bucket: rateLimitUser(userID), limit: 6, window: time.Hour}) {
+			return
+		}
+		if err := s.promptStore.ClearUserHistory(userID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "HISTORY_CLEAR_FAILED", Message: "Failed to clear history"})
+			return
+		}
+		writeJSON(w, http.StatusOK, apiResponse[map[string]bool]{Code: 200, Message: "Success", Data: map[string]bool{"cleared": true}})
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
 		return
@@ -657,6 +680,9 @@ func (s *server) handlePromptLike(w http.ResponseWriter, r *http.Request, id int
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
+	if !s.enforceRateLimits(r.Context(), w, "interaction", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}, rateLimitRule{bucket: rateLimitUser(userID), limit: 240, window: time.Minute}) {
+		return
+	}
 
 	prompt, applied, err := s.promptStore.Like(id, userID)
 	if err != nil {
@@ -681,6 +707,9 @@ func (s *server) handlePromptFavorite(w http.ResponseWriter, r *http.Request, id
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "interaction", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}, rateLimitRule{bucket: rateLimitUser(userID), limit: 240, window: time.Minute}) {
 		return
 	}
 
@@ -709,6 +738,9 @@ func (s *server) handlePromptUnlike(w http.ResponseWriter, r *http.Request, id i
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
+	if !s.enforceRateLimits(r.Context(), w, "interaction", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}, rateLimitRule{bucket: rateLimitUser(userID), limit: 240, window: time.Minute}) {
+		return
+	}
 
 	prompt, applied, err := s.promptStore.Unlike(id, userID)
 	if err != nil {
@@ -733,6 +765,9 @@ func (s *server) handlePromptUnfavorite(w http.ResponseWriter, r *http.Request, 
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "interaction", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}, rateLimitRule{bucket: rateLimitUser(userID), limit: 240, window: time.Minute}) {
 		return
 	}
 
@@ -811,6 +846,9 @@ func (s *server) handlePromptReport(w http.ResponseWriter, r *http.Request, id i
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "report", rateLimitRule{bucket: rateLimitIP(r), limit: 20, window: time.Hour}, rateLimitRule{bucket: rateLimitUser(userID), limit: 10, window: time.Hour}) {
 		return
 	}
 

@@ -71,6 +71,15 @@ type followActionResponse struct {
 	Applied bool               `json:"applied"`
 }
 
+type userDataExport struct {
+	ExportedAt string            `json:"exportedAt"`
+	User       store.PrivateUser `json:"user"`
+	Prompts    []store.Prompt    `json:"prompts"`
+	Favorites  []store.Prompt    `json:"favorites"`
+	Likes      []store.Prompt    `json:"likes"`
+	History    []store.Prompt    `json:"history"`
+}
+
 func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -352,6 +361,102 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+// handleUserDataExport returns the authenticated user's account and retained
+// Prompt data. Password hashes and OAuth identifiers are excluded; the account
+// email is included because it is part of the user's personal export.
+func (s *server) handleUserDataExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_TOKEN_MISSING", Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "data_export", rateLimitRule{bucket: rateLimitUser(userID), limit: 3, window: time.Hour}) {
+		return
+	}
+
+	user, found := s.userStore.FindByID(userID)
+	if !found || user.Status != 1 {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_USER_DISABLED", Message: "Unauthorized"})
+		return
+	}
+	prompts, err := s.promptStore.ListUserPrompts(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
+		return
+	}
+	favorites, err := s.promptStore.ListUserFavorites(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
+		return
+	}
+	likes, err := s.promptStore.ListUserLikes(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
+		return
+	}
+	history, err := s.promptStore.ListUserHistory(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[userDataExport]{
+		Code:    200,
+		Message: "Success",
+		Data: userDataExport{
+			ExportedAt: time.Now().UTC().Format(time.RFC3339),
+			User:       store.ToPrivateUser(user),
+			Prompts:    nonNilPrompts(prompts),
+			Favorites:  nonNilPrompts(favorites),
+			Likes:      nonNilPrompts(likes),
+			History:    nonNilPrompts(history),
+		},
+	})
+}
+
+func nonNilPrompts(prompts []store.Prompt) []store.Prompt {
+	if prompts == nil {
+		return []store.Prompt{}
+	}
+	return prompts
+}
+
+// handleDeleteAccount performs the authenticated account-retention transition.
+// Browsing history is cleared before disabling the account; if the second step
+// fails the account remains usable and the caller can retry safely.
+func (s *server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeMethodNotAllowed(w)
+		return
+	}
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_TOKEN_MISSING", Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "account_delete", rateLimitRule{bucket: rateLimitUser(userID), limit: 2, window: time.Hour}) {
+		return
+	}
+	if err := s.promptStore.ClearUserHistory(userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "HISTORY_CLEAR_FAILED", Message: "Failed to delete account"})
+		return
+	}
+	if err := s.userStore.DeleteAccount(userID); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[map[string]bool]{
+		Code:    200,
+		Message: "Account deleted",
+		Data:    map[string]bool{"deleted": true},
+	})
 }
 
 func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {

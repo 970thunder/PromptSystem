@@ -679,7 +679,7 @@ func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) 
 	// never touch view_histories, because they cannot be attributed to a user.
 	// Each anonymous view is an independent counter increment.
 	if userID <= 0 {
-		if _, err := tx.Exec(`UPDATE prompts SET views = views + 1 WHERE id = ? AND status = 1`, id); err != nil {
+		if _, err := tx.Exec(`UPDATE prompts SET views = views + 1, anonymous_views = anonymous_views + 1 WHERE id = ? AND status = 1`, id); err != nil {
 			return Prompt{}, false, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -885,6 +885,40 @@ func (s *MySQLPromptStore) ListUserDrafts(userID int) ([]Prompt, error) {
 	defer rows.Close()
 
 	return scanPromptRows(rows)
+}
+
+// ListUserPrompts returns all retained, non-deleted prompts owned by a user,
+// including drafts. It is used only by the authenticated data-export flow.
+func (s *MySQLPromptStore) ListUserPrompts(userID int) ([]Prompt, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			p.id, p.title, p.description, p.cover, p.images, p.content, p.system_prompt, p.model, p.params,
+			p.category_id, c.name, p.user_id,
+			u.username, u.avatar, u.email, u.bio, u.level, u.experience, u.status, u.created_at,
+			p.views, p.likes, p.favorites, p.status, p.created_at, p.updated_at,
+			COALESCE(GROUP_CONCAT(pt.tag ORDER BY pt.id SEPARATOR '||'), '')
+		FROM prompts p
+		JOIN categories c ON c.id = p.category_id
+		JOIN users u ON u.id = p.user_id
+		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
+		WHERE p.user_id = ? AND p.status <> -1
+		GROUP BY p.id
+		ORDER BY p.updated_at DESC, p.id DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanPromptRows(rows)
+}
+
+// ClearUserHistory permanently removes only the requesting user's browsing
+// history. Aggregate prompt views are retained because they are not personal
+// records and cannot be reconstructed after deletion.
+func (s *MySQLPromptStore) ClearUserHistory(userID int) error {
+	_, err := s.db.Exec(`DELETE FROM view_histories WHERE user_id = ?`, userID)
+	return err
 }
 
 func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prompt, error) {

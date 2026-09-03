@@ -10,7 +10,8 @@ import type {
   Prompt,
   RegisterRequest,
   ResetPasswordRequest,
-  User
+  User,
+  UserDataExport
 } from '@/types'
 
 export const userApi = {
@@ -28,6 +29,18 @@ export const userApi = {
 
   getUserInfo(): Promise<ApiResponse<User>> {
     return request.get('/user/info')
+  },
+
+  exportData(): Promise<ApiResponse<UserDataExport>> {
+    return request.get('/user/data-export')
+  },
+
+  clearHistory(): Promise<ApiResponse<{ cleared: boolean }>> {
+    return request.delete('/user/history')
+  },
+
+  deleteAccount(): Promise<ApiResponse<{ deleted: boolean }>> {
+    return request.delete('/user/account')
   },
 
   updateUserInfo(data: Partial<User>): Promise<ApiResponse<User>> {

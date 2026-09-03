@@ -170,6 +170,15 @@ export interface PageResponse<T> {
   pageSize: number
 }
 
+export interface UserDataExport {
+  exportedAt: string
+  user: User
+  prompts: Prompt[]
+  favorites: Prompt[]
+  likes: Prompt[]
+  history: Prompt[]
+}
+
 // Request types
 export interface LoginRequest {
   email: string

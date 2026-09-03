@@ -39,6 +39,7 @@ Current files:
 - `0014_upload_owner_fk.sql`
 - `0015_normalize_prompt_tags.sql`
 - `0016_comment_sort_indexes.sql`
+- `0017_prompt_anonymous_views.sql`
 
 The Go backend applies the baseline automatically for a truly empty database,
 then runs pending migrations on startup using the `schema_migrations` table.

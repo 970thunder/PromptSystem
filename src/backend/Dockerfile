@@ -9,6 +9,7 @@ COPY sql ./sql
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /promptos-api ./cmd/api
 RUN CGO_ENABLED=0 GOOS=linux go build -o /promptos-integrity-audit ./cmd/integrity-audit
+RUN CGO_ENABLED=0 GOOS=linux go build -o /promptos-maintenance ./cmd/maintenance
 
 FROM alpine:3.20
 
@@ -18,6 +19,7 @@ WORKDIR /app
 RUN mkdir -p /app/uploads && chown -R promptos:promptos /app
 COPY --from=builder /promptos-api /usr/local/bin/promptos-api
 COPY --from=builder /promptos-integrity-audit /usr/local/bin/promptos-integrity-audit
+COPY --from=builder /promptos-maintenance /usr/local/bin/promptos-maintenance
 COPY --from=builder /app/sql /app/sql
 
 USER promptos

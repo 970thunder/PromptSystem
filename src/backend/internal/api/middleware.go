@@ -59,11 +59,14 @@ func withRequestID(next http.Handler) http.Handler {
 // withAccessLog logs requestId, method, route, status, duration and errorCode
 // using structured slog JSON. It deliberately omits request bodies, tokens,
 // passwords, captcha values, OAuth codes, and any secret material.
-func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
+func (s *server) withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
+		if s.metrics != nil {
+			s.metrics.observeRequest(recorder.status, time.Since(start))
+		}
 		attrs := []any{
 			slog.String("service", "promptos-backend"),
 			slog.String("env", AppEnvFromRequest(r)),

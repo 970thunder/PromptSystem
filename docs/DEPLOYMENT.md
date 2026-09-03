@@ -92,6 +92,29 @@ flock -n /run/lock/promptsystem-integrity-audit.lock \
 并在发布记录中保留执行时间、JSON 结果和退出码。若告警接收端尚未配置，该项保持未验收，
 不得用本地运行或 CI 通过替代生产证据。
 
+同一 backend 镜像还提供 `/usr/local/bin/promptos-maintenance`，用于按需串行执行计数审计和上传回收：
+
+```bash
+flock -n /run/lock/promptsystem-maintenance.lock \
+  docker compose -p promptsystem --env-file /opt/secrets/promptsystem/app.env \
+  run --rm --no-deps backend /usr/local/bin/promptos-maintenance --task=all --older-than=24h
+```
+
+回收只处理数据库中状态为 `pending` 且超过阈值的上传；对象删除成功后才标记为 `trashed`，失败项
+保留原记录并以非 `0` 退出，供下一次任务重试。计数审计发现漂移同样以非 `0` 退出，不自动改写计数。
+
+### 个人数据与注销
+
+生产发布必须同时包含以下受保护接口：
+
+- `GET /api/v1/user/data-export`：导出本人账户、Prompt、收藏、点赞和浏览历史；不含密码哈希或 OAuth 标识。
+- `DELETE /api/v1/user/history`：只清理本人的 `view_histories`，不回退累计浏览数。
+- `DELETE /api/v1/user/account`：事务化清理个人互动/历史明细，禁用并匿名化用户、递增 `session_version`；Prompt、评论和上传记录按保留策略留存，禁用作者内容不再公开。
+
+注销后的上传对象不会在请求内同步删除，统一交给低峰期 `promptos-maintenance` 延迟回收；这样可以在无 Swap
+服务器上避免删除事务、对象 I/O 和应用请求争用内存。发布验收应使用测试账号验证旧 JWT 返回 `401 AUTH_USER_DISABLED`，
+并复核当前与上一版 release 的回滚路径。
+
 ### 本次发布记录（2026-08-30）
 
 - 版本：`20260830-b584585`；Compose 项目：`promptsystem`。

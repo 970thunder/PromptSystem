@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
@@ -64,6 +65,15 @@ func (s *server) handleImageUpload(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
+	if !s.enforceRateLimits(r.Context(), w, "upload", rateLimitRule{bucket: rateLimitIP(r), limit: 30, window: time.Hour}) {
+		return
+	}
+	uploadSucceeded := false
+	defer func() {
+		if s.metrics != nil {
+			s.metrics.observeUpload(uploadSucceeded)
+		}
+	}()
 
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
@@ -212,6 +222,7 @@ func (s *server) handleImageUpload(w http.ResponseWriter, r *http.Request) {
 			ObjectKey: objectKey,
 		},
 	})
+	uploadSucceeded = true
 }
 
 // detectImageFormat inspects the leading bytes to determine the real image

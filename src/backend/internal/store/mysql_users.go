@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -156,6 +158,80 @@ func (s *MySQLUserStore) BumpSessionVersion(email string) error {
 		return ErrUserNotFound
 	}
 	return nil
+}
+
+// DeleteAccount performs the account-retention transition in one transaction.
+// Rows referenced by foreign keys are retained for audit, while personal
+// interaction/history rows are removed and denormalized counters adjusted.
+func (s *MySQLUserStore) DeleteAccount(id int) error {
+	if id <= 0 {
+		return ErrUserNotFound
+	}
+
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var status int
+	err = tx.QueryRow(`SELECT status FROM users WHERE id = ? FOR UPDATE`, id).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status == 0 {
+		return nil
+	}
+
+	// Remove the user's interaction rows without leaving counters inflated.
+	// The correlated counts are evaluated inside the same transaction as the
+	// deletes, so a rollback preserves both detail rows and counters.
+	if _, err := tx.Exec(`
+		UPDATE prompts p
+		SET p.likes = GREATEST(0, p.likes - (SELECT COUNT(*) FROM likes l WHERE l.user_id = ? AND l.target_type = 'prompt' AND l.target_id = p.id)),
+		    p.favorites = GREATEST(0, p.favorites - (SELECT COUNT(*) FROM favorites f WHERE f.user_id = ? AND f.target_type = 'prompt' AND f.target_id = p.id))
+		WHERE EXISTS (SELECT 1 FROM likes l WHERE l.user_id = ? AND l.target_type = 'prompt' AND l.target_id = p.id)
+		   OR EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.target_type = 'prompt' AND f.target_id = p.id)
+	`, id, id, id, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		UPDATE comments c
+		SET c.likes = GREATEST(0, c.likes - (SELECT COUNT(*) FROM likes l WHERE l.user_id = ? AND l.target_type = 'comment' AND l.target_id = c.id))
+		WHERE EXISTS (SELECT 1 FROM likes l WHERE l.user_id = ? AND l.target_type = 'comment' AND l.target_id = c.id)
+	`, id, id); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`DELETE FROM view_histories WHERE user_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM favorites WHERE user_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM likes WHERE user_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM reports WHERE user_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM follows WHERE follower_id = ? OR following_id = ?`, id, id); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE users
+		SET username = ?, email = ?, github_id = NULL, password = NULL,
+		    avatar = NULL, bio = NULL, status = 0, session_version = session_version + 1
+		WHERE id = ?
+	`, fmt.Sprintf("deleted-user-%d", id), fmt.Sprintf("deleted+%d@invalid.promptos.local", id), id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *MySQLUserStore) FindByID(id int) (AuthUser, bool) {

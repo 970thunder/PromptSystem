@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,6 +29,10 @@ func rateLimitEmail(email string) string {
 
 func rateLimitIP(r *http.Request) string {
 	return "ip:" + clientIP(r)
+}
+
+func rateLimitUser(userID int) string {
+	return "user:" + strconv.Itoa(userID)
 }
 
 // allowRateLimit atomically increments a Redis counter. A cache error is

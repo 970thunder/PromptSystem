@@ -24,6 +24,7 @@ import (
 
 type ImageStorage interface {
 	Save(ctx context.Context, objectKey, contentType string, body []byte) (string, error)
+	Delete(ctx context.Context, objectKey string) error
 }
 
 type LocalStorage struct {
@@ -93,7 +94,10 @@ func newR2Storage(cfg config.Config) (*R2Storage, error) {
 }
 
 func (s *LocalStorage) Save(_ context.Context, objectKey, contentType string, body []byte) (string, error) {
-	targetPath := filepath.Join(s.baseDir, filepath.FromSlash(objectKey))
+	targetPath, err := safeLocalObjectPath(s.baseDir, objectKey)
+	if err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return "", fmt.Errorf("create upload path: %w", err)
 	}
@@ -104,6 +108,17 @@ func (s *LocalStorage) Save(_ context.Context, objectKey, contentType string, bo
 
 	_ = s.publicURL
 	return "/uploads/" + strings.TrimLeft(filepath.ToSlash(objectKey), "/"), nil
+}
+
+func (s *LocalStorage) Delete(_ context.Context, objectKey string) error {
+	targetPath, err := safeLocalObjectPath(s.baseDir, objectKey)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(targetPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("delete upload file: %w", err)
+	}
+	return nil
 }
 
 func (s *R2Storage) Save(ctx context.Context, objectKey, contentType string, body []byte) (string, error) {
@@ -119,6 +134,36 @@ func (s *R2Storage) Save(ctx context.Context, objectKey, contentType string, bod
 	}
 
 	return fmt.Sprintf("%s/%s", s.publicURL, strings.TrimLeft(objectKey, "/")), nil
+}
+
+func (s *R2Storage) Delete(ctx context.Context, objectKey string) error {
+	if strings.TrimSpace(objectKey) == "" {
+		return fmt.Errorf("object key must not be empty")
+	}
+	if _, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &s.bucket, Key: &objectKey}); err != nil {
+		return fmt.Errorf("delete image from R2: %w", err)
+	}
+	return nil
+}
+
+func safeLocalObjectPath(baseDir, objectKey string) (string, error) {
+	cleanKey := filepath.Clean(filepath.FromSlash(strings.TrimSpace(objectKey)))
+	if cleanKey == "." || filepath.IsAbs(cleanKey) || cleanKey == ".." || strings.HasPrefix(cleanKey, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid object key")
+	}
+	base, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve upload dir: %w", err)
+	}
+	target, err := filepath.Abs(filepath.Join(base, cleanKey))
+	if err != nil {
+		return "", fmt.Errorf("resolve upload path: %w", err)
+	}
+	rel, err := filepath.Rel(base, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid object key")
+	}
+	return target, nil
 }
 
 // BuildObjectKey derives a stable, collision-proof object key from the owning

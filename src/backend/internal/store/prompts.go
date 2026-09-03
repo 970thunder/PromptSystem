@@ -614,6 +614,119 @@ func ListUserDraftPrompts(userID int) []Prompt {
 	return list
 }
 
+// ListUserPrompts returns all non-deleted prompts owned by the user. It is
+// intentionally not restricted to public prompts so a data export can include
+// drafts while still omitting rows that have already entered the retention
+// cleanup lifecycle.
+func ListUserPrompts(userID int) []Prompt {
+	promptMu.RLock()
+	defer promptMu.RUnlock()
+
+	list := make([]Prompt, 0)
+	for _, prompt := range prompts {
+		if prompt.UserID == userID && prompt.Status != -1 {
+			list = append(list, prompt)
+		}
+	}
+
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].UpdatedAt != list[j].UpdatedAt {
+			return list[i].UpdatedAt > list[j].UpdatedAt
+		}
+		return list[i].ID > list[j].ID
+	})
+
+	return list
+}
+
+// ClearUserHistory removes only the requesting user's browsing history. Prompt
+// counters are deliberately unchanged because clearing history is a privacy
+// operation, not a correction of aggregate views.
+func ClearUserHistory(userID int) {
+	promptMu.Lock()
+	defer promptMu.Unlock()
+	delete(promptViewHistory, userID)
+}
+
+// removeUserPromptData applies account-retention semantics to the in-memory
+// interaction model. User-owned prompts remain as retained records, but their
+// embedded author snapshot is anonymized and they become private through the
+// disabled-user visibility check.
+func removeUserPromptData(userID int) {
+	promptMu.Lock()
+	for promptID, users := range promptLikes {
+		if _, exists := users[userID]; !exists {
+			continue
+		}
+		delete(users, userID)
+		for index := range prompts {
+			if prompts[index].ID == promptID && prompts[index].Likes > 0 {
+				prompts[index].Likes--
+				break
+			}
+		}
+	}
+	for promptID, users := range promptFavorites {
+		if _, exists := users[userID]; !exists {
+			continue
+		}
+		delete(users, userID)
+		for index := range prompts {
+			if prompts[index].ID == promptID && prompts[index].Favorites > 0 {
+				prompts[index].Favorites--
+				break
+			}
+		}
+	}
+	delete(promptViewHistory, userID)
+	for key, report := range promptReports {
+		if report.UserID == userID {
+			delete(promptReports, key)
+		}
+	}
+	for index := range prompts {
+		if prompts[index].UserID != userID {
+			continue
+		}
+		prompts[index].User.Username = "Deleted user"
+		prompts[index].User.Avatar = ""
+		prompts[index].User.Email = ""
+		prompts[index].User.Bio = ""
+		prompts[index].User.Status = 0
+	}
+	promptMu.Unlock()
+
+	commentMu.Lock()
+	for commentID, users := range commentLikes {
+		if _, exists := users[userID]; !exists {
+			continue
+		}
+		delete(users, userID)
+		for index := range comments {
+			if comments[index].ID == commentID && comments[index].Likes > 0 {
+				comments[index].Likes--
+				break
+			}
+		}
+	}
+	for key, report := range commentReports {
+		if report.UserID == userID {
+			delete(commentReports, key)
+		}
+	}
+	for index := range comments {
+		if comments[index].UserID != userID {
+			continue
+		}
+		comments[index].User.Username = "Deleted user"
+		comments[index].User.Avatar = ""
+		comments[index].User.Email = ""
+		comments[index].User.Bio = ""
+		comments[index].User.Status = 0
+	}
+	commentMu.Unlock()
+}
+
 func validateReportPromptInput(input ReportPromptInput) error {
 	if input.PromptID <= 0 {
 		return ErrPromptNotFound

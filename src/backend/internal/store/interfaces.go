@@ -17,6 +17,9 @@ type UserManager interface {
 	// BumpSessionVersion increments the user's session version so all previously
 	// issued tokens are rejected (used after a password reset).
 	BumpSessionVersion(email string) error
+	// DeleteAccount disables the account, removes authentication/binding data,
+	// anonymizes direct identifiers, and revokes all existing sessions.
+	DeleteAccount(id int) error
 }
 
 type PromptManager interface {
@@ -55,6 +58,11 @@ type PromptManager interface {
 	// history list stays cheap as the table grows.
 	ListUserHistoryPage(userID int, page, pageSize int) ([]Prompt, int, error)
 	ListUserDrafts(userID int) ([]Prompt, error)
+	// ListUserPrompts returns the caller's non-deleted prompts, including drafts,
+	// for the personal data export flow.
+	ListUserPrompts(userID int) ([]Prompt, error)
+	// ClearUserHistory permanently removes only the caller's browsing history.
+	ClearUserHistory(userID int) error
 }
 
 // HomeSummary carries live community aggregates for the home page.

@@ -49,6 +49,7 @@ CREATE TABLE prompts (
     category_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     views INT DEFAULT 0,
+    anonymous_views INT NOT NULL DEFAULT 0 COMMENT 'Views from anonymous visitors; not present in view_histories',
     likes INT DEFAULT 0,
     favorites INT DEFAULT 0,
     status INT DEFAULT 1 COMMENT '1:published, 0:draft, -1:deleted',

@@ -1,6 +1,10 @@
 package api
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+	"time"
+)
 
 // handleHealthLive reports that the process is alive and serving requests.
 func (s *server) handleHealthLive(w http.ResponseWriter, r *http.Request) {
@@ -29,12 +33,33 @@ func (s *server) handleHealthReady(w http.ResponseWriter, r *http.Request) {
 	}
 
 	degraded := s.storageMode != "mysql"
+	dependencies := map[string]bool{
+		"mysql":  s.storageMode == "mysql",
+		"redis":  s.cache != nil,
+		"upload": s.imageStorage != nil,
+	}
+	if s.readyCheck != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		for name, healthy := range s.readyCheck(ctx) {
+			dependencies[name] = healthy
+		}
+		if !dependencies["mysql"] || !dependencies["redis"] {
+			degraded = true
+		}
+	}
+	if s.metrics != nil {
+		for name, healthy := range dependencies {
+			s.metrics.setDependency(name, healthy)
+		}
+	}
 	data := map[string]any{
-		"status":      "ready",
-		"service":     "promptos-backend",
-		"environment": s.config.AppEnv,
-		"storageMode": s.storageMode,
-		"degraded":    degraded,
+		"status":       "ready",
+		"service":      "promptos-backend",
+		"environment":  s.config.AppEnv,
+		"storageMode":  s.storageMode,
+		"degraded":     degraded,
+		"dependencies": dependencies,
 	}
 	if degraded {
 		data["degradedReason"] = "storage is not backed by MySQL"

@@ -224,11 +224,36 @@ func TestHealthEndpoints(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpointAndRequestCounters(t *testing.T) {
+	_, h := newIntegrationServer(t)
+	rec, _ := doJSON(t, h, http.MethodGet, "/api/v1/health/live", nil, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("live status = %d", rec.Code)
+	}
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRec := httptest.NewRecorder()
+	h.ServeHTTP(metricsRec, metricsReq)
+	if metricsRec.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d", metricsRec.Code)
+	}
+	body := metricsRec.Body.String()
+	if !strings.Contains(body, "promptos_http_requests_total") || !strings.Contains(body, "promptos_dependency_healthy") {
+		t.Fatalf("metrics body missing expected series: %s", body)
+	}
+	if !strings.Contains(body, "promptos_http_errors_total") {
+		t.Fatalf("metrics body missing error series: %s", body)
+	}
+}
+
 func TestAuthRequiredEndpoints(t *testing.T) {
 	_, h := newIntegrationServer(t)
 
 	protected := []struct{ method, path string }{
 		{http.MethodGet, "/api/v1/user/info"},
+		{http.MethodGet, "/api/v1/user/data-export"},
+		{http.MethodDelete, "/api/v1/user/history"},
+		{http.MethodDelete, "/api/v1/user/account"},
 		{http.MethodPost, "/api/v1/prompts"},
 		{http.MethodPost, "/api/v1/uploads/images"},
 	}
@@ -263,6 +288,61 @@ func TestRegisterLoginAndProfile(t *testing.T) {
 	}, token)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update profile status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPersonalDataExportHistoryClearAndAccountDeletion(t *testing.T) {
+	s, h := newIntegrationServer(t)
+	token, userID := registerAndLogin(t, h)
+	promptID := createPrompt(t, s, h, token, userID)
+	path := "/api/v1/prompts/" + strconv.Itoa(promptID)
+
+	// A signed-in view is retained in the export until the caller clears it.
+	rec, _ := doJSON(t, h, http.MethodPost, path+"/view", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("record view status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec, envelope := doJSON(t, h, http.MethodGet, "/api/v1/user/data-export", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("data export status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	data, ok := envelope["data"].(map[string]any)
+	if !ok || data["exportedAt"] == nil {
+		t.Fatalf("data export missing metadata: %s", rec.Body.String())
+	}
+	if prompts, ok := data["prompts"].([]any); !ok || len(prompts) == 0 {
+		t.Fatalf("data export missing owned prompt: %s", rec.Body.String())
+	}
+	if history, ok := data["history"].([]any); !ok || len(history) == 0 {
+		t.Fatalf("data export missing view history: %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "password") || strings.Contains(rec.Body.String(), "PasswordHash") {
+		t.Fatalf("data export leaked authentication material: %s", rec.Body.String())
+	}
+
+	rec, _ = doJSON(t, h, http.MethodDelete, "/api/v1/user/history", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clear history status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec, envelope = doJSON(t, h, http.MethodGet, "/api/v1/user/data-export", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("data export after clear status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	data, _ = envelope["data"].(map[string]any)
+	if history, ok := data["history"].([]any); !ok || len(history) != 0 {
+		t.Fatalf("history should be empty after clear: %s", rec.Body.String())
+	}
+
+	rec, _ = doJSON(t, h, http.MethodDelete, "/api/v1/user/account", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete account status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := s.userStore.FindByID(userID); !ok {
+		t.Fatal("deleted account should remain as an anonymized retention row")
+	}
+	rec, envelope = doJSON(t, h, http.MethodGet, "/api/v1/user/info", nil, token)
+	if rec.Code != http.StatusUnauthorized || envelope["errorCode"] != "AUTH_USER_DISABLED" {
+		t.Fatalf("old token after account deletion = %d/%v, want 401/AUTH_USER_DISABLED", rec.Code, envelope["errorCode"])
 	}
 }
 

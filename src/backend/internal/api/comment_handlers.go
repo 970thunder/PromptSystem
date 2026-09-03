@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"promptos-backend/internal/store"
 )
@@ -61,6 +62,9 @@ func (s *server) handlePromptCommentCreate(w http.ResponseWriter, r *http.Reques
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "comment", rateLimitRule{bucket: rateLimitIP(r), limit: 60, window: time.Minute}, rateLimitRule{bucket: rateLimitUser(userID), limit: 120, window: time.Minute}) {
 		return
 	}
 
@@ -130,6 +134,9 @@ func (s *server) handleCommentLike(w http.ResponseWriter, r *http.Request, id in
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
+	if !s.enforceRateLimits(r.Context(), w, "comment_interaction", rateLimitRule{bucket: rateLimitIP(r), limit: 120, window: time.Minute}, rateLimitRule{bucket: rateLimitUser(userID), limit: 240, window: time.Minute}) {
+		return
+	}
 
 	comment, applied, err := s.commentStore.Like(id, userID)
 	if err != nil {
@@ -157,6 +164,9 @@ func (s *server) handleCommentReport(w http.ResponseWriter, r *http.Request, id 
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "comment_report", rateLimitRule{bucket: rateLimitIP(r), limit: 20, window: time.Hour}, rateLimitRule{bucket: rateLimitUser(userID), limit: 10, window: time.Hour}) {
 		return
 	}
 

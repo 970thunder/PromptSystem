@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -238,6 +239,56 @@ func (s *UserStore) BumpSessionVersion(email string) error {
 	user := s.users[userID]
 	user.SessionVer++
 	s.users[userID] = user
+	return nil
+}
+
+// DeleteAccount disables an account while retaining rows that are referenced
+// by prompts, comments, reports, and uploads. Direct identifiers and
+// authentication bindings are anonymized, existing sessions are revoked, and
+// user-owned interaction/history rows are removed from the in-memory model.
+func (s *UserStore) DeleteAccount(id int) error {
+	if id <= 0 {
+		return ErrUserNotFound
+	}
+
+	s.mu.Lock()
+	user, ok := s.users[id]
+	if !ok {
+		s.mu.Unlock()
+		return ErrUserNotFound
+	}
+	if user.Status == 0 {
+		s.mu.Unlock()
+		return nil
+	}
+	if user.Email != "" {
+		delete(s.emailIndex, strings.ToLower(user.Email))
+	}
+	if user.GitHubID > 0 {
+		delete(s.githubIDIndex, user.GitHubID)
+	}
+	user.Username = fmt.Sprintf("deleted-user-%d", id)
+	user.Avatar = ""
+	user.Email = fmt.Sprintf("deleted+%d@invalid.promptos.local", id)
+	user.GitHubID = 0
+	user.PasswordHash = ""
+	user.Bio = ""
+	user.Status = 0
+	user.SessionVer++
+	s.users[id] = user
+	for followerID, following := range s.follows {
+		if followerID == id {
+			delete(s.follows, followerID)
+			continue
+		}
+		delete(following, id)
+	}
+	s.mu.Unlock()
+
+	// The in-memory backend stores denormalized author snapshots and interaction
+	// maps separately from users, so apply the same retention semantics as the
+	// MySQL transaction before returning.
+	removeUserPromptData(id)
 	return nil
 }
 
