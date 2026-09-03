@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"promptos-backend/internal/auth"
+	"promptos-backend/internal/service"
 	"promptos-backend/internal/store"
 )
 
@@ -162,7 +163,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.userStore.Authenticate(payload.Email, payload.Password)
+	user, err := s.getAuthService().Authenticate(payload.Email, payload.Password)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_INVALID_CREDENTIALS", Message: "Invalid email or password"})
 		return
@@ -220,7 +221,7 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.userStore.ResetPassword(payload.Email, payload.Password); err != nil {
+	if err := s.getAuthService().ResetPassword(payload.Email, payload.Password); err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserNotFound):
 			// Deliberately return the same non-revealing success whether the
@@ -278,7 +279,7 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.userStore.Register(payload.Username, payload.Email, payload.Password)
+	user, err := s.getAuthService().Register(payload.Username, payload.Email, payload.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserExists):
@@ -337,7 +338,7 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		user, found := s.userStore.FindByID(userID)
+		user, found := s.getAuthService().FindByID(userID)
 		if !found {
 			writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "User not found"})
 			return
@@ -355,7 +356,7 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		user, err := s.userStore.UpdateProfile(userID, payload.Username, payload.Bio, payload.Avatar)
+		user, err := s.getAuthService().UpdateProfile(userID, payload.Username, payload.Bio, payload.Avatar)
 		if err != nil {
 			writeStoreError(w, err)
 			return
@@ -388,28 +389,12 @@ func (s *server) handleUserDataExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, found := s.userStore.FindByID(userID)
-	if !found || user.Status != 1 {
-		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_USER_DISABLED", Message: "Unauthorized"})
-		return
-	}
-	prompts, err := s.promptStore.ListUserPrompts(userID)
+	export, err := s.getAuthService().ExportAccount(userID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
-		return
-	}
-	favorites, err := s.promptStore.ListUserFavorites(userID)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
-		return
-	}
-	likes, err := s.promptStore.ListUserLikes(userID)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
-		return
-	}
-	history, err := s.promptStore.ListUserHistory(userID)
-	if err != nil {
+		if errors.Is(err, store.ErrUserNotFound) {
+			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_USER_DISABLED", Message: "Unauthorized"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "DATA_EXPORT_FAILED", Message: "Failed to export account data"})
 		return
 	}
@@ -419,11 +404,11 @@ func (s *server) handleUserDataExport(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: userDataExport{
 			ExportedAt: time.Now().UTC().Format(time.RFC3339),
-			User:       store.ToPrivateUser(user),
-			Prompts:    nonNilPrompts(prompts),
-			Favorites:  nonNilPrompts(favorites),
-			Likes:      nonNilPrompts(likes),
-			History:    nonNilPrompts(history),
+			User:       store.ToPrivateUser(export.User),
+			Prompts:    nonNilPrompts(export.Prompts),
+			Favorites:  nonNilPrompts(export.Favorites),
+			Likes:      nonNilPrompts(export.Likes),
+			History:    nonNilPrompts(export.History),
 		},
 	})
 }
@@ -451,11 +436,11 @@ func (s *server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !s.enforceRateLimits(r.Context(), w, "account_delete", rateLimitRule{bucket: rateLimitUser(userID), limit: 2, window: time.Hour}) {
 		return
 	}
-	if err := s.promptStore.ClearUserHistory(userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "HISTORY_CLEAR_FAILED", Message: "Failed to delete account"})
-		return
-	}
-	if err := s.userStore.DeleteAccount(userID); err != nil {
+	if err := s.getAuthService().DeleteAccount(userID); err != nil {
+		if errors.Is(err, service.ErrHistoryClear) {
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "HISTORY_CLEAR_FAILED", Message: "Failed to delete account"})
+			return
+		}
 		writeStoreError(w, err)
 		return
 	}
@@ -482,9 +467,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 			if ttl < 0 {
 				ttl = 0
 			}
-			if s.cache != nil {
-				_ = s.cache.Set(r.Context(), "promptos:jwt:denylist:"+claims.JTI, "1", ttl)
-			}
+			_ = s.getAuthService().RevokeToken(r.Context(), claims.JTI, ttl)
 		}
 	}
 
@@ -503,7 +486,7 @@ func (s *server) handleUserFavorites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := s.promptStore.ListUserFavorites(userID)
+	list, err := s.getAuthService().ListFavorites(userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load favorites"})
 		return
@@ -528,7 +511,7 @@ func (s *server) handleUserLikes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := s.promptStore.ListUserLikes(userID)
+	list, err := s.getAuthService().ListLikes(userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load likes"})
 		return
@@ -553,7 +536,7 @@ func (s *server) handleUserHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := s.promptStore.ListUserHistory(userID)
+	list, err := s.getAuthService().ListHistory(userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load history"})
 		return
@@ -578,7 +561,7 @@ func (s *server) handleUserFollowing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := s.userStore.ListFollowing(userID)
+	list, err := s.getAuthService().ListFollowing(userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load following"})
 		return
@@ -603,7 +586,7 @@ func (s *server) handleUserFollowers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := s.userStore.ListFollowers(userID)
+	list, err := s.getAuthService().ListFollowers(userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load followers"})
 		return
@@ -659,9 +642,9 @@ func (s *server) handleUserFollow(w http.ResponseWriter, r *http.Request, target
 	)
 	switch r.Method {
 	case http.MethodPost:
-		status, applied, err = s.userStore.Follow(userID, targetID)
+		status, applied, err = s.getAuthService().Follow(userID, targetID)
 	case http.MethodDelete:
-		status, applied, err = s.userStore.Unfollow(userID, targetID)
+		status, applied, err = s.getAuthService().Unfollow(userID, targetID)
 	default:
 		writeMethodNotAllowed(w)
 		return
@@ -694,7 +677,7 @@ func (s *server) handleUserFollowStatus(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	status, err := s.userStore.FollowStatus(targetID, userID)
+	status, err := s.getAuthService().FollowStatus(targetID, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -738,8 +721,8 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if s.cache != nil && claims.JTI != "" {
-			denied, err := s.cache.Exists(r.Context(), "promptos:jwt:denylist:"+claims.JTI)
+		if claims.JTI != "" {
+			denied, err := s.getAuthService().IsTokenRevoked(r.Context(), claims.JTI)
 			if err == nil && denied {
 				writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 					Code:      401,
@@ -758,7 +741,7 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		// Confirm the user still exists and is active; disabled users' old
 		// tokens must not keep working.
-		userRecord, found := s.userStore.FindByID(userID)
+		userRecord, found := s.getAuthService().FindByID(userID)
 		if !found || userRecord.Status != 1 {
 			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 				Code:      401,

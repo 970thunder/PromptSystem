@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：49/81 已完成，32 项待完成（2026-09-04）。
+当前进度：50/81 已完成，31 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -54,7 +54,7 @@
 ## A 架构
 
 - [x] **A-01 统一数据库初始化**：空库、旧 schema、部分迁移库通过同一入口到达最终版本，不再人工先导入 `schema.sql`。
-- [ ] **A-02 Service 层**：认证、互动、举报、上传引用和缓存失效从 handler 抽到窄业务服务。
+- [x] **A-02 Service 层**：认证、互动、举报、上传引用和缓存失效从 handler 抽到窄业务服务。
 - [x] **A-03 Store 语义一致**：MySQL/内存实现通过同一契约测试；内存实现仅限开发和测试。
 - [x] **A-04 前端数据层收敛**：View 不重复直连 API；Store 统一 loading/error/empty/success、缓存和竞态。
 - [x] **A-05 API 单一契约**：引入 OpenAPI/JSON Schema 或等价生成校验，TypeScript DTO 不手工漂移。
@@ -176,4 +176,5 @@
 - `A-04`：将 `SearchView` 的 API 直连、AbortController、请求序号、分页、去重、错误和 loading 状态收敛到 `src/frontend/src/stores/prompt.ts`；视图仅保留路由、筛选和展示职责，卸载时由 Store 统一取消搜索。新增搜索分页去重与旧请求响应隔离回归测试；前端 `npm test -- --run`（7 files/16 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过。生产尚未发布。
 - `S-09`：上传入口保留整请求/单文件大小限制、真实 MIME/扩展名一致性、标准解码和 20MP 像素上限，并新增 `UPLOAD_MAX_CONCURRENT` 并发槽、`UPLOAD_DAILY_QUOTA_MB` 用户日配额和 `UPLOAD_TOTAL_QUOTA_MB` 总容量；Redis 实现按用户/UTC 日期原子字节计数，开发/测试无 Redis 时使用进程内计数，数据库已用量与进程内预留量共同防止并发超卖。新增 `ActiveUploadBytes` Store 契约、Redis `IncrementBy`、配额/并发回归测试；`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过。生产尚未发布，RustFS 独立 bucket 和跨故障域副本仍由 `D-12/D-13` 负责。
 - `A-05`：新增 `docs/api-contract.schema.json` 作为 v1 共享 DTO 的 JSON Schema，`scripts/generate-api-contract.mjs` 生成 `src/frontend/src/types/api-contract.generated.ts`；前端 `User`、`Prompt`、`Comment`、分页和响应信封类型改为生成类型别名。新增 `npm run contract:check`，CI 在契约回归前验证生成文件无漂移；Schema 变更会触发前端 workflow。`npm run contract:check`、`npm test -- --run`（7 files/16 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过。生产尚未发布。
+- `A-02`：新增 `src/backend/internal/service` 业务层；`AuthService` 统一认证、账户导出/注销、关注和 JWT 撤销，`PromptService` 统一发布/更新/删除、互动、举报、浏览、上传引用校验及内容缓存失效，`CommentService` 统一评论创建、点赞和举报。API handler 仅保留 HTTP 解析、鉴权、限流和稳定错误映射；正式装配与直接构造的测试 server 均通过惰性 accessor 使用同一 Service。新增 Service 回归测试；`go test ./...`、`go vet ./...`、`gofmt -l .`、`git diff --check` 通过。生产尚未发布。
 - 线上只读核验（2026-09-04）：服务器 `free -h` 显示总内存 7.7 GiB、可用约 3.3 GiB、Swap 0；`df -h /` 显示 58G 总量、28G 已用、30G 可用（48%）。`docker compose ls` 确认 `promptsystem` 使用 `/srv/releases/promptsystem/20260830-b584585/docker-compose.yml`，仅保留 `20260830-b584585` 与 `20260829-a9ba2cf` 两个 release 目录；frontend/backend 仍分别绑定 `127.0.0.1:3092/5092`，公网入口为 80/443，其他 Compose 项目保持运行。线上 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。RustFS 转发服务 active，当前实测 bridge 监听为 `172.21.0.1:13902`、隧道为 `127.0.0.1:13900`；总说明中的旧 `172.17.0.1` 已修正。当前线上容器仍是旧发布策略（`ReadonlyRootfs=false`、未设置 cap/pids 限制），故 `S-11` 生产验收、`D-12/D-13` RustFS 迁移和所有告警/timer 项目保持未完成。

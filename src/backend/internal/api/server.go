@@ -16,6 +16,7 @@ import (
 	"promptos-backend/internal/cache"
 	"promptos-backend/internal/config"
 	"promptos-backend/internal/database"
+	"promptos-backend/internal/service"
 	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
 )
@@ -35,6 +36,9 @@ type server struct {
 	storageMode         string
 	metrics             *metrics
 	readyCheck          func(context.Context) map[string]bool
+	authService         *service.AuthService
+	promptService       *service.PromptService
+	commentService      *service.CommentService
 	uploadSlots         chan struct{}
 	uploadOnce          sync.Once
 	uploadQuotaMu       sync.Mutex
@@ -163,6 +167,9 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		readyCheck:       deps.readyCheck,
 		uploadDailyUsage: make(map[string]int64),
 	}
+	s.authService = service.NewAuthService(s.userStore, s.promptStore, s.cache)
+	s.promptService = service.NewPromptService(s.promptStore, s.uploadStore, s.invalidateContentCaches)
+	s.commentService = service.NewCommentService(s.commentStore)
 	s.uploadOnce.Do(func() {
 		limit := s.config.UploadMaxConcurrent
 		if limit <= 0 {
@@ -227,6 +234,30 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		withSecurityHeaders,
 		s.withCORS,
 	)
+}
+
+// service accessors keep directly constructed test servers compatible with the
+// production dependency wiring while ensuring every handler uses the same
+// business boundary.
+func (s *server) getAuthService() *service.AuthService {
+	if s.authService == nil {
+		s.authService = service.NewAuthService(s.userStore, s.promptStore, s.cache)
+	}
+	return s.authService
+}
+
+func (s *server) getPromptService() *service.PromptService {
+	if s.promptService == nil {
+		s.promptService = service.NewPromptService(s.promptStore, s.uploadStore, s.invalidateContentCaches)
+	}
+	return s.promptService
+}
+
+func (s *server) getCommentService() *service.CommentService {
+	if s.commentService == nil {
+		s.commentService = service.NewCommentService(s.commentStore)
+	}
+	return s.commentService
 }
 
 func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {

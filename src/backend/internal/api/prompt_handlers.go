@@ -234,7 +234,7 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRecord, found := s.userStore.FindByID(userID)
+	userRecord, found := s.getAuthService().FindByID(userID)
 	if !found {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 			Code:    401,
@@ -252,7 +252,7 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prompt, err := s.promptStore.Create(store.CreatePromptInput{
+	prompt, err := s.getPromptService().Create(r.Context(), store.CreatePromptInput{
 		Title:        payload.Title,
 		Description:  payload.Description,
 		Cover:        payload.Cover,
@@ -281,7 +281,6 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.invalidateContentCaches(r.Context())
 	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{
 		Code:    200,
 		Message: "Success",
@@ -545,7 +544,7 @@ func (s *server) handleUserHistoryList(w http.ResponseWriter, r *http.Request) {
 		if !s.enforceRateLimits(r.Context(), w, "history_clear", rateLimitRule{bucket: rateLimitUser(userID), limit: 6, window: time.Hour}) {
 			return
 		}
-		if err := s.promptStore.ClearUserHistory(userID); err != nil {
+		if err := s.getAuthService().ClearHistory(userID); err != nil {
 			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "HISTORY_CLEAR_FAILED", Message: "Failed to clear history"})
 			return
 		}
@@ -672,7 +671,7 @@ func (s *server) optionalUserID(r *http.Request) (int, bool) {
 		return 0, false
 	}
 
-	userRecord, found := s.userStore.FindByID(userID)
+	userRecord, found := s.getAuthService().FindByID(userID)
 	if !found || userRecord.Status != 1 || claims.SessionVersion != userRecord.SessionVer {
 		return 0, false
 	}
@@ -690,15 +689,12 @@ func (s *server) handlePromptLike(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
-	prompt, applied, err := s.promptStore.Like(id, userID)
+	prompt, applied, err := s.getPromptService().Like(r.Context(), id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	if applied {
-		s.invalidateContentCaches(r.Context())
-	}
 	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
 		Code:    200,
 		Message: "Success",
@@ -719,15 +715,12 @@ func (s *server) handlePromptFavorite(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 
-	prompt, applied, err := s.promptStore.Favorite(id, userID)
+	prompt, applied, err := s.getPromptService().Favorite(r.Context(), id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	if applied {
-		s.invalidateContentCaches(r.Context())
-	}
 	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
 		Code:    200,
 		Message: "Success",
@@ -748,15 +741,12 @@ func (s *server) handlePromptUnlike(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 
-	prompt, applied, err := s.promptStore.Unlike(id, userID)
+	prompt, applied, err := s.getPromptService().Unlike(r.Context(), id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	if applied {
-		s.invalidateContentCaches(r.Context())
-	}
 	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
 		Code:    200,
 		Message: "Success",
@@ -777,15 +767,12 @@ func (s *server) handlePromptUnfavorite(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	prompt, applied, err := s.promptStore.Unfavorite(id, userID)
+	prompt, applied, err := s.getPromptService().Unfavorite(r.Context(), id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	if applied {
-		s.invalidateContentCaches(r.Context())
-	}
 	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
 		Code:    200,
 		Message: "Success",
@@ -806,7 +793,7 @@ func (s *server) handlePromptInteractionStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	status, err := s.promptStore.GetInteractionStatus(id, userID)
+	status, err := s.getPromptService().GetInteractionStatus(id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -826,7 +813,7 @@ func (s *server) handlePromptView(w http.ResponseWriter, r *http.Request, id int
 	// total views counter. See store.RecordView for the contract.
 	userID, _ := s.optionalUserID(r)
 
-	prompt, applied, err := s.promptStore.RecordView(id, userID)
+	prompt, applied, err := s.getPromptService().RecordView(id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -858,7 +845,7 @@ func (s *server) handlePromptReport(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 
-	report, applied, err := s.promptStore.Report(id, userID, payload.Reason, payload.Detail)
+	report, applied, err := s.getPromptService().Report(r.Context(), id, userID, payload.Reason, payload.Detail)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -902,7 +889,7 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 
-	userRecord, found := s.userStore.FindByID(userID)
+	userRecord, found := s.getAuthService().FindByID(userID)
 	if !found {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
@@ -917,7 +904,7 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 
-	prompt, err := s.promptStore.Update(id, userID, store.CreatePromptInput{
+	prompt, err := s.getPromptService().Update(r.Context(), id, userID, store.CreatePromptInput{
 		Title:        payload.Title,
 		Description:  payload.Description,
 		Cover:        payload.Cover,
@@ -946,7 +933,6 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 
-	s.invalidateContentCaches(r.Context())
 	writeJSON(w, http.StatusOK, apiResponse[store.Prompt]{Code: 200, Message: "Success", Data: prompt})
 }
 
@@ -957,12 +943,11 @@ func (s *server) handlePromptDelete(w http.ResponseWriter, r *http.Request, id i
 		return
 	}
 
-	if err := s.promptStore.Delete(id, userID); err != nil {
+	if err := s.getPromptService().Delete(r.Context(), id, userID); err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	s.invalidateContentCaches(r.Context())
 	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success", Data: nil})
 }
 

@@ -14,11 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"promptos-backend/internal/service"
 	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
 )
 
-var errInvalidUploadOwnership = errors.New("invalid upload ownership")
+var errInvalidUploadOwnership = service.ErrInvalidUploadOwnership
 var errUploadConcurrency = errors.New("upload concurrency limit reached")
 var errUploadDailyQuota = errors.New("upload daily quota exceeded")
 var errUploadTotalQuota = errors.New("upload total quota exceeded")
@@ -390,46 +391,5 @@ func detectImageFormat(data []byte) string {
 // referenced so cleanup cannot remove objects that are now in use. It returns a
 // stable error when a reference is missing, owned by another user, or trashed.
 func (s *server) validateUploadOwnership(userID int, cover string, images []string) error {
-	if s.uploadStore == nil {
-		return nil
-	}
-	candidates := make([]string, 0, len(images)+1)
-	if cover != "" {
-		candidates = append(candidates, cover)
-	}
-	candidates = append(candidates, images...)
-
-	var keys []string
-	for _, raw := range candidates {
-		url := strings.TrimSpace(raw)
-		if !strings.HasPrefix(url, "/uploads/") {
-			continue
-		}
-		objectKey := strings.TrimPrefix(url, "/uploads/")
-		objectKey = strings.Trim(objectKey, "/")
-		if objectKey == "" {
-			continue
-		}
-		rec, found, err := s.uploadStore.FindUpload(objectKey)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return errInvalidUploadOwnership
-		}
-		if rec.OwnerID != userID {
-			return errInvalidUploadOwnership
-		}
-		if rec.Status == store.UploadStatusTrashed {
-			return errInvalidUploadOwnership
-		}
-		keys = append(keys, objectKey)
-	}
-
-	if len(keys) > 0 {
-		if err := s.uploadStore.MarkUploadsReferenced(keys, userID); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.getPromptService().ValidateAndMarkUploadOwnership(userID, cover, images)
 }

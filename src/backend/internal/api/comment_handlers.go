@@ -68,13 +68,13 @@ func (s *server) handlePromptCommentCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userRecord, found := s.userStore.FindByID(userID)
+	userRecord, found := s.getAuthService().FindByID(userID)
 	if !found {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
 
-	comment, err := s.commentStore.Create(store.CreateCommentInput{
+	comment, err := s.getCommentService().Create(store.CreateCommentInput{
 		TargetType: "prompt",
 		TargetID:   id,
 		User: store.User{
@@ -138,7 +138,7 @@ func (s *server) handleCommentLike(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 
-	comment, applied, err := s.commentStore.Like(id, userID)
+	comment, applied, err := s.getCommentService().Like(id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -170,7 +170,7 @@ func (s *server) handleCommentReport(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	report, applied, err := s.commentStore.Report(store.ReportCommentInput{
+	report, applied, err := s.getCommentService().Report(store.ReportCommentInput{
 		CommentID: id,
 		UserID:    userID,
 		Reason:    payload.Reason,
