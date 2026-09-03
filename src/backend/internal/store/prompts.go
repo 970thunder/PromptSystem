@@ -62,7 +62,7 @@ func QueryPrompts(filter PromptFilter) []Prompt {
 	tag := strings.ToLower(strings.TrimSpace(filter.Tag))
 
 	for _, prompt := range prompts {
-		if prompt.Status != 1 {
+		if !isPublicPrompt(prompt) {
 			continue
 		}
 		if filter.CategoryID > 0 && prompt.CategoryID != filter.CategoryID {
@@ -161,12 +161,19 @@ func FindPromptByID(id int) (Prompt, bool) {
 	defer promptMu.RUnlock()
 
 	for _, prompt := range prompts {
-		if prompt.ID == id && prompt.Status == 1 {
+		if prompt.ID == id && isPublicPrompt(prompt) {
 			return prompt, true
 		}
 	}
 
 	return Prompt{}, false
+}
+
+// isPublicPrompt is the single visibility rule for anonymous/public prompt
+// reads. A published prompt owned by a disabled account must not leak through
+// lists, search, summaries, or the public detail endpoint.
+func isPublicPrompt(prompt Prompt) bool {
+	return prompt.Status == 1 && prompt.User.Status == 1
 }
 
 func FindOwnedPromptByID(id int, userID int) (Prompt, bool) {
@@ -317,7 +324,7 @@ func LikePrompt(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id || prompts[index].Status != 1 {
+		if prompts[index].ID != id || !isPublicPrompt(prompts[index]) {
 			continue
 		}
 
@@ -341,7 +348,7 @@ func FavoritePrompt(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id || prompts[index].Status != 1 {
+		if prompts[index].ID != id || !isPublicPrompt(prompts[index]) {
 			continue
 		}
 
@@ -367,7 +374,7 @@ func UnlikePrompt(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id || prompts[index].Status != 1 {
+		if prompts[index].ID != id || !isPublicPrompt(prompts[index]) {
 			continue
 		}
 		if promptLikes[id] == nil || !mapHasUser(promptLikes[id], userID) {
@@ -389,7 +396,7 @@ func UnfavoritePrompt(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id || prompts[index].Status != 1 {
+		if prompts[index].ID != id || !isPublicPrompt(prompts[index]) {
 			continue
 		}
 		if promptFavorites[id] == nil || !mapHasUser(promptFavorites[id], userID) {
@@ -418,7 +425,7 @@ func GetPromptInteractionStatus(id int, userID int) (InteractionStatus, error) {
 
 	found := false
 	for _, prompt := range prompts {
-		if prompt.ID == id && prompt.Status == 1 {
+		if prompt.ID == id && isPublicPrompt(prompt) {
 			found = true
 			break
 		}
@@ -442,7 +449,7 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 	defer promptMu.Unlock()
 
 	for index := range prompts {
-		if prompts[index].ID != id || prompts[index].Status != 1 {
+		if prompts[index].ID != id || !isPublicPrompt(prompts[index]) {
 			continue
 		}
 
@@ -488,7 +495,7 @@ func ReportPrompt(id int, userID int, reason string, detail string) (Report, boo
 
 	found := false
 	for _, prompt := range prompts {
-		if prompt.ID == id && prompt.Status == 1 {
+		if prompt.ID == id && isPublicPrompt(prompt) {
 			found = true
 			break
 		}
@@ -548,7 +555,7 @@ func listUserHistoryPromptsLocked(userID int) []Prompt {
 	visitedAt := promptViewHistory[userID]
 	list := make([]Prompt, 0, len(visitedAt))
 	for _, prompt := range prompts {
-		if prompt.Status != 1 {
+		if !isPublicPrompt(prompt) {
 			continue
 		}
 		if _, ok := visitedAt[prompt.ID]; ok {
@@ -667,7 +674,7 @@ func promptsByIDLocked(ids []int) []Prompt {
 
 	list := make([]Prompt, 0, len(ids))
 	for _, prompt := range prompts {
-		if _, ok := allowed[prompt.ID]; ok {
+		if _, ok := allowed[prompt.ID]; ok && isPublicPrompt(prompt) {
 			list = append(list, prompt)
 		}
 	}

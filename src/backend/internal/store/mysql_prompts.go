@@ -41,20 +41,33 @@ func (s *MySQLPromptStore) QueryPage(filter PromptFilter, page, pageSize int) ([
 
 func (s *MySQLPromptStore) HomeSummary() (HomeSummary, error) {
 	var summary HomeSummary
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM prompts WHERE status = 1`).Scan(&summary.PromptCount); err != nil {
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM prompts p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1 AND u.status = 1
+	`).Scan(&summary.PromptCount); err != nil {
 		return summary, err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM prompts WHERE status = 1`).Scan(&summary.CreatorCount); err != nil {
+	if err := s.db.QueryRow(`
+		SELECT COUNT(DISTINCT p.user_id) FROM prompts p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1 AND u.status = 1
+	`).Scan(&summary.CreatorCount); err != nil {
 		return summary, err
 	}
-	if err := s.db.QueryRow(`SELECT COALESCE(SUM(views), 0) FROM prompts WHERE status = 1`).Scan(&summary.TotalViews); err != nil {
+	if err := s.db.QueryRow(`
+		SELECT COALESCE(SUM(p.views), 0) FROM prompts p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1 AND u.status = 1
+	`).Scan(&summary.TotalViews); err != nil {
 		return summary, err
 	}
 
 	tagRows, err := s.db.Query(`
-		SELECT pt.tag FROM prompt_tags pt
+	SELECT pt.tag FROM prompt_tags pt
 		JOIN prompts p ON p.id = pt.prompt_id
-		WHERE p.status = 1
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1 AND u.status = 1
 		GROUP BY pt.tag ORDER BY COUNT(*) DESC LIMIT 8
 	`)
 	if err != nil {
@@ -70,9 +83,10 @@ func (s *MySQLPromptStore) HomeSummary() (HomeSummary, error) {
 	}
 
 	catRows, err := s.db.Query(`
-		SELECT c.name FROM prompts p
+	SELECT c.name FROM prompts p
 		JOIN categories c ON c.id = p.category_id
-		WHERE p.status = 1
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1 AND u.status = 1
 		GROUP BY c.id, c.name ORDER BY COUNT(*) DESC LIMIT 8
 	`)
 	if err != nil {
@@ -93,7 +107,8 @@ func (s *MySQLPromptStore) HomeSummary() (HomeSummary, error) {
 func (s *MySQLPromptStore) ListCategories() ([]Category, error) {
 	rows, err := s.db.Query(`
 		SELECT c.id, c.name, c.icon,
-			(SELECT COUNT(*) FROM prompts p WHERE p.category_id = c.id AND p.status = 1) AS cnt
+		(SELECT COUNT(*) FROM prompts p JOIN users u ON u.id = p.user_id
+		 WHERE p.category_id = c.id AND p.status = 1 AND u.status = 1) AS cnt
 		FROM categories c
 		WHERE c.type = 1
 		ORDER BY c.sort ASC, c.id ASC
@@ -145,7 +160,7 @@ func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([
 		JOIN categories c ON c.id = p.category_id
 		JOIN users u ON u.id = p.user_id
 		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
-		WHERE p.status = 1
+		WHERE p.status = 1 AND u.status = 1
 	`
 
 	var (
@@ -196,7 +211,7 @@ func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([
 		FROM prompts p
 		JOIN categories c ON c.id = p.category_id
 		JOIN users u ON u.id = p.user_id
-		WHERE p.status = 1
+		WHERE p.status = 1 AND u.status = 1
 	`
 	var countArgs []any
 	if len(conditions) > 0 {
@@ -236,7 +251,7 @@ func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([
 
 func (s *MySQLPromptStore) FindByID(id int) (Prompt, bool, error) {
 	return s.findOne(`
-		WHERE p.id = ? AND p.status = 1
+		WHERE p.id = ? AND p.status = 1 AND u.status = 1
 		GROUP BY p.id
 	`, id)
 }
@@ -556,7 +571,7 @@ func (s *MySQLPromptStore) removeEngagement(table, counterColumn string, id, use
 	defer tx.Rollback()
 
 	var published int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts WHERE id = ? AND status = 1`, id).Scan(&published); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1`, id).Scan(&published); err != nil {
 		return Prompt{}, false, err
 	}
 	if published == 0 {
@@ -609,7 +624,7 @@ func (s *MySQLPromptStore) removeEngagement(table, counterColumn string, id, use
 // infer existence from the response.
 func (s *MySQLPromptStore) GetInteractionStatus(id int, userID int) (InteractionStatus, error) {
 	var published int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM prompts WHERE id = ? AND status = 1`, id).Scan(&published); err != nil {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM prompts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1`, id).Scan(&published); err != nil {
 		return InteractionStatus{}, err
 	}
 	if published == 0 {
@@ -644,7 +659,7 @@ func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) 
 	defer tx.Rollback()
 
 	var published int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts WHERE id = ? AND status = 1`, id).Scan(&published); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1`, id).Scan(&published); err != nil {
 		return Prompt{}, false, err
 	}
 	if published == 0 {
@@ -776,7 +791,7 @@ func (s *MySQLPromptStore) ListUserHistory(userID int) ([]Prompt, error) {
 		JOIN categories c ON c.id = p.category_id
 		JOIN users u ON u.id = p.user_id
 		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
-		WHERE vh.user_id = ? AND p.status = 1
+		WHERE vh.user_id = ? AND p.status = 1 AND u.status = 1
 		GROUP BY p.id, vh.viewed_at
 		ORDER BY vh.viewed_at DESC, p.id DESC
 	`, userID)
@@ -804,7 +819,7 @@ func (s *MySQLPromptStore) ListUserHistoryPage(userID, page, pageSize int) ([]Pr
 		SELECT COUNT(DISTINCT p.id)
 		FROM view_histories vh
 		JOIN prompts p ON p.id = vh.prompt_id
-		WHERE vh.user_id = ? AND p.status = 1
+		WHERE vh.user_id = ? AND p.status = 1 AND u.status = 1
 	`, userID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -821,7 +836,7 @@ func (s *MySQLPromptStore) ListUserHistoryPage(userID, page, pageSize int) ([]Pr
 		JOIN categories c ON c.id = p.category_id
 		JOIN users u ON u.id = p.user_id
 		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
-		WHERE vh.user_id = ? AND p.status = 1
+		WHERE vh.user_id = ? AND p.status = 1 AND u.status = 1
 		GROUP BY p.id
 		ORDER BY MAX(vh.viewed_at) DESC, p.id DESC
 		LIMIT ? OFFSET ?
@@ -879,7 +894,7 @@ func (s *MySQLPromptStore) listUserEngagements(table string, userID int) ([]Prom
 		JOIN categories c ON c.id = p.category_id
 		JOIN users u ON u.id = p.user_id
 		LEFT JOIN prompt_tags pt ON pt.prompt_id = p.id
-		WHERE e.user_id = ? AND p.status = 1
+		WHERE e.user_id = ? AND p.status = 1 AND u.status = 1
 		GROUP BY p.id, e.created_at
 		ORDER BY e.created_at DESC, p.id DESC
 	`, userID)
@@ -919,7 +934,7 @@ func (s *MySQLPromptStore) applyEngagement(table string, counterColumn string, i
 	defer tx.Rollback()
 
 	var published int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts WHERE id = ? AND status = 1`, id).Scan(&published); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1`, id).Scan(&published); err != nil {
 		return Prompt{}, false, err
 	}
 	if published == 0 {

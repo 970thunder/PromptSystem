@@ -50,6 +50,31 @@ func TestNormalizePromptTagsCapsCount(t *testing.T) {
 	}
 }
 
+func TestPublicQueriesExcludeDisabledAuthors(t *testing.T) {
+	prompt, err := CreatePrompt(CreatePromptInput{
+		Title:      "Disabled author prompt",
+		Content:    "must stay private",
+		Model:      "gpt-4",
+		CategoryID: 1,
+		Tags:       []string{"visibility"},
+		User:       User{ID: 99001, Username: "disabled-author", Status: 0},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePrompt() error = %v", err)
+	}
+
+	if _, found := FindPromptByID(prompt.ID); found {
+		t.Fatal("published prompt owned by disabled user must not be public")
+	}
+	results := QueryPrompts(PromptFilter{Keyword: "Disabled author prompt"})
+	for _, result := range results {
+		if result.ID == prompt.ID {
+			t.Fatal("disabled author's prompt leaked into public search")
+		}
+	}
+}
+
 func TestMemoryPromptRejectsBlankTag(t *testing.T) {
 	_, err := CreatePrompt(CreatePromptInput{
 		Title:      "Title",

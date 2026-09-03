@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -161,5 +162,57 @@ func TestMySQLSoftDeleteExcludesFromLists(t *testing.T) {
 	}
 	if total != 0 || len(history) != 0 {
 		t.Fatalf("soft-deleted prompt returned in history: total=%d len=%d", total, len(history))
+	}
+}
+
+func TestMySQLPublicQueriesExcludeDisabledAuthors(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+	users := NewMySQLUserStore(db)
+	suffix := time.Now().UnixNano()
+	user, err := users.Register(fmt.Sprintf("disabled_%d", suffix), fmt.Sprintf("disabled-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	prompts := NewMySQLPromptStore(db)
+	prompt, err := prompts.Create(CreatePromptInput{
+		Title:       fmt.Sprintf("disabled author %d", suffix),
+		Description: "must stay private",
+		Content:     "content",
+		Model:       "gpt-4o",
+		CategoryID:  1,
+		Tags:        []string{"visibility"},
+		User:        User{ID: user.ID, Username: user.Username, Email: user.Email, Status: 1},
+		Status:      1,
+	})
+	if err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+	before, err := prompts.HomeSummary()
+	if err != nil {
+		t.Fatalf("summary before disable: %v", err)
+	}
+	if _, err := db.Exec("UPDATE users SET status = 0 WHERE id = ?", user.ID); err != nil {
+		t.Fatalf("disable user: %v", err)
+	}
+
+	results, total, err := prompts.QueryPage(PromptFilter{Keyword: prompt.Title}, 1, 10)
+	if err != nil {
+		t.Fatalf("query disabled author: %v", err)
+	}
+	if total != 0 || len(results) != 0 {
+		t.Fatalf("disabled author's prompt returned in search: total=%d len=%d", total, len(results))
+	}
+	if _, found, err := prompts.FindByID(prompt.ID); err != nil {
+		t.Fatalf("find disabled author prompt: %v", err)
+	} else if found {
+		t.Fatal("disabled author's prompt returned from public detail lookup")
+	}
+	after, err := prompts.HomeSummary()
+	if err != nil {
+		t.Fatalf("summary after disable: %v", err)
+	}
+	if after.PromptCount != before.PromptCount || after.CreatorCount != before.CreatorCount || after.TotalViews != before.TotalViews {
+		t.Fatalf("disabled author affected public summary: before=%+v after=%+v", before, after)
 	}
 }
