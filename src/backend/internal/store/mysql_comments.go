@@ -35,6 +35,14 @@ func (s *MySQLCommentStore) listByTargetPage(filter CommentFilter, page, pageSiz
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 100
 	}
+	sortBy := normalizeCommentSort(filter.SortBy)
+	orderBy := "c.created_at DESC, c.id DESC"
+	switch sortBy {
+	case "oldest":
+		orderBy = "c.created_at ASC, c.id ASC"
+	case "popular":
+		orderBy = "c.likes DESC, c.created_at DESC, c.id DESC"
+	}
 
 	var total int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM comments WHERE target_type = ? AND target_id = ? AND parent_id IS NULL`,
@@ -50,7 +58,7 @@ func (s *MySQLCommentStore) listByTargetPage(filter CommentFilter, page, pageSiz
 		FROM comments c
 		JOIN users u ON u.id = c.user_id
 		WHERE c.target_type = ? AND c.target_id = ? AND c.parent_id IS NULL
-		ORDER BY c.created_at ASC, c.id ASC
+		ORDER BY `+orderBy+`
 		LIMIT ? OFFSET ?
 	`, targetType, filter.TargetID, pageSize, (page-1)*pageSize)
 	if err != nil {
@@ -71,7 +79,7 @@ func (s *MySQLCommentStore) listByTargetPage(filter CommentFilter, page, pageSiz
 		return nil, 0, err
 	}
 
-	return buildCommentTree(flat, filter.SortBy), total, nil
+	return buildCommentTree(flat, sortBy), total, nil
 }
 
 func (s *MySQLCommentStore) Create(input CreateCommentInput) (Comment, error) {

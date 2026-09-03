@@ -170,11 +170,15 @@ func TestMySQLPublicQueriesExcludeDisabledAuthors(t *testing.T) {
 	db := openTestMySQL(t, dsn)
 	users := NewMySQLUserStore(db)
 	suffix := time.Now().UnixNano()
+	prompts := NewMySQLPromptStore(db)
+	before, err := prompts.HomeSummary()
+	if err != nil {
+		t.Fatalf("summary before create: %v", err)
+	}
 	user, err := users.Register(fmt.Sprintf("disabled_%d", suffix), fmt.Sprintf("disabled-%d@example.com", suffix), "StrongPass123!")
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	prompts := NewMySQLPromptStore(db)
 	prompt, err := prompts.Create(CreatePromptInput{
 		Title:       fmt.Sprintf("disabled author %d", suffix),
 		Description: "must stay private",
@@ -187,10 +191,6 @@ func TestMySQLPublicQueriesExcludeDisabledAuthors(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("create prompt: %v", err)
-	}
-	before, err := prompts.HomeSummary()
-	if err != nil {
-		t.Fatalf("summary before disable: %v", err)
 	}
 	if _, err := db.Exec("UPDATE users SET status = 0 WHERE id = ?", user.ID); err != nil {
 		t.Fatalf("disable user: %v", err)
@@ -214,5 +214,71 @@ func TestMySQLPublicQueriesExcludeDisabledAuthors(t *testing.T) {
 	}
 	if after.PromptCount != before.PromptCount || after.CreatorCount != before.CreatorCount || after.TotalViews != before.TotalViews {
 		t.Fatalf("disabled author affected public summary: before=%+v after=%+v", before, after)
+	}
+}
+
+func TestMySQLCommentPopularSortsBeforePagination(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+	users := NewMySQLUserStore(db)
+	suffix := time.Now().UnixNano()
+	user, err := users.Register(fmt.Sprintf("comment_sort_%d", suffix), fmt.Sprintf("comment-sort-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	prompts := NewMySQLPromptStore(db)
+	prompt, err := prompts.Create(CreatePromptInput{
+		Title:      fmt.Sprintf("comment sort prompt %d", suffix),
+		Content:    "content",
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		Tags:       []string{"comments"},
+		User:       User{ID: user.ID, Username: user.Username, Email: user.Email, Status: 1},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+	comments := NewMySQLCommentStore(db)
+	created := make([]Comment, 0, 3)
+	for _, content := range []string{"low", "high", "middle"} {
+		comment, err := comments.Create(CreateCommentInput{
+			TargetType: "prompt",
+			TargetID:   prompt.ID,
+			User:       User{ID: user.ID, Username: user.Username, Email: user.Email, Status: 1},
+			Content:    content,
+		})
+		if err != nil {
+			t.Fatalf("create comment %q: %v", content, err)
+		}
+		created = append(created, comment)
+	}
+	if _, err := db.Exec(`UPDATE comments SET likes = CASE id WHEN ? THEN 1 WHEN ? THEN 7 WHEN ? THEN 3 END WHERE id IN (?, ?, ?)`,
+		created[0].ID, created[1].ID, created[2].ID, created[0].ID, created[1].ID, created[2].ID); err != nil {
+		t.Fatalf("set comment likes: %v", err)
+	}
+
+	page, total, err := comments.ListByTargetPage(CommentFilter{TargetType: "prompt", TargetID: prompt.ID, SortBy: "popular"}, 1, 1)
+	if err != nil {
+		t.Fatalf("list popular comments: %v", err)
+	}
+	if total != 3 || len(page) != 1 {
+		t.Fatalf("popular page = len %d total %d, want len 1 total 3", len(page), total)
+	}
+	if page[0].ID != created[1].ID || page[0].Likes != 7 {
+		t.Fatalf("popular page returned %+v, want highest-liked comment %d", page[0], created[1].ID)
+	}
+
+	var plan string
+	if err := db.QueryRow(`EXPLAIN FORMAT=JSON
+		SELECT c.id
+		FROM comments c
+		WHERE c.target_type = 'prompt' AND c.target_id = ? AND c.parent_id IS NULL
+		ORDER BY c.likes DESC, c.created_at DESC, c.id DESC
+		LIMIT 1`, prompt.ID).Scan(&plan); err != nil {
+		t.Fatalf("explain popular comment query: %v", err)
+	}
+	if !strings.Contains(plan, "idx_target_parent_likes") {
+		t.Fatalf("popular comment plan does not expose idx_target_parent_likes: %s", plan)
 	}
 }

@@ -108,6 +108,8 @@ CREATE TABLE comments (
     likes INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_target (target_type, target_id),
+    INDEX idx_target_parent_created (target_type, target_id, parent_id, created_at, id),
+    INDEX idx_target_parent_likes (target_type, target_id, parent_id, likes, created_at, id),
     INDEX idx_user (user_id),
     INDEX idx_parent (parent_id),
     FOREIGN KEY (user_id) REFERENCES users(id),
