@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -91,13 +92,20 @@ func cleanupUploads(cfg config.Config, db *sql.DB, olderThan time.Duration) (int
 		return 0, 0, err
 	}
 	uploads := store.NewMySQLUploadStore(db)
+	return cleanupUploadRecords(cfg.UploadProvider, uploads, imageStorage, olderThan)
+}
+
+func cleanupUploadRecords(configuredProvider string, uploads store.UploadManager, imageStorage storage.ImageStorage, olderThan time.Duration) (int, int, error) {
+	if uploads == nil || imageStorage == nil {
+		return 0, 0, fmt.Errorf("upload cleanup dependencies are unavailable")
+	}
 	records, err := uploads.ListUnreferencedUploads(time.Now().UTC().Add(-olderThan))
 	if err != nil {
 		return 0, 0, err
 	}
 	trashed, failures := 0, 0
 	for _, rec := range records {
-		if !sameStorageProvider(rec.Provider, cfg.UploadProvider) {
+		if !sameStorageProvider(rec.Provider, configuredProvider) {
 			// Never delete an object through a provider selected by a different
 			// deployment configuration. Leave the row pending for an operator
 			// to rerun with the matching provider credentials.

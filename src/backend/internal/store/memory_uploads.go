@@ -48,7 +48,9 @@ func (s *MemoryUploadStore) RecordUpload(rec UploadRecord) (UploadRecord, error)
 	rec.ID = s.nextID
 	rec.Provider = provider
 	rec.Status = status
-	rec.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	if rec.CreatedAt == "" {
+		rec.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
 	s.uploads[rec.ObjectKey] = rec
 	return rec, nil
 }
