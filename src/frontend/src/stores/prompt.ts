@@ -27,20 +27,34 @@ export const usePromptStore = defineStore('prompt', () => {
   const currentCategoryId = ref<number | undefined>(undefined)
   const currentTag = ref<string | undefined>(undefined)
   const loadingMore = ref(false)
+  const searchResults = ref<Prompt[]>([])
+  const searchLoading = ref(false)
+  const searchError = ref('')
+  const searchPage = ref(1)
+  const searchTotal = ref(0)
   let feedRequestID = 0
   let feedController: AbortController | null = null
   let detailRequestID = 0
   let detailController: AbortController | null = null
   let commentsRequestID = 0
   let commentsController: AbortController | null = null
+  let searchRequestID = 0
+  let searchController: AbortController | null = null
 
   const cancelPendingRequests = () => {
     feedController?.abort()
     detailController?.abort()
     commentsController?.abort()
+    searchController?.abort()
     feedController = null
     detailController = null
     commentsController = null
+    searchController = null
+  }
+
+  const cancelSearch = () => {
+    searchController?.abort()
+    searchController = null
   }
 
   const setPrompts = (list: Prompt[]) => {
@@ -263,6 +277,57 @@ export const usePromptStore = defineStore('prompt', () => {
     }
   }
 
+  // Search state lives in the store so every view gets the same cancellation,
+  // request-order protection, pagination and error semantics.
+  const searchPrompts = async (params: {
+    page: number
+    pageSize: number
+    categoryId?: number
+    model?: string
+    sort?: string
+    tag?: string
+    keyword?: string
+  }, append = false) => {
+    searchController?.abort()
+    const controller = new AbortController()
+    searchController = controller
+    const requestID = ++searchRequestID
+    searchLoading.value = true
+    if (!append) {
+      searchError.value = ''
+    }
+
+    try {
+      const response = await promptApi.searchPrompts(params, controller.signal)
+      if (controller.signal.aborted || requestID !== searchRequestID) return null
+
+      if (append) {
+        const existing = new Set(searchResults.value.map((item) => item.id))
+        searchResults.value = [
+          ...searchResults.value,
+          ...response.data.list.filter((item) => !existing.has(item.id))
+        ]
+      } else {
+        searchResults.value = response.data.list
+      }
+      searchTotal.value = response.data.total
+      searchPage.value = response.data.page
+      searchError.value = ''
+      return response.data
+    } catch (error) {
+      if (controller.signal.aborted || requestID !== searchRequestID || isCancel(error)) return null
+      if (!append) {
+        searchResults.value = []
+        searchTotal.value = 0
+        searchPage.value = 1
+      }
+      searchError.value = '暂时无法连接服务，请检查网络或稍后重试。'
+      return null
+    } finally {
+      if (requestID === searchRequestID) searchLoading.value = false
+    }
+  }
+
   const loadPromptComments = async (id: number, sort = 'latest') => {
     commentsController?.abort()
     const controller = new AbortController()
@@ -368,10 +433,16 @@ export const usePromptStore = defineStore('prompt', () => {
     currentTag,
     hasMore,
     loadingMore,
+    searchResults,
+    searchLoading,
+    searchError,
+    searchPage,
+    searchTotal,
     hotTags,
     featuredPrompts,
     latestPrompts,
     cancelPendingRequests,
+    cancelSearch,
     setPrompts,
     setCurrentPrompt,
     mergePrompt,
@@ -384,6 +455,7 @@ export const usePromptStore = defineStore('prompt', () => {
     ensurePromptSeed,
     loadHomeFeed,
     loadMorePrompts,
+    searchPrompts,
     loadPromptDetail,
     loadPromptComments,
     loadMoreComments,

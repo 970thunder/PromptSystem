@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { isCancel } from 'axios'
 import { useRoute, useRouter } from 'vue-router'
-import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
-import type { Prompt } from '@/types'
 import AppShell from '@/components/layout/AppShell.vue'
 import BackButton from '@/components/navigation/BackButton.vue'
 import PromptCard from '@/components/prompt/PromptCard.vue'
@@ -15,17 +12,15 @@ const route = useRoute()
 const router = useRouter()
 const promptStore = usePromptStore()
 
-const loading = ref(false)
+const loading = computed(() => promptStore.searchLoading)
 const hasLoaded = ref(false)
 const syncingRoute = ref(false)
-const total = ref(0)
-const results = ref<Prompt[]>([])
+const total = computed(() => promptStore.searchTotal)
+const results = computed(() => promptStore.searchResults)
 const searchHistory = ref<string[]>([])
 const page = ref(1)
 const pageSize = 24
-const errorMessage = ref('')
-let latestRequestId = 0
-let searchController: AbortController | null = null
+const errorMessage = computed(() => promptStore.searchError)
 let skipNextRouteLoad = false
 
 const searchHistoryKey = 'promptos:search-history'
@@ -146,14 +141,7 @@ const saveSearchHistory = (keyword: string) => {
 }
 
 const loadResults = async (append = false) => {
-  const requestId = ++latestRequestId
-  searchController?.abort()
-  const controller = new AbortController()
-  searchController = controller
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const response = await promptApi.searchPrompts({
+  const response = await promptStore.searchPrompts({
       keyword: filters.keyword.trim(),
       categoryId: filters.categoryId || undefined,
       model: filters.model.trim() || undefined,
@@ -161,36 +149,15 @@ const loadResults = async (append = false) => {
       sort: filters.sort,
       page: page.value,
       pageSize
-    }, controller.signal)
-
-    if (controller.signal.aborted || requestId !== latestRequestId) return
-    if (append) {
-      const existingIds = new Set(results.value.map((item) => item.id))
-      results.value = [
-        ...results.value,
-        ...response.data.list.filter((item) => !existingIds.has(item.id))
-      ]
-    } else {
-      results.value = response.data.list
-    }
-    total.value = response.data.total
-    page.value = response.data.page
-  } catch (error) {
-    if (controller.signal.aborted || requestId !== latestRequestId || isCancel(error)) return
-    if (!append) {
-      results.value = []
-      total.value = 0
-    }
-    errorMessage.value = '暂时无法连接服务，请检查网络或稍后重试。'
-  } finally {
-    if (requestId === latestRequestId) {
-      hasLoaded.value = true
-      loading.value = false
-    }
+    }, append)
+  if (response) {
+    page.value = response.page
   }
+  hasLoaded.value = true
+  return response
 }
 
-onBeforeUnmount(() => searchController?.abort())
+onBeforeUnmount(() => promptStore.cancelSearch())
 
 const submitSearch = async () => {
   saveSearchHistory(filters.keyword)
@@ -221,7 +188,10 @@ const loadMore = async () => {
   if (loading.value || !hasMore.value) return
   page.value += 1
   await updateRouteQuery(true)
-  await loadResults(true)
+  const response = await loadResults(true)
+  if (!response) {
+    page.value = Math.max(1, page.value - 1)
+  }
 }
 
 watch(

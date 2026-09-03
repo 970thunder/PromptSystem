@@ -108,4 +108,47 @@ describe('prompt store comments pagination', () => {
     expect(store.comments.map((item) => item.id)).toEqual([2])
     expect(store.commentsError).toBe(false)
   })
+
+  it('keeps search pagination in the store and appends unique prompts', async () => {
+    vi.spyOn(promptApi, 'searchPrompts')
+      .mockResolvedValueOnce({ code: 200, message: 'Success', data: { list: [prompt(1)], total: 2, page: 1, pageSize: 24 } })
+      .mockResolvedValueOnce({ code: 200, message: 'Success', data: { list: [prompt(1), prompt(2)], total: 2, page: 2, pageSize: 24 } })
+
+    const store = usePromptStore()
+    const params = { keyword: '测试', page: 1, pageSize: 24 }
+    await store.searchPrompts(params)
+    expect(store.searchResults.map((item) => item.id)).toEqual([1])
+    expect(store.searchTotal).toBe(2)
+    expect(store.searchPage).toBe(1)
+
+    await store.searchPrompts({ ...params, page: 2 }, true)
+    expect(store.searchResults.map((item) => item.id)).toEqual([1, 2])
+    expect(store.searchPage).toBe(2)
+    expect(store.searchLoading).toBe(false)
+  })
+
+  it('cancels stale search requests and keeps the newest response', async () => {
+    vi.stubEnv('MODE', 'development')
+    const pending: Array<{
+      signal: AbortSignal | undefined
+      resolve: (value: { code: number; message: string; data: { list: ReturnType<typeof prompt>[]; total: number; page: number; pageSize: number } }) => void
+    }> = []
+    vi.spyOn(promptApi, 'searchPrompts').mockImplementation((_params, signal) => new Promise((resolve) => {
+      pending.push({ signal, resolve })
+    }))
+
+    const store = usePromptStore()
+    const first = store.searchPrompts({ keyword: '旧', page: 1, pageSize: 24 })
+    const second = store.searchPrompts({ keyword: '新', page: 1, pageSize: 24 })
+    expect(pending[0].signal?.aborted).toBe(true)
+
+    pending[1].resolve({ code: 200, message: 'Success', data: { list: [prompt(2)], total: 1, page: 1, pageSize: 24 } })
+    await second
+    pending[0].resolve({ code: 200, message: 'Success', data: { list: [prompt(1)], total: 1, page: 1, pageSize: 24 } })
+    await first
+
+    expect(store.searchResults.map((item) => item.id)).toEqual([2])
+    expect(store.searchError).toBe('')
+    expect(store.searchLoading).toBe(false)
+  })
 })
