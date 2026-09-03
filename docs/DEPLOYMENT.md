@@ -55,6 +55,8 @@
 - 上传存储：当前使用独立 Docker 本地卷；未复用其他站点的 RustFS 凭据
 - 健康检查：`/api/v1/health/ready` 返回 `storageMode=mysql`
 
+截至 2026-09-04 的线上只读核验：上述版本仍在运行，内存可用约 `3.3 GiB`、根盘使用率约 `48%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。仓库中的新版生产 Compose 已加入只读根文件系统、`cap_drop`、PID/内存上限等加固项，但线上当前 release 尚未重启应用该策略，必须在下一次低峰发布中完成 `config`、启动、健康和 HTTPS 验收后，才能把 `S-11` 标记为生产完成。服务器实际 RustFS bridge 地址以 `ss -lntp` 为准，目前为 `172.21.0.1:13902`；PromptOS 当前尚未接入 RustFS，上传仍在本地卷。
+
 ## 回滚
 
 1. compose 切回上一版镜像 tag / release 目录；

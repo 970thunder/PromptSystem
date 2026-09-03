@@ -10,7 +10,7 @@
 
 - 生产域名：`https://promptsystem.isoumao.top`
 - Compose 项目：`promptsystem`；当前发布目录：`/srv/releases/promptsystem/20260830-b584585`；上一回滚目录：`/srv/releases/promptsystem/20260829-a9ba2cf`
-- 服务器：7.7 GiB 内存、无 Swap、58 GiB 根盘（2026-08-30 剩余约 32 GiB）
+- 服务器：7.7 GiB 内存、无 Swap、58 GiB 根盘（2026-09-04 实测可用内存约 3.3 GiB、剩余约 30 GiB，根盘使用率 48%）
 - 公网只开放 80/443；PromptOS 前端/后端分别绑定 `127.0.0.1:3092/5092`
 - RustFS 转发链路可用，但 PromptOS 尚无独立 bucket/低权限凭据，上传暂存独立 Docker 卷
 - 服务器已有多个 Compose 项目，禁止全局 prune、删除未知卷、改动其他项目或在服务器编译源码
@@ -172,3 +172,4 @@
 - `D-10`：新增 `GET /api/v1/user/data-export`、`DELETE /api/v1/user/history` 和 `DELETE /api/v1/user/account`；内存/MySQL Store 均支持本人 Prompt 导出、历史清除和事务化注销。注销禁用账户、清除密码/GitHub 绑定、匿名化用户名/邮箱、递增 `session_version`，清理个人点赞/收藏/举报/关注/浏览明细并修正 Prompt/评论计数；保留 Prompt/评论记录以满足审计和外键保留策略，禁用作者内容不再公开。个人中心增加导出、清空浏览记录和注销入口。`go test ./...`、MySQL `TestMySQLDeleteAccountAnonymizesAndClearsPersonalRows`、前端 `npm run lint:check`、`npm test -- --run`（7 files/14 tests）和 `npm run build` 通过。生产尚未发布，注销后上传对象仍由 `D-04` 延迟回收任务负责，真实 SMTP/告警/RustFS 依赖项目保持未验收。
 - `A-11/D-05/S-07`：新增轻量 Prometheus `/metrics` 端点，记录 HTTP 请求/错误/平均延迟、上传、任务和 MySQL/Redis/上传依赖状态；新增只读 Prompt 计数审计并纳入低峰维护命令；登录、注册、验证码、重置、评论、举报、搜索、互动和上传按 IP/邮箱/用户分维度限流，生产 Redis 不可用时 fail-closed。新增限流与 metrics 回归测试。后端 `go test ./...`、`go vet ./...`、三个二进制构建和前端全量校验通过；生产 timer/告警尚未配置，故 `A-10/O-01` 仍待服务器验收。
 - `S-11`：生产 Compose 为 backend/frontend 增加 `no-new-privileges`、最小 Linux capabilities、只读根文件系统、tmpfs、PID/内存上限，并保留现有日志轮转和 loopback 端口边界；security workflow 增加策略断言。生产尚未重启验证，前端 nginx 的 `NET_BIND_SERVICE` 例外需在下一发布窗口用 `config`、启动和 HTTPS 冒烟验收。
+- 线上只读核验（2026-09-04）：服务器 `free -h` 显示总内存 7.7 GiB、可用约 3.3 GiB、Swap 0；`df -h /` 显示 58G 总量、28G 已用、30G 可用（48%）。`docker compose ls` 确认 `promptsystem` 使用 `/srv/releases/promptsystem/20260830-b584585/docker-compose.yml`，仅保留 `20260830-b584585` 与 `20260829-a9ba2cf` 两个 release 目录；frontend/backend 仍分别绑定 `127.0.0.1:3092/5092`，公网入口为 80/443，其他 Compose 项目保持运行。线上 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。RustFS 转发服务 active，当前实测 bridge 监听为 `172.21.0.1:13902`、隧道为 `127.0.0.1:13900`；总说明中的旧 `172.17.0.1` 已修正。当前线上容器仍是旧发布策略（`ReadonlyRootfs=false`、未设置 cap/pids 限制），故 `S-11` 生产验收、`D-12/D-13` RustFS 迁移和所有告警/timer 项目保持未完成。
