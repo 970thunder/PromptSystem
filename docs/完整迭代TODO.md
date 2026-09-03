@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：34/81 已完成，47 项待完成（2026-09-04）。
+当前进度：35/81 已完成，46 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -74,7 +74,7 @@
 - [ ] **D-04 上传垃圾回收**：草稿删除、替换图片、发布失败和注销产生的未引用对象延迟回收。
 - [ ] **D-05 汇总计数审计**：定期核对 views/likes/favorites 与明细表，并对偏差告警。
 - [ ] **D-06 事务一致性**：发布、互动、评论、举报、关注的明细与汇总在同一事务或有明确补偿。
-- [ ] **D-07 标签规范化**：统一大小写、空白、长度和唯一性；热门标签由后端聚合。
+- [x] **D-07 标签规范化**：统一大小写、空白、长度和唯一性；热门标签由后端聚合。
 - [ ] **D-08 公开查询边界**：草稿、删除内容、禁用用户内容不能出现在首页和搜索。
 - [ ] **D-09 数据字典**：记录全部表、字段、状态值、索引、外键和保留期限。
 - [ ] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
@@ -163,3 +163,4 @@
 - 验证：`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过；临时 MySQL 实测 `TestMigrationMatrix` 的 fresh（真正空库）、baseline、partial 三场景及二次运行幂等性全部通过。提交 `15ea2f9` 的 GitHub Actions backend `33781675791`、frontend `33781675792`、security `33781675829` 全部成功。生产尚未在本批发布，下一次发布仍需按备份、迁移、ready 和回滚流程执行。
 - `A-06`：存储层统一使用 sentinel error（用户、Prompt、评论、举报、关注等），API 通过 `errors.Is` 集中映射稳定 `errorCode`；未知存储错误统一 `500 INTERNAL_ERROR`，不再返回内部错误文本或用错误字符串分支。响应写出层为遗漏的 4xx/5xx 信封补默认稳定码。新增登录、自己关注、不存在 Prompt 评论、越权更新和未知错误不泄露回归测试。`go test ./...`、`go vet ./...`、`go build ./cmd/api`、`docker compose config --quiet`、`git diff --check` 通过；本机 race 未执行成功（Windows 环境缺少 `gcc`），GitHub Actions backend `33784076660`（含 Linux `go test -race`、迁移矩阵、Docker health）和 security `33784076727` 均成功。提交 `3cdb64e` 已推送，生产尚未发布。
 - `A-07`：API 客户端支持 `AbortSignal`；Prompt Store 对首页列表、详情、评论及加载更多请求执行取消和请求序号校验；搜索页取消旧搜索并在卸载时终止；详情页卸载时取消待处理请求；Axios 取消不再触发网络错误提示。新增旧详情/评论响应不覆盖新状态测试。前端 `npm test -- --run`（7 files/14 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过，生产尚未发布。
+- `D-07`：应用层和 MySQL 种子统一 trim、合并空白、大小写规范化、长度限制和去重；新增 `0015_normalize_prompt_tags.sql` 清理历史标签冲突并保持幂等，热门标签继续由后端聚合。新增 MySQL 隔离库迁移回归测试，验证旧标签归一化为单个 canonical 值且重复迁移无变化；`go test ./internal/store ./internal/database` 通过（未设置 `PROMPTOS_TEST_MYSQL_DSN` 时集成测试按约定跳过）。生产尚未发布。

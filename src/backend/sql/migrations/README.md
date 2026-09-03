@@ -37,6 +37,7 @@ Current files:
 - `0012_recalibrate_counters.sql`
 - `0013_uploads_table.sql`
 - `0014_upload_owner_fk.sql`
+- `0015_normalize_prompt_tags.sql`
 
 The Go backend applies the baseline automatically for a truly empty database,
 then runs pending migrations on startup using the `schema_migrations` table.

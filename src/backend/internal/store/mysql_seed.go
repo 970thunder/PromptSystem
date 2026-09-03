@@ -186,7 +186,11 @@ func seedPrompts(db *sql.DB) error {
 			return err
 		}
 
-		for _, tag := range prompt.Tags {
+		tags, err := NormalizePromptTags(prompt.Tags)
+		if err != nil {
+			return err
+		}
+		for _, tag := range tags {
 			if _, err := tx.Exec(`INSERT INTO prompt_tags (prompt_id, tag) VALUES (?, ?)`, prompt.ID, tag); err != nil {
 				return err
 			}

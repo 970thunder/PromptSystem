@@ -679,10 +679,10 @@ func promptsByIDLocked(ids []int) []Prompt {
 	return list
 }
 
-// normalizeTagValue trims surrounding whitespace and collapses any run of
-// internal whitespace to a single space, so tags like "  摄影  大师  " become the
-// canonical "摄影 大师". This keeps persisted tags consistent and prevents
-// duplicates that differ only in spacing.
+// normalizeTagValue trims surrounding whitespace, collapses any run of
+// internal whitespace to a single space, and lowercases case-foldable
+// characters. Tags like "  Brand  Guide  " therefore become the canonical
+// "brand guide", preventing duplicates that differ only in spacing or case.
 // MaxSearchKeywordLen bounds the length of a LIKE keyword. Boundless LIKE terms
 // degrade index usage and can be abused for expensive scans; MySQL ingestion of
 // overly long patterns is also wasted work. Cap it (in runes) since CJK keywords
@@ -700,11 +700,11 @@ func capKeywordLength(keyword string) string {
 }
 
 func normalizeTagValue(tag string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(tag)), " ")
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(tag)), " "))
 }
 
 // NormalizePromptTags normalizes a prompt's tag list for persistence: each tag
-// is trimmed and whitespace-collapsed, tags are deduplicated (case-preserving),
+// is trimmed, whitespace-collapsed and case-folded, tags are deduplicated,
 // the count is capped at MaxPromptTags, and every individual tag is capped at
 // MaxPromptTagLength. It returns ErrInvalidTag if a tag is entirely whitespace
 // or longer than MaxPromptTagLength after normalization.

@@ -11,11 +11,13 @@ func TestNormalizePromptTagsCollapsesWhitespaceAndDedupes(t *testing.T) {
 		"  摄影  ",
 		" 摄影 ",
 		" 智能体 研究 ",
+		" Brand ",
+		"brand",
 	})
 	if err != nil {
 		t.Fatalf("NormalizePromptTags() error = %v", err)
 	}
-	want := []string{"摄影", "智能体 研究"}
+	want := []string{"摄影", "智能体 研究", "brand"}
 	if !reflect.DeepEqual(tags, want) {
 		t.Fatalf("NormalizePromptTags() = %#v, want %#v", tags, want)
 	}
