@@ -6,6 +6,8 @@
     environment:
       MYSQL_ROOT_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:-promptos-dev-root-change-me}
       MYSQL_DATABASE: promptos
+      MYSQL_USER: ${PROMPTOS_MYSQL_USER:-promptos_app}
+      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:-promptos-local-password}
     ports:
       - "${PROMPTOS_MYSQL_PORT:-3306}:3306"
     volumes:
