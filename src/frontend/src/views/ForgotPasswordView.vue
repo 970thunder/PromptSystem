@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { userApi } from '@/api/userApi'
+import { siteCapabilities } from '@/config/capabilities'
 import AppShell from '@/components/layout/AppShell.vue'
 
 const router = useRouter()
@@ -27,7 +28,7 @@ const passwordMismatch = computed(
 )
 
 const canSendCaptcha = computed(
-  () => emailPattern.test(formValue.email.trim()) && !captchaLoading.value && captchaCountdown.value === 0
+  () => siteCapabilities.emailAuth && emailPattern.test(formValue.email.trim()) && !captchaLoading.value && captchaCountdown.value === 0
 )
 
 const infoItems = [
@@ -51,6 +52,10 @@ const startCaptchaCountdown = (seconds: number) => {
 }
 
 const handleSendCaptcha = async () => {
+  if (!siteCapabilities.emailAuth) {
+    message.error('邮箱验证暂未开放')
+    return
+  }
   if (!emailPattern.test(formValue.email.trim())) {
     message.error('请先输入有效的邮箱地址')
     return
@@ -74,6 +79,10 @@ const handleSendCaptcha = async () => {
 }
 
 const handleSubmit = async () => {
+  if (!siteCapabilities.emailAuth) {
+    message.error('密码重置暂未开放')
+    return
+  }
   if (!emailPattern.test(formValue.email.trim())) {
     message.error('请输入有效的邮箱地址')
     return

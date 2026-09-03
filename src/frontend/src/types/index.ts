@@ -139,7 +139,8 @@ export interface ResetPasswordRequest {
 }
 
 export interface LoginResponse {
-  token: string
+  /** Legacy bearer clients may receive a token; browser sessions use a cookie. */
+  token?: string
   user: User
 }
 

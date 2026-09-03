@@ -117,7 +117,7 @@ Contributor and AI coding conventions (stack, directories, API style) are define
 - Frontend env vars use the `VITE_` prefix, for example `VITE_API_BASE_URL` and `VITE_APP_TITLE`.
 - The home feed uses live prompt APIs; API failures are shown as an actionable error state.
 - Backend runtime config is environment-driven for local runs and Docker Compose.
-- Passwords are hashed with `bcrypt`, and protected API routes require a bearer JWT.
+- Passwords are hashed with `bcrypt`; production browser sessions use an HttpOnly Secure SameSite cookie, while bearer JWT remains available for compatible API clients.
 - Prompt cover uploads validate image MIME type and file size before storing the file.
 
 ## Verification Commands

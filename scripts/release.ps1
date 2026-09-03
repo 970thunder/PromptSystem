@@ -58,7 +58,7 @@ $frontendImage = "$ProjectName-frontend`:$Version"
 
 Step '本机构建生产镜像'
 Invoke-Checked docker @('build', '--pull=false', '-t', $backendImage, 'src/backend')
-Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '-t', $frontendImage, 'src/frontend')
+Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', 'VITE_EMAIL_AUTH_ENABLED=true', '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
 
 $imageArchive = Join-Path $releaseRoot "${ProjectName}-images-$Version.tar"
 Invoke-Checked docker @('save', '-o', $imageArchive, $backendImage, $frontendImage)
@@ -102,7 +102,8 @@ Invoke-Checked scp ($sshArgs + @($imageArchive, "$remote`:$remoteDir/"))
 Invoke-Checked scp ($sshArgs + @((Join-Path $releaseRoot 'docker-compose.yml'), "$remote`:$remoteDir/docker-compose.yml"))
 
 Step '服务器串行加载镜像并部署原 Compose 项目'
-$deployCommand = "set -eu; cd '$remoteDir'; sha256sum '${ProjectName}-images-$Version.tar.gz' >/tmp/${ProjectName}-$Version.sha256; gzip -dc '${ProjectName}-images-$Version.tar.gz' | docker load; sed -i 's/^PROMPTSYSTEM_VERSION=.*/PROMPTSYSTEM_VERSION=$Version/' /opt/secrets/$ProjectName/app.env; chmod 600 /opt/secrets/$ProjectName/app.env; docker compose -p '$ProjectName' --env-file /opt/secrets/$ProjectName/app.env -f docker-compose.yml config --quiet; docker compose -p '$ProjectName' --env-file /opt/secrets/$ProjectName/app.env -f docker-compose.yml up -d --no-build"
+$archiveName = "${ProjectName}-images-$Version.tar.gz"
+$deployCommand = "set -eu; cd '$remoteDir'; sha256sum '$archiveName' >/tmp/${ProjectName}-$Version.sha256; test `$(cut -d ' ' -f1 /tmp/${ProjectName}-$Version.sha256) = '$hash'; gzip -dc '$archiveName' | docker load; rm -f '$archiveName'; sed -i 's/^PROMPTSYSTEM_VERSION=.*/PROMPTSYSTEM_VERSION=$Version/' /opt/secrets/$ProjectName/app.env; chmod 600 /opt/secrets/$ProjectName/app.env; docker compose -p '$ProjectName' --env-file /opt/secrets/$ProjectName/app.env -f docker-compose.yml config --quiet; docker compose -p '$ProjectName' --env-file /opt/secrets/$ProjectName/app.env -f docker-compose.yml up -d --no-build"
 & ssh @sshArgs $remote $deployCommand
 if ($LASTEXITCODE -ne 0) { Fail "部署失败。请用上一 release '$ProjectName' 项目名回滚，不要删除卷。" }
 
@@ -110,5 +111,10 @@ Step '线上健康检查与 HTTPS 验证'
 $verifyCommand = "set -eu; for i in `$(seq 1 30); do curl -fsS https://$Domain/api/v1/health/ready >/tmp/promptos-ready && break || sleep 2; done; grep -q 'storageMode.*mysql' /tmp/promptos-ready; curl -fsS https://$Domain/ >/dev/null; cat /tmp/promptos-ready"
 & ssh @sshArgs $remote $verifyCommand
 if ($LASTEXITCODE -ne 0) { Fail '健康检查失败，请按 docs/DEPLOYMENT.md 回滚到上一 release' }
+
+Step '健康检查通过后更新 current 发布指针'
+$promoteCommand = "set -eu; ln -sfn '$remoteDir' '/srv/releases/$ProjectName/current'"
+& ssh @sshArgs $remote $promoteCommand
+if ($LASTEXITCODE -ne 0) { Fail 'current 发布指针更新失败；当前容器仍保持运行，请人工核对 release 目录' }
 
 Write-Host "发布成功：$Version；镜像归档 SHA-256：$hash；备份目录：$backupDir" -ForegroundColor Green

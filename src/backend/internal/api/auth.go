@@ -63,8 +63,15 @@ type updateUserRequest struct {
 }
 
 type authResponse struct {
-	Token string            `json:"token"`
+	Token string            `json:"token,omitempty"`
 	User  store.PrivateUser `json:"user"`
+}
+
+func (s *server) authResponseToken(token string) string {
+	if s.authCookieEnabled() {
+		return ""
+	}
+	return token
 }
 
 type followActionResponse struct {
@@ -175,11 +182,12 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.setAuthCookie(w, token)
 	writeJSON(w, http.StatusOK, apiResponse[authResponse]{
 		Code:    200,
 		Message: "Success",
 		Data: authResponse{
-			Token: token,
+			Token: s.authResponseToken(token),
 			User:  store.ToPrivateUser(user),
 		},
 	})
@@ -310,11 +318,12 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.setAuthCookie(w, token)
 	writeJSON(w, http.StatusOK, apiResponse[authResponse]{
 		Code:    200,
 		Message: "Success",
 		Data: authResponse{
-			Token: token,
+			Token: s.authResponseToken(token),
 			User:  store.ToPrivateUser(user),
 		},
 	})
@@ -458,7 +467,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	token, _ := sessionTokenFromRequest(r)
 	if token != "" {
 		claims, err := s.tokenManager.Verify(token)
 		if err == nil && claims.JTI != "" {
@@ -471,6 +480,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	clearSessionCookies(w, s.authCookieSecure())
 	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
 }
 
@@ -692,8 +702,8 @@ func (s *server) handleUserFollowStatus(w http.ResponseWriter, r *http.Request, 
 
 func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		token, ok := sessionTokenFromRequest(r)
+		if !ok {
 			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 				Code:      401,
 				Message:   "Unauthorized",
@@ -702,7 +712,6 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 		claims, err := s.tokenManager.Verify(token)
 		if err != nil {
 			status := http.StatusUnauthorized

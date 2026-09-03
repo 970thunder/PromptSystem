@@ -15,36 +15,44 @@ const localDateKey = () => {
 }
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string>(localStorage.getItem('token') || '')
+  // JWTs are delivered through an HttpOnly cookie. `token` remains an
+  // in-memory escape hatch for older API clients and is never persisted.
+  const token = ref<string>('')
   const userInfo = ref<User | null>(
     localStorage.getItem('userInfo') ? JSON.parse(localStorage.getItem('userInfo') as string) : null
   )
   const loading = ref(false)
+  const sessionReady = ref(false)
+  const sessionActive = ref(false)
+  localStorage.removeItem('token')
 
   const setToken = (newToken: string) => {
     token.value = newToken
-    localStorage.setItem('token', newToken)
+    sessionActive.value = Boolean(newToken) || Boolean(userInfo.value)
   }
 
   const setUserInfo = (info: User | null) => {
     userInfo.value = info
     if (info) {
       localStorage.setItem('userInfo', JSON.stringify(info))
+      sessionActive.value = true
       return
     }
 
     localStorage.removeItem('userInfo')
+    sessionActive.value = false
   }
 
   const logout = () => {
     token.value = ''
     userInfo.value = null
-    localStorage.removeItem('token')
+    sessionActive.value = false
+    sessionReady.value = true
     localStorage.removeItem('userInfo')
   }
 
   const logoutServer = async () => {
-    if (token.value) {
+    if (sessionActive.value || token.value) {
       try {
         await userApi.logout()
       } catch {
@@ -89,14 +97,33 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem(bindPromptDailyKey(user.id), today)
   }
 
-  const isLoggedIn = computed(() => !!token.value)
+  const isLoggedIn = computed(() => sessionActive.value)
+
+  const restoreSession = async () => {
+    if (sessionReady.value) {
+      return sessionActive.value
+    }
+    try {
+      const response = await userApi.getUserInfo()
+      userInfo.value = response.data
+      localStorage.setItem('userInfo', JSON.stringify(response.data))
+      sessionActive.value = true
+    } catch {
+      userInfo.value = null
+      localStorage.removeItem('userInfo')
+      sessionActive.value = false
+    } finally {
+      sessionReady.value = true
+    }
+    return sessionActive.value
+  }
 
   const login = async (payload: { email: string; password: string }) => {
     loading.value = true
     try {
       const response = await userApi.login(payload)
-      setToken(response.data.token)
       setUserInfo(response.data.user)
+      setToken(response.data.token || '')
       return response.data.user
     } finally {
       loading.value = false
@@ -107,8 +134,8 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true
     try {
       const response = await userApi.register(payload)
-      setToken(response.data.token)
       setUserInfo(response.data.user)
+      setToken(response.data.token || '')
       if (!response.data.user.hasGitHubBound) {
         markBindPromptPending(response.data.user.id)
       }
@@ -130,10 +157,6 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const fetchUserInfo = async () => {
-    if (!token.value) {
-      return null
-    }
-
     try {
       const response = await userApi.getUserInfo()
       setUserInfo(response.data)
@@ -155,6 +178,8 @@ export const useUserStore = defineStore('user', () => {
     shouldPromptBindGitHub,
     markBindPromptShown,
     isLoggedIn,
+    sessionReady,
+    restoreSession,
     login,
     register,
     updateProfile,

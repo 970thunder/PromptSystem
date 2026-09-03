@@ -30,10 +30,13 @@ services:
       options:
         max-size: 5m
         max-file: "3"
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}", "--protected-mode", "yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
     volumes:
       - promptsystem_redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -60,6 +63,7 @@ services:
       - /opt/secrets/promptsystem/app.env
     environment:
       APP_ENV: production
+      AUTH_COOKIE_ENABLED: "true"
       PORT: 8080
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
@@ -70,6 +74,7 @@ services:
       MYSQL_MIGRATION_PASSWORD: ${MYSQL_MIGRATION_PASSWORD:?MYSQL_MIGRATION_PASSWORD must be set}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-8}
       DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-4}
       DB_CONN_MAX_LIFETIME_MINUTES: ${DB_CONN_MAX_LIFETIME_MINUTES:-30}

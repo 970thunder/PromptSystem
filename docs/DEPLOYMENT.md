@@ -24,7 +24,7 @@
 
 1. 本地 `docs\RELEASE-CHECKLIST.md` 全绿；
 2. 服务器备份：mysqldump 全库 + uploads 卷，保留最近 3 版；
-3. 本机构建并标记镜像后通过 `docker save`/`docker load` 传输；服务器不编译源码；
+3. 本机构建并标记镜像后通过 `docker save`/`docker load` 传输；服务器不编译源码；远端必须校验本地计算的归档 SHA-256，镜像加载后立即删除压缩包；
 4. 验证：`curl https://<域名>/` + 首页登录/发布冒烟；
 5. 失败回滚：切回上一版镜像/目录 + 恢复数据库备份。
 
@@ -59,14 +59,14 @@
 
 ## 回滚
 
-1. compose 切回上一版镜像 tag / release 目录；
+1. compose 切回上一版镜像 tag / release 目录（`current` 只在健康检查通过后更新）；
 2. 必要时恢复 mysql_data 备份；
 3. CHANGELOG 记录回滚事件。
 
 ## 依赖服务
 
 - MySQL 8.4：`promptsystem_promptsystem_mysql_data` 卷；每次发布前由 `scripts\release.ps1` 串行执行 `mysqldump --single-transaction --routines --events`，压缩后写入 `/srv/backups/promptsystem/<version>/mysql.sql.gz` 并生成 `SHA256SUMS`。
-- Redis 7：缓存，可丢失重建。
+- Redis 7：缓存，可丢失重建；生产 Compose 使用独立 `REDIS_PASSWORD` 启用 `requirepass` 和 protected mode，backend 通过同名环境变量认证。密码必须只存在于 `/opt/secrets/promptsystem/app.env`（权限 `600`），不得复用其他站点凭据；发布前用 `docker compose ... config --quiet` 和 ready 检查确认认证生效。
 
 ### 上传配额与低内存预算
 

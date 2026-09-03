@@ -105,6 +105,7 @@ func TestValidateAllowsDisabledOAuthInProduction(t *testing.T) {
 		MySQLUser:          "promptos_app",
 		MySQLMigrationUser: "promptos_migrator",
 		MySQLMigrationPass: "migration-password",
+		RedisPass:          "redis-password",
 		AllowedOrigin:      "https://example.com",
 		SMTPHost:           "smtp.example.com",
 		SMTPPort:           "587",
@@ -114,6 +115,27 @@ func TestValidateAllowsDisabledOAuthInProduction(t *testing.T) {
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("disabled OAuth should validate: %v", err)
+	}
+}
+
+func TestValidateRejectsMissingRedisPasswordInProduction(t *testing.T) {
+	cfg := Config{
+		AppEnv:             "production",
+		Port:               "8080",
+		JWTSecret:          "super-strong-secret",
+		MySQLPass:          "strong-password",
+		MySQLUser:          "promptos_app",
+		MySQLMigrationUser: "promptos_migrator",
+		MySQLMigrationPass: "migration-password",
+		AllowedOrigin:      "https://example.com",
+		SMTPHost:           "smtp.example.com",
+		SMTPPort:           "587",
+		SMTPFrom:           "noreply@example.com",
+		JWTExpireHours:     72,
+		UploadMaxMB:        10,
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "REDIS_PASSWORD") {
+		t.Fatalf("expected missing Redis password validation, got %v", err)
 	}
 }
 

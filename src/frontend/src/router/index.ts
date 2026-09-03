@@ -90,8 +90,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const userStore = useUserStore()
 
-  if (userStore.token && !userStore.userInfo) {
-    await userStore.fetchUserInfo()
+  if (!userStore.sessionReady) {
+    await userStore.restoreSession()
   }
 
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {

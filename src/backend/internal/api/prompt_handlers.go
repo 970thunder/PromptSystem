@@ -660,18 +660,17 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	writeAPIError(w, apiErr)
 }
 
-// optionalUserID resolves the requesting user from an optional Bearer token,
+// optionalUserID resolves the requesting user from an optional session token,
 // returning (id, true) when the token is valid and the user is active, and
 // (0, false) otherwise. It is used only by the anonymous-friendly view endpoint
 // so a guest can bump a prompt's view counter without a history row, while a
 // signed-in user's view is still attributed to their history.
 func (s *server) optionalUserID(r *http.Request) (int, bool) {
-	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if !strings.HasPrefix(authHeader, "Bearer ") {
+	token, ok := sessionTokenFromRequest(r)
+	if !ok {
 		return 0, false
 	}
 
-	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 	claims, err := s.tokenManager.Verify(token)
 	if err != nil {
 		return 0, false

@@ -233,6 +233,7 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		func(next http.Handler) http.Handler { return s.withAccessLog(logger, next) },
 		withSecurityHeaders,
 		s.withCORS,
+		s.withCSRF,
 	)
 }
 

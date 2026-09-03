@@ -343,11 +343,12 @@ func (s *server) handleAuthExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.setAuthCookie(w, token)
 	writeJSON(w, http.StatusOK, apiResponse[authResponse]{
 		Code:    200,
 		Message: "Success",
 		Data: authResponse{
-			Token: token,
+			Token: s.authResponseToken(token),
 			User:  store.ToPrivateUser(user),
 		},
 	})

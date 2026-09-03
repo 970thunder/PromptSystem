@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：54/81 已完成，27 项待完成（2026-09-04）。
+当前进度：58/81 已完成，23 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -15,13 +15,33 @@
 - RustFS 转发链路可用，但 PromptOS 尚无独立 bucket/低权限凭据，上传暂存独立 Docker 卷
 - 服务器已有多个 Compose 项目，禁止全局 prune、删除未知卷、改动其他项目或在服务器编译源码
 
+## 当前功能缺失与风险清单
+
+这张表把“现在还不能对用户承诺的能力”和“必须在生产补齐的工程条件”单独列出；每项均映射到下方唯一编号，完成前不得用演示数据或手工口头操作替代。
+
+| 类型 | 当前缺失/风险 | 用户或系统影响 | 对应迭代 | 完成前置 |
+|---|---|---|---|---|
+| 产品能力 | Skill 运行器、在线 Playground、创作者学院、提示词交易市场尚未实现 | 导航仅显示不可点击的“即将开放”，不能宣传为可用能力 | `F-06`（开关已完成）/后续产品迭代 | 需求、执行沙箱、计费和内容审核方案明确后再开放开关 |
+| 认证 | 生产验证码邮件发送尚未接入真实 SMTP | 注册/找回密码在生产不能安全闭环 | `P0-06` | SMTP 凭据、发信域名、退信处理、Redis 原子消费和限流验收 |
+| 治理 | 没有管理员举报审核、内容下架、用户禁用和不可抵赖审计后台 | 举报只能写入 pending，无法形成受控处置闭环 | `S-14` | 角色模型、最小权限 API、审计表/留存、管理员 MFA 或等价保护 |
+| 对象数据 | 上传仍在 Docker 本地卷，未接入 PromptOS 独立 RustFS bucket | 单机卷故障会影响图片可用性，无法证明跨故障域副本 | `D-12/D-13` | 独立 bucket、最小权限凭据、迁移校验和第二故障域副本 |
+| 备份 | 当前有手工/发布备份和首次恢复演练，但没有每日 timer、失败告警和跨故障域复制 | RPO 仍取决于人工发布频率，备份失败可能无人发现 | `D-11/A-10/O-01` | 告警接收端、`flock` 串行任务、保留策略和容量预算 |
+| 运行时安全 | 新版 Cookie/CSP/Redis 密码/容器加固尚未发布到线上；线上仍是旧 release | 浏览器仍拿不到新 CSRF Header，CSP 和 Redis 隔离未生效 | `S-04/S-05/S-10/S-11` | 低峰发布、备份、迁移、ready/HTTPS/预检/容器属性验收 |
+| 发布治理 | 完整浏览器 E2E、密钥轮换流程和故障演练尚未形成自动化证据 | 变更回归、泄露处置和跨组件恢复依赖人工 | `F-10/S-13/O-10/R-06/R-08` | 测试账号、告警接收端、轮换窗口和可回滚制品 |
+
+### 架构、数据、安全的排期原则
+
+1. **架构**：先保持 API 契约、Service/Store 边界和任务入口稳定；新能力必须复用现有业务层，不在 handler 或前端 View 中增加第二套状态与权限逻辑。服务器无 Swap，后台任务采用一次性容器 + `flock`，不引入常驻队列或监控套件。
+2. **数据**：所有删除先走软删/状态迁移，上传对象按 `pending → referenced → trashed` 生命周期处理；MySQL 备份、对象迁移和恢复演练都要有 SHA-256、时间点、RPO/RTO 和临时资源清理证据。
+3. **安全**：浏览器只使用 HttpOnly 会话和 CSRF 双提交，API 保留 Bearer 兼容；生产 Origin 必须白名单，Redis 必须内网认证，管理员操作必须最小权限和审计；任何缺少真实凭据、告警端或线上验证的项目保持未勾选。
+
 ## 服务器条件适配与执行顺序
 
 以下顺序把 `E:\Web\服务器部署总说明.md` 的约束直接转成迭代门槛。代码、测试和镜像在本机构建；公网服务器只执行拉取/加载、备份、迁移、切换和验证。
 
 | 阶段 | 迭代项 | 服务器验收门槛 |
 |---|---|---|
-| 1. 契约与代码 | `A-02`-`A-07`、`A-09`、`D-02`-`D-10`、`S-02`-`S-09`、`F-06`、`F-08`-`F-11` | 本机单元/集成/E2E、`go vet`、前端 lint/build、契约回归和安全扫描通过；不占用生产资源 |
+| 1. 契约与代码 | `A-02`-`A-07`、`A-09`、`D-02`-`D-10`、`S-04`-`S-09`、`F-06`、`F-10`-`F-11` | 本机单元/集成/E2E、`go vet`、前端 lint/build、契约回归和安全扫描通过；不占用生产资源 |
 | 2. 低内存运维 | `A-10`、`A-11`、`O-01`、`O-04`-`O-07`、`O-10` | 任务使用 systemd timer/cron；无 Swap 时串行执行；告警接收地址、RustFS 链路和 nginx reload 均有实测记录 |
 | 3. 数据与对象 | `P0-06`、`D-11`-`D-14`、`S-10`、`S-13` | SMTP 真实凭据、独立 RustFS bucket/低权限凭据、跨故障域副本和备份恢复证据齐备；条件缺失保持未勾选 |
 | 4. 发布自动化 | `A-12`、`R-06`、`R-07`、`R-08` | 本机构建并固定镜像 tag/digest；服务器保留当前+上一版；备份校验、迁移、ready、HTTPS 冒烟和回滚记录完整 |
@@ -86,7 +106,7 @@
 ## S 安全
 
 - [x] **S-01 会话撤销**：登出调用后端；密码重置、禁用、注销使旧 token 立即失效。
-- [ ] **S-02 JWT 存储策略**：先完成 CSP/XSS 审计，再评估迁移 HttpOnly+Secure+SameSite Cookie。
+- [x] **S-02 JWT 存储策略**：先完成 CSP/XSS 审计，再迁移 HttpOnly+Secure+SameSite Cookie。
 - [x] **S-03 GitHub OAuth 开关**：显式 enable 配置；未配置时前端不显示可点击入口，启用时校验 redirect/state/code。
 - [ ] **S-04 CSP**：从 Report-Only 开始制定 Vue 生产 CSP，再切换强制模式。（已加入 Report-Only，待生产报告复核后切换强制）
 - [ ] **S-05 CORS/CSRF**：生产仅允许正式域名；Cookie 会话启用 CSRF 防护。
@@ -107,10 +127,10 @@
 - [x] **F-03 真正退出登录**：UI 调用 `/user/logout` 后清理本地状态并返回安全页面。
 - [x] **F-04 评论工作区**：分页、排序、加载更多、回复、错误重试和真实总数。
 - [x] **F-05 相关推荐**：通过稳定后端查询获取，不依赖当前 Pinia 页缓存。
-- [ ] **F-06 生产能力开关**：OAuth、邮件、Skill、Playground 等未启用能力不可误点。
+- [x] **F-06 生产能力开关**：OAuth、邮件、Skill、Playground 等未启用能力不可误点。
 - [x] **F-07 清理演示 fallback**：生产 API 失败显示真实错误，不自动切换成演示数据。
-- [ ] **F-08 搜索与列表性能**：URL 恢复、取消旧请求、稳定图片尺寸、加载更多与错误恢复。
-- [ ] **F-09 响应式与无障碍**：390/768/1440 px、键盘、焦点、Escape、reduced motion 全部验收。
+- [x] **F-08 搜索与列表性能**：URL 恢复、取消旧请求、稳定图片尺寸、加载更多与错误恢复。
+- [x] **F-09 响应式与无障碍**：390/768/1440 px、键盘、焦点、Escape、reduced motion 全部验收。
 - [ ] **F-10 浏览器 E2E**：覆盖首页、导航、搜索、详情、注册登录、评论互动、发布、工作台、主题与移动端。
 - [ ] **F-11 更新前端重设计手册状态**：以实际提交和验收证据补齐原 24 项状态，禁止批量虚假勾选。
 
@@ -159,6 +179,15 @@
 
 ### 2026-09-04
 
+- `F-09`：主要页面（首页、搜索、社区、详情、认证和受保护路由）在 390/768/1440 px 浏览器视口无横向溢出；交互元素可访问名称扫描为 0，补充公开作者页头像文件输入 `aria-label`；顶栏键盘 Enter 展开、Escape 关闭并恢复焦点；组件统一保留 `:focus-visible` 焦点环，动画均提供 `prefers-reduced-motion` 分支。`npm run lint:check`、`npm test -- --run`（8 files/18 tests）和 `npm run build` 通过。生产尚未发布。
+- `A-12`（发布工具增强，待生产验收）：`scripts/release.ps1` 对远端镜像归档 SHA-256 与本地期望值做强校验，`docker load` 后删除压缩包，健康检查通过后才更新 `/srv/releases/promptsystem/current`；仍需低峰服务器实测备份、迁移、ready、HTTPS 和回滚链路，A-12/R-06/R-07 保持未勾选。
+
+- `F-08`：搜索页通过 URL 查询恢复筛选和页码，Prompt Store 统一 AbortController、请求序号、分页去重、加载更多和错误重试；PromptCard 固定 4:3 封面比例并使用宽高属性避免布局跳动。修复首页标题飘带在 computed 中重复随机导致轨道重排/抽搐的问题，改为仅在提示词数据源变化时抽样。新增稳定性回归；`npm test -- --run`（8 files/18 tests）、`npm run lint:check`、`npm run build` 通过；浏览器实测 `/prompt/104` 详情导航、390/768/1440 视口无横向溢出。生产尚未发布。
+
+- `S-02`：浏览器会话改用 `HttpOnly; Secure; SameSite=Lax` 的 `promptos_session` Cookie，配套可读 `promptos_csrf` Cookie 与 `X-CSRF-Token` 写请求校验；旧版 Bearer 客户端保持兼容，前端不再把 JWT 写入 `localStorage`。新增 Cookie 标志、Cookie 鉴权和 CSRF 回归测试；前端主题初始化移出内联脚本，生产 nginx CSP 改为强制策略。`go test ./...`、`go vet ./...`、`npm run lint:check`、`npm test -- --run`（8 files/17 tests）、`npm run build` 和本地浏览器无 CSP 控制台错误通过。生产当前仍运行旧 release，S-04/S-05 需下一发布窗口验证线上 Header 后再勾选。
+- `S-05`（代码待生产验收）：新增 CORS 白名单预检/非法 Origin/Bearer 兼容回归测试，API 契约补充 Cookie、CSRF、预检和生产 Origin 规则。线上只读检查（2026-09-04）确认陌生 Origin 返回 `403 ORIGIN_NOT_ALLOWED`，但旧 release 的 `Access-Control-Allow-Headers` 尚未包含 `X-CSRF-Token`，因此不勾选。
+- `S-10`（配置待生产验收）：生产 Compose 强制独立 `REDIS_PASSWORD`，Redis 使用 protected mode + requirepass，backend/healthcheck 通过认证连接；配置校验在 production 缺少密码时 fail-closed。本地 Compose 支持空密码开发模式或显式密码模式。服务器尚未配置新密码和重启验证，保持未勾选。
+
 - `A-01`：`src/backend/internal/database/migrate.go` 在当前数据库无任何表时自动应用随镜像发布的 `sql/schema.sql` 基线，再通过 `schema_migrations` 顺序执行增量迁移；已有 schema 或部分迁移库不会覆盖数据。基线执行跳过仅用于已创建数据库的 `CREATE DATABASE`/`USE` 引导语句，兼容生产最小权限迁移账号。开发 Compose 移除 MySQL 的 `schema.sql` 隐式挂载并显式创建与 backend 配套的 `promptos_app` 账号，`README.md`、`docs/DEPLOYMENT.md` 和迁移 README 改为单一启动入口。
 - 验证：`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过；临时 MySQL 实测 `TestMigrationMatrix` 的 fresh（真正空库）、baseline、partial 三场景及二次运行幂等性全部通过。提交 `15ea2f9` 的 GitHub Actions backend `33781675791`、frontend `33781675792`、security `33781675829` 全部成功。生产尚未在本批发布，下一次发布仍需按备份、迁移、ready 和回滚流程执行。
 - `A-06`：存储层统一使用 sentinel error（用户、Prompt、评论、举报、关注等），API 通过 `errors.Is` 集中映射稳定 `errorCode`；未知存储错误统一 `500 INTERNAL_ERROR`，不再返回内部错误文本或用错误字符串分支。响应写出层为遗漏的 4xx/5xx 信封补默认稳定码。新增登录、自己关注、不存在 Prompt 评论、越权更新和未知错误不泄露回归测试。`go test ./...`、`go vet ./...`、`go build ./cmd/api`、`docker compose config --quiet`、`git diff --check` 通过；本机 race 未执行成功（Windows 环境缺少 `gcc`），GitHub Actions backend `33784076660`（含 Linux `go test -race`、迁移矩阵、Docker health）和 security `33784076727` 均成功。提交 `3cdb64e` 已推送，生产尚未发布。
@@ -182,3 +211,4 @@
 - `D-04`：维护命令的上传回收核心拆为可测试的 `cleanupUploadRecords`；只处理超过安全窗口的 `pending` 对象，provider 不匹配或对象删除失败保留 `pending`，仅在物理删除成功后转 `trashed`，支持下一轮重试。内存回归覆盖最近对象不删、旧对象删除、失败/错 provider 保留；`go test ./cmd/maintenance ./internal/service ./internal/store` 通过。生产 timer 尚未配置，待 `A-10/O-01` 服务器验收。
 - `D-06`：MySQL Prompt/评论举报把公开目标校验、幂等写入和结果读取放入同一事务；关注/取关按稳定用户锁顺序在同一事务内写入关系并计算 follower/following 汇总；Prompt/标签写入原有事务保持不变；上传引用元数据使用单事务批量标记，跨 Prompt/上传 Store 失败时由 `FinalizeUploadReferences` 先重试标记当前引用再回收旧引用，补偿成功可安全返回，双失败保留可重试状态。新增 `TestMySQLReportAndFollowTransactions`（并发关注/举报、重复操作、删除目标拒绝）和 `TestPromptServiceCompensatesUploadReferenceFailure`；本机 `go test ./...`、`go vet ./...`、API/维护/完整性审计构建、`git diff --check` 通过；使用临时隔离 MySQL 库实测 `go test ./internal/store -count=1` 和 `TestMigrationMatrix` 均通过，测试库已清理。生产尚未发布。
 - 线上只读核验（2026-09-04）：服务器 `free -h` 显示总内存 7.7 GiB、可用约 3.3 GiB、Swap 0；`df -h /` 显示 58G 总量、28G 已用、30G 可用（48%）。`docker compose ls` 确认 `promptsystem` 使用 `/srv/releases/promptsystem/20260830-b584585/docker-compose.yml`，仅保留 `20260830-b584585` 与 `20260829-a9ba2cf` 两个 release 目录；frontend/backend 仍分别绑定 `127.0.0.1:3092/5092`，公网入口为 80/443，其他 Compose 项目保持运行。线上 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。RustFS 转发服务 active，当前实测 bridge 监听为 `172.21.0.1:13902`、隧道为 `127.0.0.1:13900`；总说明中的旧 `172.17.0.1` 已修正。当前线上容器仍是旧发布策略（`ReadonlyRootfs=false`、未设置 cap/pids 限制），故 `S-11` 生产验收、`D-12/D-13` RustFS 迁移和所有告警/timer 项目保持未完成。
+- `F-06`：新增统一 `siteCapabilities` 构建开关，OAuth、邮件验证、Skill、Playground、创作者学院和交易市场均由显式 `VITE_*` 配置控制；未实现模块继续以不可点击的“即将开放”项显示，关闭邮件能力时注册/找回表单不会发起请求。新增默认能力回归测试；前端 `npm run lint:check`、`npm test -- --run`（8 files/17 tests）和 `npm run build` 通过。生产构建默认关闭未完成模块，真实 SMTP 仍由 `P0-06` 验收。

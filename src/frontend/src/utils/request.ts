@@ -8,10 +8,17 @@ const { message: messageApi } = createDiscreteApi(['message'])
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 })
+
+const readCookie = (name: string) => {
+  const prefix = `${encodeURIComponent(name)}=`
+  const item = document.cookie.split('; ').find((entry) => entry.startsWith(prefix))
+  return item ? decodeURIComponent(item.slice(prefix.length)) : ''
+}
 
 // Request interceptor
 request.interceptors.request.use(
@@ -19,6 +26,12 @@ request.interceptors.request.use(
     const userStore = useUserStore()
     if (userStore.token) {
       config.headers.Authorization = `Bearer ${userStore.token}`
+    }
+    if (config.method && !['get', 'head', 'options', 'trace'].includes(config.method.toLowerCase())) {
+      const csrf = readCookie('promptos_csrf')
+      if (csrf) {
+        config.headers['X-CSRF-Token'] = csrf
+      }
     }
     return config
   },

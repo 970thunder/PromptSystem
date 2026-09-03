@@ -36,7 +36,8 @@ const openBindGitHubPrompt = () => {
 }
 
 onMounted(async () => {
-  if (userStore.token && !userStore.userInfo) {
+  if (!userStore.sessionReady) {
+    await userStore.restoreSession()
     await userStore.fetchUserInfo()
   }
 

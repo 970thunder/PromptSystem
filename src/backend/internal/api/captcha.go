@@ -108,7 +108,13 @@ func (s *server) issueRedisCaptcha(ctx context.Context, email string) (string, t
 		return "", time.Time{}, 0, store.ErrInvalidEmail
 	}
 	if s.cache == nil {
-		// Fall back to the in-memory manager when Redis is unavailable.
+		// A production process must never issue a one-time credential from an
+		// in-memory store: a restart or a second replica could invalidate the
+		// code while the caller still believes it is usable.
+		if s.config.IsProduction() {
+			return "", time.Time{}, 0, fmt.Errorf("captcha store is unavailable in production")
+		}
+		// Development and test servers may use the bounded in-memory manager.
 		return s.captcha.issue(email)
 	}
 

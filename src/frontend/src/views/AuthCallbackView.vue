@@ -30,8 +30,8 @@ onMounted(async () => {
 
   try {
     const response = await userApi.exchangeGithubCode(code)
-    userStore.setToken(response.data.token)
     userStore.setUserInfo(response.data.user)
+    userStore.setToken(response.data.token || '')
     message.success('已通过 GitHub 登录')
     const redirect = isSafeInternalPath(route.query.redirect)
     await router.replace(redirect)

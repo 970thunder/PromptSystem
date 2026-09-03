@@ -265,6 +265,15 @@ func TestProductionCaptchaResponseDoesNotExposeCode(t *testing.T) {
 	}
 }
 
+func TestProductionCaptchaFailsClosedWithoutRedis(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.config.AppEnv = "production"
+	s.cache = nil
+	if _, _, _, err := s.issueRedisCaptcha(context.Background(), "safe@example.com"); err == nil {
+		t.Fatal("production captcha must fail closed when Redis is unavailable")
+	}
+}
+
 func TestProductionCaptchaSendFailureDeletesPendingCode(t *testing.T) {
 	s, fc := newTestServer(t)
 	s.config.AppEnv = "production"

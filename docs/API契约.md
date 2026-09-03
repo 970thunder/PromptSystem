@@ -7,7 +7,8 @@
 
 ## 通用约定
 
-- 认证：受保护接口使用 `Authorization: Bearer <token>`。
+- 认证：浏览器生产会话使用 `HttpOnly; Secure; SameSite=Lax` 的 `promptos_session` Cookie，前端请求携带凭据并使用可读的 `promptos_csrf` Cookie 值设置 `X-CSRF-Token` 保护 `POST`/`PUT`/`PATCH`/`DELETE` 写操作。`GET`/`HEAD`/`OPTIONS`/`TRACE` 不要求 CSRF Header。旧版 API 客户端仍可使用 `Authorization: Bearer <token>`，Bearer 请求不读取会话 Cookie，也不要求 CSRF Header。
+- 跨域：生产 `ALLOWED_ORIGIN` 必须是正式 HTTPS 源的逗号分隔白名单，禁止 `*`；白名单源收到 `Access-Control-Allow-Credentials: true`，未列出的 Origin 返回 `403 ORIGIN_NOT_ALLOWED`。同源请求不需要 Origin Header，`OPTIONS` 预检成功返回 `204`。生产 Redis 必须设置独立 `REDIS_PASSWORD`，Redis 只接受 Compose 内网连接。
 - 分页：`page`（默认 1，`>=1`）、`pageSize`（默认 12，`1..100`）。非法值返回 `400`。
 - 请求体：单个 JSON 值，未知字段被拒绝，超限返回 `413 BODY_TOO_LARGE`。
 - 错误码示例：`AUTH_INVALID_CREDENTIALS`、`AUTH_TOKEN_MISSING`、`AUTH_TOKEN_INVALID`、`AUTH_TOKEN_EXPIRED`、`AUTH_TOKEN_REVOKED`、`AUTH_USER_DISABLED`、`USER_NOT_FOUND`、`CANNOT_FOLLOW_SELF`、`PROMPT_NOT_FOUND`、`PROMPT_FORBIDDEN`、`COMMENT_NOT_FOUND`、`COMMENT_PARENT_NOT_FOUND`、`COMMENT_PARENT_MISMATCH`、`INVALID_COMMENT_CONTENT`、`INVALID_REPORT_REASON`、`REPORT_DETAIL_TOO_LONG`、`INVALID_CATEGORY`、`INVALID_TAG`、`INVALID_PAGE`、`INVALID_PAGE_SIZE`、`INVALID_JSON`、`ORIGIN_NOT_ALLOWED`、`INVALID_UPLOAD_OWNERSHIP`、`INVALID_IMAGE_FORMAT`、`IMAGE_REQUIRED`、`IMAGE_TOO_LARGE`、`REQUEST_TOO_LARGE`、`UPLOAD_CONCURRENCY_LIMITED`、`UPLOAD_DAILY_QUOTA_EXCEEDED`、`UPLOAD_CAPACITY_EXCEEDED`、`UPLOAD_QUOTA_UNAVAILABLE`、`UPLOAD_REFERENCE_FAILED`、`UPLOAD_LIFECYCLE_FAILED`、`HISTORY_CLEAR_FAILED`、`DATA_EXPORT_FAILED`、`INTERNAL_ERROR`。
@@ -129,7 +130,7 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 重置密码。请求体：`{ "email", "captcha", "password" }`。
 
 ### `POST /user/logout`（需登录）
-登出：将当前 JWT `jti` 写入 Redis denylist，TTL 等于 token 剩余有效期。
+登出：将当前 JWT `jti` 写入 Redis denylist，TTL 等于 token 剩余有效期，并清除会话和 CSRF Cookie。
 
 ### `GET /user/info` / `PUT /user/info`（需登录）
 当前用户资料读取与更新。

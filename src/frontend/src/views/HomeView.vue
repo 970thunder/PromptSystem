@@ -2,7 +2,7 @@
      「今日精选」大屏展示（1 张大卡 + 2 张横排小卡）、「最新发布」卡片网格（支持
      加载更多）、分类/标签发现入口与发布引导。所有内容均来自实时服务（测试环境除外）。 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { usePromptStore } from '@/stores/prompt'
@@ -43,16 +43,26 @@ const shuffle = <T,>(items: T[]) => {
   return shuffled
 }
 
-// 飘带只从当前已加载提示词的标题中取值，避免展示脱离内容流的文案。
-const heroTitles = computed(() => {
+type HeroTitle = { id: number; title: string; cover: string }
+
+const heroTitles = ref<HeroTitle[]>([])
+const heroSourceKey = computed(() => promptStore.prompts
+  .map((prompt) => `${prompt.id}:${prompt.title}:${prompt.cover}`)
+  .join('\u001f'))
+
+// 只在信息流真正变化时抽样一次。把 Math.random 放进 computed 会在任意
+// 计数/主题更新时换序，CSS 轨道因此被重排并出现视觉抽搐。
+const refreshHeroTitles = () => {
   const prompts = promptStore.prompts.filter((prompt) => prompt.title.trim())
-  return shuffle(prompts.map((prompt) => ({
+  heroTitles.value = shuffle(prompts.map((prompt) => ({
     id: prompt.id,
     title: prompt.title.trim(),
     cover: resolveCover(prompt)
   })))
     .slice(0, 8)
-})
+}
+
+watch(heroSourceKey, refreshHeroTitles, { immediate: true })
 
 const heroTitleRows = computed(() => {
   const rows: Array<{ items: Array<{ id: number; title: string; cover: string }>; duration: number }> = []

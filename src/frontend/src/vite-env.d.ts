@@ -11,6 +11,11 @@ interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string
   readonly VITE_ENABLE_PROMPT_API?: string
   readonly VITE_GITHUB_OAUTH_ENABLED?: string
+  readonly VITE_EMAIL_AUTH_ENABLED?: string
+  readonly VITE_SKILL_ENABLED?: string
+  readonly VITE_PLAYGROUND_ENABLED?: string
+  readonly VITE_CREATOR_ACADEMY_ENABLED?: string
+  readonly VITE_MARKETPLACE_ENABLED?: string
 }
 
 interface ImportMeta {

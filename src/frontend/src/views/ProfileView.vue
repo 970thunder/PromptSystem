@@ -513,6 +513,7 @@ watch(() => route.params.userId, loadProfile)
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
                   class="profile-avatar-input"
+                  aria-label="选择头像图片"
                   @change="handleAvatarUpload"
                 >
                 <div class="profile-card__info">

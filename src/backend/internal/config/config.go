@@ -13,6 +13,7 @@ type Config struct {
 	Port                 string
 	JWTSecret            string
 	JWTExpireHours       int
+	AuthCookieEnabled    bool
 	UploadProvider       string
 	UploadDir            string
 	UploadBaseURL        string
@@ -65,6 +66,7 @@ func Load() Config {
 		Port:                 getEnv("PORT", "8080"),
 		JWTSecret:            getEnv("JWT_SECRET", "promptos-dev-secret-change-me"),
 		JWTExpireHours:       getEnvAsInt("JWT_EXPIRE_HOURS", 72),
+		AuthCookieEnabled:    getEnvAsBool("AUTH_COOKIE_ENABLED", true),
 		UploadProvider:       getEnv("UPLOAD_PROVIDER", "local"),
 		UploadDir:            getEnv("UPLOAD_DIR", "./uploads"),
 		UploadBaseURL:        getEnv("UPLOAD_BASE_URL", "http://localhost:8080"),
@@ -157,6 +159,9 @@ func (c Config) Validate() error {
 	}
 	if prod && strings.EqualFold(strings.TrimSpace(c.MySQLMigrationUser), strings.TrimSpace(c.MySQLUser)) {
 		return errors.New("MYSQL_MIGRATION_USER must differ from MYSQL_USER in production")
+	}
+	if prod && strings.TrimSpace(c.RedisPass) == "" {
+		return errors.New("REDIS_PASSWORD must be configured in production")
 	}
 	if prod && c.AllowedOrigin == "*" {
 		return errors.New("ALLOWED_ORIGIN must be an explicit origin list (not *) in non-development environments")

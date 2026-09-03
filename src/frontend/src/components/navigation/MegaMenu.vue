@@ -2,6 +2,7 @@
      不依赖 position:fixed/absolute，也绝无全屏遮罩。桌面与移动端共用同一份数据。 -->
 <script setup lang="ts">
 import { watch } from 'vue'
+import { siteCapabilities } from '@/config/capabilities'
 
 const props = defineProps<{
   open: boolean
@@ -54,10 +55,10 @@ const groups: MegaGroup[] = [
   {
     title: '即将开放',
     items: [
-      { label: '技能运行器', disabled: true },
-      { label: '在线 Playground', disabled: true },
-      { label: '创作者学院', disabled: true },
-      { label: '提示词交易市场', disabled: true }
+      { label: '技能运行器', disabled: !siteCapabilities.skillRunner },
+      { label: '在线 Playground', disabled: !siteCapabilities.playground },
+      { label: '创作者学院', disabled: !siteCapabilities.creatorAcademy },
+      { label: '提示词交易市场', disabled: !siteCapabilities.marketplace }
     ]
   }
 ]

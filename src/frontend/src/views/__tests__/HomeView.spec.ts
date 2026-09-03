@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import HomeView from '../HomeView.vue'
+import { usePromptStore } from '@/stores/prompt'
 
 const router = createRouter({
   history: createMemoryHistory(),
@@ -76,5 +77,17 @@ describe('HomeView', () => {
 
     expect(toggle.attributes('aria-expanded')).toBe('true')
     expect(wrapper.find('#home-category-list').findAll('.home-cat-chip').length).toBeGreaterThan(14)
+  })
+
+  it('does not reshuffle the title barrage on unrelated reactive updates', async () => {
+    const wrapper = await mountHome()
+    const firstOrder = wrapper.findAll('.home-hero__title-item').map((item) => item.text())
+
+    const piniaStore = usePromptStore()
+    piniaStore.setCurrentPrompt(piniaStore.prompts[0] ?? null)
+    await wrapper.vm.$nextTick()
+
+    const secondOrder = wrapper.findAll('.home-hero__title-item').map((item) => item.text())
+    expect(secondOrder).toEqual(firstOrder)
   })
 })
