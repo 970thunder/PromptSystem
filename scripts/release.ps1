@@ -92,6 +92,7 @@ if ($SkipDeploy) {
 }
 
 $sshArgs = @('-i', $SshKey, '-p', "$SshPort", '-o', 'BatchMode=yes')
+$scpArgs = @('-i', $SshKey, '-P', "$SshPort", '-o', 'BatchMode=yes')
 $remote = "$ServerUser@$ServerHost"
 $remoteDir = "/srv/releases/$ProjectName/$Version"
 $backupDir = "/srv/backups/$ProjectName/$Version"
@@ -116,8 +117,8 @@ if ($LASTEXITCODE -ne 0) { Fail '服务器备份失败，终止发布' }
 Step '上传 release 文件和镜像包'
 & ssh @sshArgs $remote "install -d -m 755 '$remoteDir'"
 if ($LASTEXITCODE -ne 0) { Fail '服务器 release 目录创建失败' }
-Invoke-Checked scp ($sshArgs + @($imageArchive, "$remote`:$remoteDir/"))
-Invoke-Checked scp ($sshArgs + @((Join-Path $releaseRoot 'docker-compose.yml'), "$remote`:$remoteDir/docker-compose.yml"))
+Invoke-Checked scp ($scpArgs + @($imageArchive, "$remote`:$remoteDir/"))
+Invoke-Checked scp ($scpArgs + @((Join-Path $releaseRoot 'docker-compose.yml'), "$remote`:$remoteDir/docker-compose.yml"))
 
 Step '服务器串行加载镜像并部署原 Compose 项目'
 $archiveName = "${ProjectName}-images-$Version.tar.gz"
