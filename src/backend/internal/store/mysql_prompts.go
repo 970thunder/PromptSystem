@@ -819,6 +819,7 @@ func (s *MySQLPromptStore) ListUserHistoryPage(userID, page, pageSize int) ([]Pr
 		SELECT COUNT(DISTINCT p.id)
 		FROM view_histories vh
 		JOIN prompts p ON p.id = vh.prompt_id
+		JOIN users u ON u.id = p.user_id
 		WHERE vh.user_id = ? AND p.status = 1 AND u.status = 1
 	`, userID).Scan(&total); err != nil {
 		return nil, 0, err
