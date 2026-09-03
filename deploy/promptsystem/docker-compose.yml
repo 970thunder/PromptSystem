@@ -64,6 +64,7 @@ services:
     environment:
       APP_ENV: production
       AUTH_COOKIE_ENABLED: "true"
+      EMAIL_AUTH_ENABLED: ${EMAIL_AUTH_ENABLED:-true}
       PORT: 8080
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
