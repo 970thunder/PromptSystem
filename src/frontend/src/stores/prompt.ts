@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { isCancel } from 'axios'
 import { promptApi } from '@/api/promptApi'
 import { categoryApi } from '@/api/categoryApi'
 import { mockCategories, mockPrompts } from '@/mock/prompts'
@@ -26,6 +27,21 @@ export const usePromptStore = defineStore('prompt', () => {
   const currentCategoryId = ref<number | undefined>(undefined)
   const currentTag = ref<string | undefined>(undefined)
   const loadingMore = ref(false)
+  let feedRequestID = 0
+  let feedController: AbortController | null = null
+  let detailRequestID = 0
+  let detailController: AbortController | null = null
+  let commentsRequestID = 0
+  let commentsController: AbortController | null = null
+
+  const cancelPendingRequests = () => {
+    feedController?.abort()
+    detailController?.abort()
+    commentsController?.abort()
+    feedController = null
+    detailController = null
+    commentsController = null
+  }
 
   const setPrompts = (list: Prompt[]) => {
     prompts.value = list
@@ -116,6 +132,10 @@ export const usePromptStore = defineStore('prompt', () => {
   }
 
   const loadHomeFeed = async (categoryId?: number, tag?: string) => {
+    feedController?.abort()
+    const controller = new AbortController()
+    feedController = controller
+    const requestID = ++feedRequestID
     loading.value = true
     feedError.value = ''
     page.value = 1
@@ -140,28 +160,31 @@ export const usePromptStore = defineStore('prompt', () => {
 
     try {
       const [categoryRes, promptRes] = await Promise.all([
-        categoryApi.getCategoryList(),
+        categoryApi.getCategoryList(controller.signal),
         promptApi.getPromptList({
           page: page.value,
           pageSize: pageSize.value,
           sort: 'latest',
           categoryId,
           tag: currentTag.value
-        })
+        }, controller.signal)
       ])
+
+      if (controller.signal.aborted || requestID !== feedRequestID) return
 
       categories.value = categoryRes.data
       prompts.value = promptRes.data.list
       total.value = promptRes.data.total
       usingMockData.value = false
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || requestID !== feedRequestID || isCancel(error)) return
       categories.value = []
       prompts.value = []
       total.value = 0
       usingMockData.value = false
       feedError.value = '暂时无法加载内容，请检查服务连接后重试。'
     } finally {
-      loading.value = false
+      if (requestID === feedRequestID) loading.value = false
     }
   }
 
@@ -170,6 +193,10 @@ export const usePromptStore = defineStore('prompt', () => {
       return
     }
 
+    feedController?.abort()
+    const controller = new AbortController()
+    feedController = controller
+    const requestID = ++feedRequestID
     loadingMore.value = true
     try {
       const nextPage = page.value + 1
@@ -179,7 +206,9 @@ export const usePromptStore = defineStore('prompt', () => {
         sort: 'latest',
         categoryId: currentCategoryId.value,
         tag: currentTag.value
-      })
+      }, controller.signal)
+
+      if (controller.signal.aborted || requestID !== feedRequestID) return
 
       page.value = response.data.page
       total.value = response.data.total
@@ -190,7 +219,8 @@ export const usePromptStore = defineStore('prompt', () => {
       ]
       usingMockData.value = false
       feedError.value = ''
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || requestID !== feedRequestID || isCancel(error)) return
       feedError.value = '暂时无法加载内容，请检查服务连接后重试。'
     } finally {
       loadingMore.value = false
@@ -198,6 +228,10 @@ export const usePromptStore = defineStore('prompt', () => {
   }
 
   const loadPromptDetail = async (id: number) => {
+    detailController?.abort()
+    const controller = new AbortController()
+    detailController = controller
+    const requestID = ++detailRequestID
     detailLoading.value = true
 
     if (import.meta.env.MODE === 'test') {
@@ -209,7 +243,8 @@ export const usePromptStore = defineStore('prompt', () => {
     }
 
     try {
-      const response = await promptApi.getPromptDetail(id)
+      const response = await promptApi.getPromptDetail(id, controller.signal)
+      if (controller.signal.aborted || requestID !== detailRequestID) return null
       currentPrompt.value = response.data
       usingMockData.value = false
 
@@ -218,33 +253,40 @@ export const usePromptStore = defineStore('prompt', () => {
       }
 
       return response.data
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || requestID !== detailRequestID || isCancel(error)) return null
       currentPrompt.value = null
       usingMockData.value = false
       return null
     } finally {
-      detailLoading.value = false
+      if (requestID === detailRequestID) detailLoading.value = false
     }
   }
 
   const loadPromptComments = async (id: number, sort = 'latest') => {
+    commentsController?.abort()
+    const controller = new AbortController()
+    commentsController = controller
+    const requestID = ++commentsRequestID
     commentsLoading.value = true
     commentsError.value = false
 
     try {
-      const response = await promptApi.getPromptComments(id, sort, 1, commentsPageSize.value)
+      const response = await promptApi.getPromptComments(id, sort, 1, commentsPageSize.value, controller.signal)
+      if (controller.signal.aborted || requestID !== commentsRequestID) return comments.value
       comments.value = response.data.list
       commentsTotal.value = response.data.total
       commentsPage.value = response.data.page
       return response.data.list
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || requestID !== commentsRequestID || isCancel(error)) return comments.value
       comments.value = []
       commentsTotal.value = 0
       commentsPage.value = 1
       commentsError.value = true
       return []
     } finally {
-      commentsLoading.value = false
+      if (requestID === commentsRequestID) commentsLoading.value = false
     }
   }
 
@@ -253,10 +295,15 @@ export const usePromptStore = defineStore('prompt', () => {
       return comments.value
     }
 
+    commentsController?.abort()
+    const controller = new AbortController()
+    commentsController = controller
+    const requestID = ++commentsRequestID
     commentsLoadingMore.value = true
     try {
       const nextPage = commentsPage.value + 1
-      const response = await promptApi.getPromptComments(id, sort, nextPage, commentsPageSize.value)
+      const response = await promptApi.getPromptComments(id, sort, nextPage, commentsPageSize.value, controller.signal)
+      if (controller.signal.aborted || requestID !== commentsRequestID) return comments.value
       const existing = new Set(comments.value.map((item) => item.id))
       comments.value = [
         ...comments.value,
@@ -265,8 +312,11 @@ export const usePromptStore = defineStore('prompt', () => {
       commentsTotal.value = response.data.total
       commentsPage.value = response.data.page
       return comments.value
+    } catch (error) {
+      if (controller.signal.aborted || requestID !== commentsRequestID || isCancel(error)) return comments.value
+      throw error
     } finally {
-      commentsLoadingMore.value = false
+      if (requestID === commentsRequestID) commentsLoadingMore.value = false
     }
   }
 
@@ -321,6 +371,7 @@ export const usePromptStore = defineStore('prompt', () => {
     hotTags,
     featuredPrompts,
     latestPrompts,
+    cancelPendingRequests,
     setPrompts,
     setCurrentPrompt,
     mergePrompt,

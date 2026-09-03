@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：33/81 已完成，48 项待完成（2026-09-04）。
+当前进度：34/81 已完成，47 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -59,7 +59,7 @@
 - [ ] **A-04 前端数据层收敛**：View 不重复直连 API；Store 统一 loading/error/empty/success、缓存和竞态。
 - [ ] **A-05 API 单一契约**：引入 OpenAPI/JSON Schema 或等价生成校验，TypeScript DTO 不手工漂移。
 - [x] **A-06 统一错误模型**：所有接口返回稳定 `errorCode`，禁止返回内部错误文本或通过字符串分支。
-- [ ] **A-07 请求取消与竞态**：搜索、详情、评论使用 AbortController/请求序列，旧响应不能覆盖新状态。
+- [x] **A-07 请求取消与竞态**：搜索、详情、评论使用 AbortController/请求序列，旧响应不能覆盖新状态。
 - [x] **A-08 数据库连接池**：配置最大/空闲连接与生命周期，并采集连接池指标。
 - [ ] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
 - [ ] **A-10 轻量后台任务**：上传回收、数据审计、备份校验优先使用 systemd timer/cron，不新增高内存常驻套件。
@@ -162,3 +162,4 @@
 - `A-01`：`src/backend/internal/database/migrate.go` 在当前数据库无任何表时自动应用随镜像发布的 `sql/schema.sql` 基线，再通过 `schema_migrations` 顺序执行增量迁移；已有 schema 或部分迁移库不会覆盖数据。基线执行跳过仅用于已创建数据库的 `CREATE DATABASE`/`USE` 引导语句，兼容生产最小权限迁移账号。开发 Compose 移除 MySQL 的 `schema.sql` 隐式挂载并显式创建与 backend 配套的 `promptos_app` 账号，`README.md`、`docs/DEPLOYMENT.md` 和迁移 README 改为单一启动入口。
 - 验证：`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过；临时 MySQL 实测 `TestMigrationMatrix` 的 fresh（真正空库）、baseline、partial 三场景及二次运行幂等性全部通过。提交 `15ea2f9` 的 GitHub Actions backend `33781675791`、frontend `33781675792`、security `33781675829` 全部成功。生产尚未在本批发布，下一次发布仍需按备份、迁移、ready 和回滚流程执行。
 - `A-06`：存储层统一使用 sentinel error（用户、Prompt、评论、举报、关注等），API 通过 `errors.Is` 集中映射稳定 `errorCode`；未知存储错误统一 `500 INTERNAL_ERROR`，不再返回内部错误文本或用错误字符串分支。响应写出层为遗漏的 4xx/5xx 信封补默认稳定码。新增登录、自己关注、不存在 Prompt 评论、越权更新和未知错误不泄露回归测试。`go test ./...`、`go vet ./...`、`go build ./cmd/api`、`docker compose config --quiet`、`git diff --check` 通过；本机 race 未执行成功（Windows 环境缺少 `gcc`），GitHub Actions backend `33784076660`（含 Linux `go test -race`、迁移矩阵、Docker health）和 security `33784076727` 均成功。提交 `3cdb64e` 已推送，生产尚未发布。
+- `A-07`：API 客户端支持 `AbortSignal`；Prompt Store 对首页列表、详情、评论及加载更多请求执行取消和请求序号校验；搜索页取消旧搜索并在卸载时终止；详情页卸载时取消待处理请求；Axios 取消不再触发网络错误提示。新增旧详情/评论响应不覆盖新状态测试。前端 `npm test -- --run`（7 files/14 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过，生产尚未发布。

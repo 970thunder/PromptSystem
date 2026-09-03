@@ -1,6 +1,6 @@
 <!-- 文件作用：展示 Prompt 详情、互动操作、结构化示例和社区评论。 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { promptApi } from '@/api/promptApi'
@@ -433,6 +433,7 @@ const retryDetail = async () => {
 watch(galleryImages, () => setActiveImage(0))
 
 onMounted(loadDetail)
+onBeforeUnmount(() => promptStore.cancelPendingRequests())
 watch(() => route.params.id, loadDetail)
 watch(commentSort, async () => {
   if (!Number.isNaN(promptId.value)) {

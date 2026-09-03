@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
+import axios, { isCancel, type AxiosInstance, type AxiosResponse } from 'axios'
 import { useUserStore } from '@/stores/user'
 import { createDiscreteApi } from 'naive-ui'
 import router from '@/router'
@@ -43,6 +43,9 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
+    if (isCancel(error)) {
+      return Promise.reject(error)
+    }
     const errorMessage = error.response?.data?.message || error.message || '网络错误'
     messageApi.error(errorMessage)
     return Promise.reject(error)

@@ -24,13 +24,13 @@ export const promptApi = {
     keyword?: string
     model?: string
     tag?: string
-  }): Promise<ApiResponse<PageResponse<Prompt>>> {
-    return request.get('/prompts', { params })
+  }, signal?: AbortSignal): Promise<ApiResponse<PageResponse<Prompt>>> {
+    return request.get('/prompts', { params, signal })
   },
 
   // Get prompt detail
-  getPromptDetail(id: number): Promise<ApiResponse<Prompt>> {
-    return request.get(`/prompts/${id}`)
+  getPromptDetail(id: number, signal?: AbortSignal): Promise<ApiResponse<Prompt>> {
+    return request.get(`/prompts/${id}`, { signal })
   },
 
   getRelatedPrompts(id: number): Promise<ApiResponse<Prompt[]>> {
@@ -101,9 +101,10 @@ export const promptApi = {
     return request.post(`/prompts/${id}/view`)
   },
 
-  getPromptComments(id: number, sort?: string, page = 1, pageSize = 20): Promise<ApiResponse<PageResponse<Comment>>> {
+  getPromptComments(id: number, sort?: string, page = 1, pageSize = 20, signal?: AbortSignal): Promise<ApiResponse<PageResponse<Comment>>> {
     return request.get(`/prompts/${id}/comments`, {
-      params: { sort, page, pageSize }
+      params: { sort, page, pageSize },
+      signal
     })
   },
 
@@ -130,8 +131,8 @@ export const promptApi = {
   },
 
   // Get categories
-  getCategories(): Promise<ApiResponse<Category[]>> {
-    return request.get('/categories')
+  getCategories(signal?: AbortSignal): Promise<ApiResponse<Category[]>> {
+    return request.get('/categories', { signal })
   },
 
   // Search prompts
@@ -143,7 +144,7 @@ export const promptApi = {
     model?: string
     sort?: string
     tag?: string
-  }): Promise<ApiResponse<PageResponse<Prompt>>> {
-    return request.get('/prompts/search', { params })
+  }, signal?: AbortSignal): Promise<ApiResponse<PageResponse<Prompt>>> {
+    return request.get('/prompts/search', { params, signal })
   }
 }

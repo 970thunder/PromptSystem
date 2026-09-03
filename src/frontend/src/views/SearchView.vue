@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { isCancel } from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 import { promptApi } from '@/api/promptApi'
 import { usePromptStore } from '@/stores/prompt'
@@ -24,6 +25,7 @@ const page = ref(1)
 const pageSize = 24
 const errorMessage = ref('')
 let latestRequestId = 0
+let searchController: AbortController | null = null
 let skipNextRouteLoad = false
 
 const searchHistoryKey = 'promptos:search-history'
@@ -145,6 +147,9 @@ const saveSearchHistory = (keyword: string) => {
 
 const loadResults = async (append = false) => {
   const requestId = ++latestRequestId
+  searchController?.abort()
+  const controller = new AbortController()
+  searchController = controller
   loading.value = true
   errorMessage.value = ''
   try {
@@ -156,9 +161,9 @@ const loadResults = async (append = false) => {
       sort: filters.sort,
       page: page.value,
       pageSize
-    })
+    }, controller.signal)
 
-    if (requestId !== latestRequestId) return
+    if (controller.signal.aborted || requestId !== latestRequestId) return
     if (append) {
       const existingIds = new Set(results.value.map((item) => item.id))
       results.value = [
@@ -170,8 +175,8 @@ const loadResults = async (append = false) => {
     }
     total.value = response.data.total
     page.value = response.data.page
-  } catch {
-    if (requestId !== latestRequestId) return
+  } catch (error) {
+    if (controller.signal.aborted || requestId !== latestRequestId || isCancel(error)) return
     if (!append) {
       results.value = []
       total.value = 0
@@ -184,6 +189,8 @@ const loadResults = async (append = false) => {
     }
   }
 }
+
+onBeforeUnmount(() => searchController?.abort())
 
 const submitSearch = async () => {
   saveSearchHistory(filters.keyword)
