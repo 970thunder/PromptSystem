@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"sort"
@@ -55,8 +56,15 @@ func (s *MySQLUploadStore) MarkUploadsReferenced(objectKeys []string, ownerID in
 	if len(objectKeys) == 0 {
 		return nil
 	}
+	// A prompt may reference several images. Mark the whole set atomically so a
+	// transient database error cannot leave only a prefix protected from cleanup.
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	for _, key := range objectKeys {
-		if _, err := s.db.Exec(`
+		if _, err := tx.Exec(`
 			UPDATE uploads
 			SET status = ?, updated_at = CURRENT_TIMESTAMP
 			WHERE object_key = ? AND owner_id = ? AND status <> ?
@@ -64,7 +72,7 @@ func (s *MySQLUploadStore) MarkUploadsReferenced(objectKeys []string, ownerID in
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (s *MySQLUploadStore) FindUpload(objectKey string) (UploadRecord, bool, error) {

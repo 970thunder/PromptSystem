@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
@@ -200,13 +201,22 @@ func (s *MySQLCommentStore) Report(input ReportCommentInput) (Report, bool, erro
 		return Report{}, false, err
 	}
 
-	if _, found, err := s.findCommentByID(input.CommentID); err != nil {
+	// Validate the comment and insert the idempotent report on one transaction.
+	// This closes the race where a comment disappears between an existence read
+	// and INSERT, and makes a failed target check leave no report row.
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return Report{}, false, err
+	}
+	defer tx.Rollback()
+
+	if _, found, err := s.findCommentByIDTx(tx, input.CommentID); err != nil {
 		return Report{}, false, err
 	} else if !found {
 		return Report{}, false, ErrCommentNotFound
 	}
 
-	result, err := s.db.Exec(`
+	result, err := tx.Exec(`
 		INSERT IGNORE INTO reports (user_id, target_type, target_id, reason, detail, status)
 		VALUES (?, 'comment', ?, ?, ?, 'pending')
 	`, input.UserID, input.CommentID, strings.TrimSpace(input.Reason), strings.TrimSpace(input.Detail))
@@ -219,12 +229,19 @@ func (s *MySQLCommentStore) Report(input ReportCommentInput) (Report, bool, erro
 		return Report{}, false, err
 	}
 
-	report, found, err := s.findReport(input.UserID, "comment", input.CommentID)
+	report, found, err := scanReportRow(tx.QueryRow(`
+		SELECT id, user_id, target_type, target_id, reason, detail, status, created_at
+		FROM reports
+		WHERE user_id = ? AND target_type = ? AND target_id = ?
+	`, input.UserID, "comment", input.CommentID).Scan)
 	if err != nil {
 		return Report{}, false, err
 	}
 	if !found {
 		return Report{}, false, ErrReportNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return Report{}, false, err
 	}
 
 	return report, affected > 0, nil
@@ -290,27 +307,7 @@ func (s *MySQLCommentStore) findReport(userID int, targetType string, targetID i
 		WHERE user_id = ? AND target_type = ? AND target_id = ?
 	`, userID, targetType, targetID)
 
-	var (
-		report    Report
-		createdAt time.Time
-	)
-	if err := row.Scan(
-		&report.ID,
-		&report.UserID,
-		&report.TargetType,
-		&report.TargetID,
-		&report.Reason,
-		&report.Detail,
-		&report.Status,
-		&createdAt,
-	); errors.Is(err, sql.ErrNoRows) {
-		return Report{}, false, nil
-	} else if err != nil {
-		return Report{}, false, err
-	}
-
-	report.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-	return report, true, nil
+	return scanReportRow(row.Scan)
 }
 
 func scanComment(scan func(dest ...any) error) (Comment, error) {

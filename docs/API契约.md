@@ -97,6 +97,8 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 - `favorite`：同上，`favorites` 表唯一约束。
 - `view`（登录用户）：`view_histories` 的 `(user_id, prompt_id)` 唯一约束保证同一用户对同一 Prompt 只产生一条历史、计数只增一次。
 
+其他写入边界：Prompt 与标签在同一事务提交；Prompt/评论举报在同一事务内校验公开目标、执行幂等插入并读取结果；关注/取关按稳定用户锁顺序在同一事务内更新关系并计算派生关注数。Prompt 写入与上传元数据属于不同 Store，若引用标记失败，服务层会先重试标记当前 Prompt 引用，再将旧引用退回 `pending`；补偿失败保持可重试状态，不直接删除对象。
+
 历史不一致可用迁移 `sql/migrations/0012_recalibrate_counters.sql` 一键重算（可重复执行、幂等）。
 
 ### 浏览隐私与去重（B5-03）

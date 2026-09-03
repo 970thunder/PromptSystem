@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -104,6 +105,155 @@ func TestMySQLInteractionsUniqueConstraints(t *testing.T) {
 	}
 	if status.Liked {
 		t.Fatal("expected liked=false after unlike")
+	}
+}
+
+// TestMySQLReportAndFollowTransactions verifies that target validation,
+// idempotent detail writes, and derived follow counts observe one committed
+// transaction even when identical requests race.
+func TestMySQLReportAndFollowTransactions(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+	suffix := time.Now().UnixNano()
+	users := NewMySQLUserStore(db)
+	follower, err := users.Register(
+		fmt.Sprintf("tx_follower_%d", suffix),
+		fmt.Sprintf("tx-follower-%d@example.com", suffix),
+		"StrongPass123!",
+	)
+	if err != nil {
+		t.Fatalf("register follower: %v", err)
+	}
+	target, err := users.Register(
+		fmt.Sprintf("tx_target_%d", suffix),
+		fmt.Sprintf("tx-target-%d@example.com", suffix),
+		"StrongPass123!",
+	)
+	if err != nil {
+		t.Fatalf("register target: %v", err)
+	}
+
+	prompts := NewMySQLPromptStore(db)
+	prompt, err := prompts.Create(CreatePromptInput{
+		Title:      fmt.Sprintf("transaction prompt %d", suffix),
+		Content:    "transaction test",
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		Tags:       []string{"transaction"},
+		User:       User{ID: target.ID, Username: target.Username, Status: 1},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+
+	const followWorkers = 8
+	followErrs := make(chan error, followWorkers)
+	var followWG sync.WaitGroup
+	for i := 0; i < followWorkers; i++ {
+		followWG.Add(1)
+		go func() {
+			defer followWG.Done()
+			if _, _, err := users.Follow(follower.ID, target.ID); err != nil {
+				followErrs <- err
+			}
+		}()
+	}
+	followWG.Wait()
+	close(followErrs)
+	for err := range followErrs {
+		t.Fatalf("concurrent follow: %v", err)
+	}
+	status, err := users.FollowStatus(target.ID, follower.ID)
+	if err != nil {
+		t.Fatalf("follow status: %v", err)
+	}
+	if !status.Following || status.FollowerCount != 1 {
+		t.Fatalf("follow status = %+v, want following=true and one follower", status)
+	}
+
+	if _, applied, err := users.Unfollow(follower.ID, target.ID); err != nil || !applied {
+		t.Fatalf("unfollow: applied=%v err=%v, want applied", applied, err)
+	}
+	if _, applied, err := users.Unfollow(follower.ID, target.ID); err != nil || applied {
+		t.Fatalf("duplicate unfollow: applied=%v err=%v, want no-op", applied, err)
+	}
+
+	const reportWorkers = 8
+	reportErrs := make(chan error, reportWorkers)
+	var reportWG sync.WaitGroup
+	for i := 0; i < reportWorkers; i++ {
+		reportWG.Add(1)
+		go func() {
+			defer reportWG.Done()
+			if _, _, err := prompts.Report(prompt.ID, follower.ID, ReportReasonSpam, "transaction report"); err != nil {
+				reportErrs <- err
+			}
+		}()
+	}
+	reportWG.Wait()
+	close(reportErrs)
+	for err := range reportErrs {
+		t.Fatalf("concurrent prompt report: %v", err)
+	}
+	var reportCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reports WHERE user_id = ? AND target_type = 'prompt' AND target_id = ?`, follower.ID, prompt.ID).Scan(&reportCount); err != nil {
+		t.Fatalf("count prompt reports: %v", err)
+	}
+	if reportCount != 1 {
+		t.Fatalf("prompt report rows = %d, want 1", reportCount)
+	}
+
+	comments := NewMySQLCommentStore(db)
+	comment, err := comments.Create(CreateCommentInput{
+		TargetType: "prompt",
+		TargetID:   prompt.ID,
+		User:       User{ID: follower.ID, Username: follower.Username, Status: 1},
+		Content:    "transaction comment",
+	})
+	if err != nil {
+		t.Fatalf("create comment: %v", err)
+	}
+	if _, _, err := comments.Report(ReportCommentInput{
+		CommentID: comment.ID,
+		UserID:    target.ID,
+		Reason:    ReportReasonAbuse,
+		Detail:    "comment report",
+	}); err != nil {
+		t.Fatalf("report comment: %v", err)
+	}
+	if _, applied, err := comments.Report(ReportCommentInput{
+		CommentID: comment.ID,
+		UserID:    target.ID,
+		Reason:    ReportReasonNsfw,
+		Detail:    "duplicate should reuse row",
+	}); err != nil || applied {
+		t.Fatalf("duplicate comment report: applied=%v err=%v, want no-op", applied, err)
+	}
+
+	deletedPrompt, err := prompts.Create(CreatePromptInput{
+		Title:      fmt.Sprintf("deleted transaction prompt %d", suffix),
+		Content:    "deleted",
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		Tags:       []string{"transaction"},
+		User:       User{ID: target.ID, Username: target.Username, Status: 1},
+		Status:     1,
+	})
+	if err != nil {
+		t.Fatalf("create deleted prompt: %v", err)
+	}
+	if err := prompts.Delete(deletedPrompt.ID, target.ID); err != nil {
+		t.Fatalf("delete prompt: %v", err)
+	}
+	if _, _, err := prompts.Report(deletedPrompt.ID, follower.ID, ReportReasonOther, "must be rejected"); !errors.Is(err, ErrPromptNotFound) {
+		t.Fatalf("report deleted prompt error = %v, want ErrPromptNotFound", err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reports WHERE user_id = ? AND target_type = 'prompt' AND target_id = ?`, follower.ID, deletedPrompt.ID).Scan(&reportCount); err != nil {
+		t.Fatalf("count deleted prompt reports: %v", err)
+	}
+	if reportCount != 0 {
+		t.Fatalf("deleted prompt report rows = %d, want 0", reportCount)
 	}
 }
 

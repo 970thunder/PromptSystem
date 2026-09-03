@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -377,14 +378,21 @@ func (s *MySQLUserStore) Follow(followerID, followingID int) (FollowStatus, bool
 	if followerID == followingID {
 		return FollowStatus{}, false, ErrCannotFollowSelf
 	}
-	if _, ok := s.FindByID(followerID); !ok {
-		return FollowStatus{}, false, ErrUserNotFound
+
+	// Lock both user rows in a stable order, then insert the relationship and
+	// calculate its derived counts on the same transaction. This prevents a
+	// concurrent account transition from producing a relationship whose target
+	// no longer exists and gives the caller a status from the committed view.
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return FollowStatus{}, false, err
 	}
-	if _, ok := s.FindByID(followingID); !ok {
-		return FollowStatus{}, false, ErrUserNotFound
+	defer tx.Rollback()
+	if err := lockUsersTx(tx, followerID, followingID); err != nil {
+		return FollowStatus{}, false, err
 	}
 
-	result, err := s.db.Exec(`
+	result, err := tx.Exec(`
 		INSERT IGNORE INTO follows (follower_id, following_id)
 		VALUES (?, ?)
 	`, followerID, followingID)
@@ -397,8 +405,11 @@ func (s *MySQLUserStore) Follow(followerID, followingID int) (FollowStatus, bool
 		return FollowStatus{}, false, err
 	}
 
-	status, err := s.FollowStatus(followingID, followerID)
+	status, err := followStatusTx(tx, followingID, followerID)
 	if err != nil {
+		return FollowStatus{}, false, err
+	}
+	if err := tx.Commit(); err != nil {
 		return FollowStatus{}, false, err
 	}
 
@@ -406,14 +417,18 @@ func (s *MySQLUserStore) Follow(followerID, followingID int) (FollowStatus, bool
 }
 
 func (s *MySQLUserStore) Unfollow(followerID, followingID int) (FollowStatus, bool, error) {
-	if _, ok := s.FindByID(followerID); !ok {
-		return FollowStatus{}, false, ErrUserNotFound
+	// Use the same lock ordering and transaction boundary as Follow so a delete
+	// cannot race a user transition or return counts from a different snapshot.
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return FollowStatus{}, false, err
 	}
-	if _, ok := s.FindByID(followingID); !ok {
-		return FollowStatus{}, false, ErrUserNotFound
+	defer tx.Rollback()
+	if err := lockUsersTx(tx, followerID, followingID); err != nil {
+		return FollowStatus{}, false, err
 	}
 
-	result, err := s.db.Exec(`
+	result, err := tx.Exec(`
 		DELETE FROM follows
 		WHERE follower_id = ? AND following_id = ?
 	`, followerID, followingID)
@@ -426,12 +441,53 @@ func (s *MySQLUserStore) Unfollow(followerID, followingID int) (FollowStatus, bo
 		return FollowStatus{}, false, err
 	}
 
-	status, err := s.FollowStatus(followingID, followerID)
+	status, err := followStatusTx(tx, followingID, followerID)
 	if err != nil {
+		return FollowStatus{}, false, err
+	}
+	if err := tx.Commit(); err != nil {
 		return FollowStatus{}, false, err
 	}
 
 	return status, affected > 0, nil
+}
+
+func lockUsersTx(tx *sql.Tx, ids ...int) error {
+	ordered := append([]int(nil), ids...)
+	sort.Ints(ordered)
+	for _, id := range ordered {
+		var exists int
+		if err := tx.QueryRow(`SELECT 1 FROM users WHERE id = ? LIMIT 1 FOR UPDATE`, id).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		} else if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func followStatusTx(tx *sql.Tx, userID, viewerID int) (FollowStatus, error) {
+	status := FollowStatus{UserID: userID}
+	if viewerID > 0 {
+		var following int
+		if err := tx.QueryRow(`
+			SELECT 1 FROM follows
+			WHERE follower_id = ? AND following_id = ?
+			LIMIT 1
+		`, viewerID, userID).Scan(&following); err == nil {
+			status.Following = following == 1
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return FollowStatus{}, err
+		}
+	}
+
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM follows WHERE following_id = ?`, userID).Scan(&status.FollowerCount); err != nil {
+		return FollowStatus{}, err
+	}
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM follows WHERE follower_id = ?`, userID).Scan(&status.FollowingCount); err != nil {
+		return FollowStatus{}, err
+	}
+	return status, nil
 }
 
 func (s *MySQLUserStore) FollowStatus(userID, viewerID int) (FollowStatus, error) {

@@ -8,6 +8,19 @@ import (
 	"promptos-backend/internal/store"
 )
 
+type failOnceReferenceUploads struct {
+	*store.MemoryUploadStore
+	failNext bool
+}
+
+func (s *failOnceReferenceUploads) MarkUploadsReferenced(keys []string, ownerID int) error {
+	if s.failNext {
+		s.failNext = false
+		return errors.New("injected upload reference failure")
+	}
+	return s.MemoryUploadStore.MarkUploadsReferenced(keys, ownerID)
+}
+
 func TestPromptServiceInvalidatesOnlyAppliedInteractions(t *testing.T) {
 	prompts := store.NewMemoryPromptStore()
 	invalidations := 0
@@ -70,5 +83,46 @@ func TestPromptServiceReconcilesReplacedUploadReferences(t *testing.T) {
 	newRecord, found, err := uploads.FindUpload(newKey)
 	if err != nil || !found || newRecord.Status != store.UploadStatusReferenced {
 		t.Fatalf("new upload = %#v found=%v err=%v, want referenced", newRecord, found, err)
+	}
+}
+
+func TestPromptServiceCompensatesUploadReferenceFailure(t *testing.T) {
+	const ownerID = 92
+	prompts := store.NewMemoryPromptStore()
+	uploads := &failOnceReferenceUploads{
+		MemoryUploadStore: store.NewMemoryUploadStore(),
+		failNext:          true,
+	}
+	key := "prompt_image/92/cover.png"
+	if _, err := uploads.RecordUpload(store.UploadRecord{
+		OwnerID:   ownerID,
+		ObjectKey: key,
+		Purpose:   store.UploadPurposePromptImage,
+		Status:    store.UploadStatusPending,
+	}); err != nil {
+		t.Fatalf("record upload: %v", err)
+	}
+	if _, err := prompts.Create(store.CreatePromptInput{
+		Title:      "compensation",
+		Content:    "content",
+		Cover:      "/uploads/" + key,
+		Model:      "gpt-4o",
+		CategoryID: 1,
+		User:       store.User{ID: ownerID, Username: "compensating-owner", Status: 1},
+		Status:     0,
+	}); err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+
+	s := NewPromptService(prompts, uploads, nil)
+	if err := s.FinalizeUploadReferences(ownerID, "/uploads/"+key, nil); err != nil {
+		t.Fatalf("finalize upload references: %v", err)
+	}
+	record, found, err := uploads.FindUpload(key)
+	if err != nil || !found {
+		t.Fatalf("find repaired upload: record=%#v found=%v err=%v", record, found, err)
+	}
+	if record.Status != store.UploadStatusReferenced {
+		t.Fatalf("repaired upload status = %q, want referenced", record.Status)
 	}
 }

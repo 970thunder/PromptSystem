@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"promptos-backend/internal/service"
 	"promptos-backend/internal/store"
 )
 
@@ -280,12 +281,14 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.getPromptService().MarkUploadsReferenced(userID, payload.Cover, payload.Images); err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "UPLOAD_REFERENCE_FAILED", Message: "Failed to finalize image references"})
-		return
-	}
-	if err := s.getPromptService().ReconcileUploads(userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "UPLOAD_LIFECYCLE_FAILED", Message: "Failed to reconcile image references"})
+	if err := s.getPromptService().FinalizeUploadReferences(userID, payload.Cover, payload.Images); err != nil {
+		errorCode := "UPLOAD_REFERENCE_FAILED"
+		message := "Failed to finalize image references"
+		if errors.Is(err, service.ErrUploadLifecycle) {
+			errorCode = "UPLOAD_LIFECYCLE_FAILED"
+			message = "Failed to reconcile image references"
+		}
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: errorCode, Message: message})
 		return
 	}
 
@@ -940,12 +943,14 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		writeStoreError(w, err)
 		return
 	}
-	if err := s.getPromptService().MarkUploadsReferenced(userID, payload.Cover, payload.Images); err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "UPLOAD_REFERENCE_FAILED", Message: "Failed to finalize image references"})
-		return
-	}
-	if err := s.getPromptService().ReconcileUploads(userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "UPLOAD_LIFECYCLE_FAILED", Message: "Failed to reconcile image references"})
+	if err := s.getPromptService().FinalizeUploadReferences(userID, payload.Cover, payload.Images); err != nil {
+		errorCode := "UPLOAD_REFERENCE_FAILED"
+		message := "Failed to finalize image references"
+		if errors.Is(err, service.ErrUploadLifecycle) {
+			errorCode = "UPLOAD_LIFECYCLE_FAILED"
+			message = "Failed to reconcile image references"
+		}
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: errorCode, Message: message})
 		return
 	}
 

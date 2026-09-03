@@ -750,13 +750,31 @@ func (s *MySQLPromptStore) Report(id int, userID int, reason string, detail stri
 		return Report{}, false, err
 	}
 
-	if _, found, err := s.FindByID(id); err != nil {
+	// Keep target validation, idempotent insert, and report lookup in one
+	// transaction. A prompt can be soft-deleted concurrently; validating it on
+	// the same connection as the insert prevents a report for a non-public
+	// target and guarantees a failed write leaves no detail row behind.
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
 		return Report{}, false, err
-	} else if !found {
+	}
+	defer tx.Rollback()
+
+	var published int
+	if err := tx.QueryRow(`
+		SELECT 1
+		FROM prompts p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.id = ? AND p.status = 1 AND u.status = 1
+		LIMIT 1
+		FOR UPDATE
+	`, id).Scan(&published); errors.Is(err, sql.ErrNoRows) {
 		return Report{}, false, ErrPromptNotFound
+	} else if err != nil {
+		return Report{}, false, err
 	}
 
-	result, err := s.db.Exec(`
+	result, err := tx.Exec(`
 		INSERT IGNORE INTO reports (user_id, target_type, target_id, reason, detail, status)
 		VALUES (?, 'prompt', ?, ?, ?, 'pending')
 	`, userID, id, strings.TrimSpace(reason), strings.TrimSpace(detail))
@@ -769,12 +787,19 @@ func (s *MySQLPromptStore) Report(id int, userID int, reason string, detail stri
 		return Report{}, false, err
 	}
 
-	report, found, err := s.findPromptReport(userID, "prompt", id)
+	report, found, err := scanReportRow(tx.QueryRow(`
+		SELECT id, user_id, target_type, target_id, reason, detail, status, created_at
+		FROM reports
+		WHERE user_id = ? AND target_type = ? AND target_id = ?
+	`, userID, "prompt", id).Scan)
 	if err != nil {
 		return Report{}, false, err
 	}
 	if !found {
 		return Report{}, false, ErrReportNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return Report{}, false, err
 	}
 
 	return report, affected > 0, nil
@@ -1060,27 +1085,7 @@ func (s *MySQLPromptStore) findPromptReport(userID int, targetType string, targe
 		WHERE user_id = ? AND target_type = ? AND target_id = ?
 	`, userID, targetType, targetID)
 
-	var (
-		report    Report
-		createdAt time.Time
-	)
-	if err := row.Scan(
-		&report.ID,
-		&report.UserID,
-		&report.TargetType,
-		&report.TargetID,
-		&report.Reason,
-		&report.Detail,
-		&report.Status,
-		&createdAt,
-	); errors.Is(err, sql.ErrNoRows) {
-		return Report{}, false, nil
-	} else if err != nil {
-		return Report{}, false, err
-	}
-
-	report.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-	return report, true, nil
+	return scanReportRow(row.Scan)
 }
 
 func scanPrompt(scan func(dest ...any) error) (Prompt, error) {

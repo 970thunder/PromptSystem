@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"promptos-backend/internal/store"
@@ -11,6 +12,16 @@ import (
 // ErrInvalidUploadOwnership is returned when a prompt tries to reference a
 // local upload that is missing, trashed, or owned by another account.
 var ErrInvalidUploadOwnership = errors.New("invalid upload ownership")
+
+// ErrUploadReferenceFinalize identifies a prompt write whose upload metadata
+// could not be finalized even after the compensating reconciliation attempt.
+// The prompt remains durable and a later retry can repair the references.
+var ErrUploadReferenceFinalize = errors.New("upload reference finalization failed")
+
+// ErrUploadLifecycle identifies a failure while reconciling all of the owner's
+// retained prompt references. It is retry-safe and never marks stale objects as
+// referenced after the prompt set has changed.
+var ErrUploadLifecycle = errors.New("upload lifecycle reconciliation failed")
 
 // PromptService owns prompt business operations that span a store and public
 // cache invalidation. HTTP handlers only translate the result into an API
@@ -132,12 +143,43 @@ func (s *PromptService) ReconcileUploads(userID int) error {
 	if s.uploads == nil {
 		return nil
 	}
+	if s.prompts == nil {
+		return fmt.Errorf("%w: prompt store unavailable", ErrUploadLifecycle)
+	}
 	keys, err := s.prompts.ListReferencedUploadKeys(userID)
 	if err != nil {
 		return err
 	}
+	// Mark current references first. This is the compensating step for a prompt
+	// transaction that committed just before upload metadata became unavailable;
+	// a later retry can never garbage-collect an object still used by a prompt.
+	if err := s.uploads.MarkUploadsReferenced(keys, userID); err != nil {
+		return err
+	}
 	_, err = s.uploads.UnreferenceUploadsByOwner(userID, keys)
 	return err
+}
+
+// FinalizeUploadReferences closes the cross-store prompt/upload boundary. The
+// prompt write is already atomic in its own store; metadata finalization is
+// retried by reconciliation, which marks all current references before moving
+// stale records back to pending. A remaining error is explicit and retry-safe.
+func (s *PromptService) FinalizeUploadReferences(userID int, cover string, images []string) error {
+	markErr := s.MarkUploadsReferenced(userID, cover, images)
+	reconcileErr := s.ReconcileUploads(userID)
+	if markErr != nil {
+		if reconcileErr != nil {
+			return fmt.Errorf("%w: mark=%v; reconcile=%v", ErrUploadReferenceFinalize, markErr, reconcileErr)
+		}
+		// The compensating pass repaired every current reference. The caller can
+		// safely observe success even though the first metadata write transiently
+		// failed.
+		return nil
+	}
+	if reconcileErr != nil {
+		return fmt.Errorf("%w: %v", ErrUploadLifecycle, reconcileErr)
+	}
+	return nil
 }
 
 func uploadKeys(cover string, images []string) []string {
