@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：32/81 已完成，49 项待完成（2026-09-04）。
+当前进度：33/81 已完成，48 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -14,6 +14,27 @@
 - 公网只开放 80/443；PromptOS 前端/后端分别绑定 `127.0.0.1:3092/5092`
 - RustFS 转发链路可用，但 PromptOS 尚无独立 bucket/低权限凭据，上传暂存独立 Docker 卷
 - 服务器已有多个 Compose 项目，禁止全局 prune、删除未知卷、改动其他项目或在服务器编译源码
+
+## 服务器条件适配与执行顺序
+
+以下顺序把 `E:\Web\服务器部署总说明.md` 的约束直接转成迭代门槛。代码、测试和镜像在本机构建；公网服务器只执行拉取/加载、备份、迁移、切换和验证。
+
+| 阶段 | 迭代项 | 服务器验收门槛 |
+|---|---|---|
+| 1. 契约与代码 | `A-02`-`A-07`、`A-09`、`D-02`-`D-10`、`S-02`-`S-09`、`F-06`、`F-08`-`F-11` | 本机单元/集成/E2E、`go vet`、前端 lint/build、契约回归和安全扫描通过；不占用生产资源 |
+| 2. 低内存运维 | `A-10`、`A-11`、`O-01`、`O-04`-`O-07`、`O-10` | 任务使用 systemd timer/cron；无 Swap 时串行执行；告警接收地址、RustFS 链路和 nginx reload 均有实测记录 |
+| 3. 数据与对象 | `P0-06`、`D-11`-`D-14`、`S-10`、`S-13` | SMTP 真实凭据、独立 RustFS bucket/低权限凭据、跨故障域副本和备份恢复证据齐备；条件缺失保持未勾选 |
+| 4. 发布自动化 | `A-12`、`R-06`、`R-07`、`R-08` | 本机构建并固定镜像 tag/digest；服务器保留当前+上一版；备份校验、迁移、ready、HTTPS 冒烟和回滚记录完整 |
+
+服务器资源预算和不可变约束：
+
+- 服务器约 7.7 GiB 内存且无 Swap；发布前后保持至少 2 GiB 可用内存，镜像加载、备份、迁移、重启、恢复演练不得并行。
+- 根盘约 58 GiB；达到 70%/80%/90% 分别触发观察、清理和发布阻断。只清理已确认的悬空镜像/build cache，不执行全局或 volume prune。
+- 生产 Compose 项目固定为 `promptsystem`，应用只监听 `127.0.0.1:3092/5092`，公网仅 80/443；升级不得新建项目名、替换卷名或停止其他项目。
+- 发布目录必须同时保留当前版本 `/srv/releases/promptsystem/<current>` 与上一可回滚版本；服务器不保存源码、node_modules、构建上下文或压缩包。
+- 当前上传仍在独立 Docker 卷；在 `D-12/D-13` 的独立 bucket、凭据和迁移验收完成前，不得宣称已完成 RustFS 迁移或删除原卷。
+
+外部前置条件未满足时的处理：真实 SMTP、告警通知接收端、PromptOS 独立 RustFS bucket/凭据、跨故障域备份目标任一缺失，对应项目只能记录为阻塞/待验证，不能用本地 mock、现有他站点凭据或 CI 通过替代生产证据。
 
 ## P0 生产阻塞项
 
@@ -37,7 +58,7 @@
 - [ ] **A-03 Store 语义一致**：MySQL/内存实现通过同一契约测试；内存实现仅限开发和测试。
 - [ ] **A-04 前端数据层收敛**：View 不重复直连 API；Store 统一 loading/error/empty/success、缓存和竞态。
 - [ ] **A-05 API 单一契约**：引入 OpenAPI/JSON Schema 或等价生成校验，TypeScript DTO 不手工漂移。
-- [ ] **A-06 统一错误模型**：所有接口返回稳定 `errorCode`，禁止返回 `err.Error()` 或通过字符串分支。
+- [x] **A-06 统一错误模型**：所有接口返回稳定 `errorCode`，禁止返回内部错误文本或通过字符串分支。
 - [ ] **A-07 请求取消与竞态**：搜索、详情、评论使用 AbortController/请求序列，旧响应不能覆盖新状态。
 - [x] **A-08 数据库连接池**：配置最大/空闲连接与生命周期，并采集连接池指标。
 - [ ] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
@@ -140,3 +161,4 @@
 
 - `A-01`：`src/backend/internal/database/migrate.go` 在当前数据库无任何表时自动应用随镜像发布的 `sql/schema.sql` 基线，再通过 `schema_migrations` 顺序执行增量迁移；已有 schema 或部分迁移库不会覆盖数据。基线执行跳过仅用于已创建数据库的 `CREATE DATABASE`/`USE` 引导语句，兼容生产最小权限迁移账号。开发 Compose 移除 MySQL 的 `schema.sql` 隐式挂载并显式创建与 backend 配套的 `promptos_app` 账号，`README.md`、`docs/DEPLOYMENT.md` 和迁移 README 改为单一启动入口。
 - 验证：`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过；临时 MySQL 实测 `TestMigrationMatrix` 的 fresh（真正空库）、baseline、partial 三场景及二次运行幂等性全部通过。提交 `15ea2f9` 的 GitHub Actions backend `33781675791`、frontend `33781675792`、security `33781675829` 全部成功。生产尚未在本批发布，下一次发布仍需按备份、迁移、ready 和回滚流程执行。
+- `A-06`：存储层统一使用 sentinel error（用户、Prompt、评论、举报、关注等），API 通过 `errors.Is` 集中映射稳定 `errorCode`；未知存储错误统一 `500 INTERNAL_ERROR`，不再返回内部错误文本或用错误字符串分支。响应写出层为遗漏的 4xx/5xx 信封补默认稳定码。新增登录、自己关注、不存在 Prompt 评论、越权更新和未知错误不泄露回归测试。`go test ./...`、`go vet ./...`、`go build ./cmd/api`、`docker compose config --quiet`、`git diff --check` 通过；本机 race 未执行成功（Windows 环境缺少 `gcc`，CI 仍需验证）。提交前工作树包含本项未提交改动，生产尚未发布。

@@ -86,7 +86,7 @@ func (s *MySQLCommentStore) Create(input CreateCommentInput) (Comment, error) {
 	defer tx.Rollback()
 
 	if !s.promptExists(tx, input.TargetID) {
-		return Comment{}, errors.New("prompt not found")
+		return Comment{}, ErrPromptNotFound
 	}
 
 	var parentID any
@@ -96,10 +96,10 @@ func (s *MySQLCommentStore) Create(input CreateCommentInput) (Comment, error) {
 			return Comment{}, err
 		}
 		if !found {
-			return Comment{}, errors.New("parent comment not found")
+			return Comment{}, ErrCommentParentNotFound
 		}
 		if parent.TargetType != "prompt" || parent.TargetID != input.TargetID {
-			return Comment{}, errors.New("parent comment does not match prompt")
+			return Comment{}, ErrCommentParentMismatch
 		}
 		parentID = parent.ID
 	}
@@ -126,7 +126,7 @@ func (s *MySQLCommentStore) Create(input CreateCommentInput) (Comment, error) {
 		return Comment{}, err
 	}
 	if !found {
-		return Comment{}, errors.New("comment not found")
+		return Comment{}, ErrCommentNotFound
 	}
 
 	return comment, nil
@@ -216,7 +216,7 @@ func (s *MySQLCommentStore) Report(input ReportCommentInput) (Report, bool, erro
 		return Report{}, false, err
 	}
 	if !found {
-		return Report{}, false, errors.New("report not found")
+		return Report{}, false, ErrReportNotFound
 	}
 
 	return report, affected > 0, nil

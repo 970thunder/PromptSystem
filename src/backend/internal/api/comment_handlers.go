@@ -88,12 +88,7 @@ func (s *server) handlePromptCommentCreate(w http.ResponseWriter, r *http.Reques
 		ParentID: payload.ParentID,
 	})
 	if err != nil {
-		status := http.StatusBadRequest
-		if err.Error() == "prompt not found" {
-			status = http.StatusNotFound
-		}
-
-		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 

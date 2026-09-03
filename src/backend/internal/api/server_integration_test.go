@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -320,6 +322,51 @@ func TestPromptLifecycleAndInteractions(t *testing.T) {
 	data, _ = envelope["data"].(map[string]any)
 	if data["liked"] != false {
 		t.Fatalf("interaction liked after unlike = %v, want false", data["liked"])
+	}
+}
+
+func TestStableErrorModel(t *testing.T) {
+	s, h := newIntegrationServer(t)
+	token, userID := registerAndLogin(t, h)
+
+	// Authentication failures must be stable and must not reveal whether an
+	// account exists.
+	rec, envelope := doJSON(t, h, http.MethodPost, "/api/v1/user/login", map[string]any{
+		"email":    "unknown@example.com",
+		"password": "WrongPass123!",
+	}, "")
+	if rec.Code != http.StatusUnauthorized || envelope["errorCode"] != "AUTH_INVALID_CREDENTIALS" {
+		t.Fatalf("login error = %d/%v, want 401/AUTH_INVALID_CREDENTIALS", rec.Code, envelope["errorCode"])
+	}
+
+	// Store sentinels map to client-facing codes without exposing their text.
+	rec, envelope = doJSON(t, h, http.MethodPost, "/api/v1/users/"+strconv.Itoa(userID)+"/follow", nil, token)
+	if rec.Code != http.StatusBadRequest || envelope["errorCode"] != "CANNOT_FOLLOW_SELF" {
+		t.Fatalf("self-follow error = %d/%v, want 400/CANNOT_FOLLOW_SELF", rec.Code, envelope["errorCode"])
+	}
+
+	rec, envelope = doJSON(t, h, http.MethodPost, "/api/v1/prompts/999999/comments", map[string]any{"content": "hello"}, token)
+	if rec.Code != http.StatusNotFound || envelope["errorCode"] != "PROMPT_NOT_FOUND" {
+		t.Fatalf("missing prompt comment error = %d/%v, want 404/PROMPT_NOT_FOUND", rec.Code, envelope["errorCode"])
+	}
+
+	promptID := createPrompt(t, s, h, token, userID)
+	secondToken, _ := registerAndLogin(t, h)
+	rec, envelope = doJSON(t, h, http.MethodPut, "/api/v1/prompts/"+strconv.Itoa(promptID), map[string]any{
+		"title": "attempted update", "description": "description", "content": "content",
+		"model": "gpt-4o", "categoryId": 1, "cover": "https://example.com/cover.png", "status": 1,
+	}, secondToken)
+	if rec.Code != http.StatusForbidden || envelope["errorCode"] != "PROMPT_FORBIDDEN" {
+		t.Fatalf("forbidden update error = %d/%v, want 403/PROMPT_FORBIDDEN", rec.Code, envelope["errorCode"])
+	}
+
+	recorder := httptest.NewRecorder()
+	writeStoreError(recorder, errors.New("sql connection secret"))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unknown store error status = %d, want 500", recorder.Code)
+	}
+	if strings.Contains(recorder.Body.String(), "sql connection secret") || !strings.Contains(recorder.Body.String(), "INTERNAL_ERROR") {
+		t.Fatalf("unknown store error leaked or lacks stable code: %s", recorder.Body.String())
 	}
 }
 

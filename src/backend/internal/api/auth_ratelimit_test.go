@@ -122,6 +122,9 @@ func TestLoginUnifiedError(t *testing.T) {
 		if payload.Message != "Invalid email or password" {
 			t.Fatalf("case %d: expected unified message, got %q", i, payload.Message)
 		}
+		if payload.ErrorCode != "AUTH_INVALID_CREDENTIALS" {
+			t.Fatalf("case %d: expected AUTH_INVALID_CREDENTIALS, got %q", i, payload.ErrorCode)
+		}
 	}
 }
 

@@ -17,6 +17,8 @@ var (
 	ErrPasswordTooLong    = errors.New("password must be 72 bytes or fewer")
 	ErrInvalidEmail       = errors.New("invalid email address")
 	ErrInvalidGitHubUser  = errors.New("invalid github user")
+	ErrInvalidUser        = errors.New("invalid user")
+	ErrCannotFollowSelf   = errors.New("cannot follow yourself")
 )
 
 // maxPasswordBytes mirrors the bcrypt 72-byte input limit. Keep this in sync
@@ -375,7 +377,7 @@ func (s *UserStore) UpdateProfile(id int, username, bio, avatar string) (AuthUse
 
 func (s *UserStore) Follow(followerID, followingID int) (FollowStatus, bool, error) {
 	if followerID == followingID {
-		return FollowStatus{}, false, errors.New("cannot follow yourself")
+		return FollowStatus{}, false, ErrCannotFollowSelf
 	}
 
 	s.mu.Lock()

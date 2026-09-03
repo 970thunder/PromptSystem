@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -13,6 +14,8 @@ import (
 	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
 )
+
+var errInvalidUploadOwnership = errors.New("invalid upload ownership")
 
 type uploadImageResponse struct {
 	URL       string `json:"url"`
@@ -259,13 +262,13 @@ func (s *server) validateUploadOwnership(userID int, cover string, images []stri
 			return err
 		}
 		if !found {
-			return fmt.Errorf("upload %s not found", objectKey)
+			return errInvalidUploadOwnership
 		}
 		if rec.OwnerID != userID {
-			return fmt.Errorf("upload %s is owned by another user", objectKey)
+			return errInvalidUploadOwnership
 		}
 		if rec.Status == store.UploadStatusTrashed {
-			return fmt.Errorf("upload %s was removed", objectKey)
+			return errInvalidUploadOwnership
 		}
 		keys = append(keys, objectKey)
 	}

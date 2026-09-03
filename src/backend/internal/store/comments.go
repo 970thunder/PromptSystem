@@ -1,7 +1,6 @@
 package store
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -46,24 +45,24 @@ func normalizeCommentSort(sortBy string) string {
 func validateCommentInput(input CreateCommentInput) error {
 	targetType := strings.TrimSpace(strings.ToLower(input.TargetType))
 	if targetType != "prompt" {
-		return errors.New("invalid comment target")
+		return ErrInvalidCommentTarget
 	}
 	if input.TargetID <= 0 {
-		return errors.New("invalid comment target")
+		return ErrInvalidCommentTarget
 	}
 
 	content := strings.TrimSpace(input.Content)
 	if content == "" {
-		return errors.New("comment content is required")
+		return ErrInvalidCommentContent
 	}
 	if len([]rune(content)) > 1000 {
-		return errors.New("comment content must be 1000 characters or fewer")
+		return ErrInvalidCommentContent
 	}
 	if err := ValidateCommentModeration(content); err != nil {
 		return err
 	}
 	if input.User.ID <= 0 {
-		return errors.New("invalid user")
+		return ErrInvalidCommentUser
 	}
 
 	return nil
@@ -71,10 +70,10 @@ func validateCommentInput(input CreateCommentInput) error {
 
 func validateReportCommentInput(input ReportCommentInput) error {
 	if input.CommentID <= 0 {
-		return errors.New("invalid comment id")
+		return ErrInvalidCommentID
 	}
 	if input.UserID <= 0 {
-		return errors.New("invalid user")
+		return ErrInvalidUser
 	}
 
 	reason := strings.TrimSpace(input.Reason)
@@ -82,7 +81,7 @@ func validateReportCommentInput(input ReportCommentInput) error {
 		return ErrInvalidReportReason
 	}
 	if len([]rune(strings.TrimSpace(input.Detail))) > MaxReportDetailRunes {
-		return fmt.Errorf("report detail must be %d characters or fewer", MaxReportDetailRunes)
+		return ErrReportDetailTooLong
 	}
 
 	return nil
@@ -177,7 +176,7 @@ func CreateComment(input CreateCommentInput) (Comment, error) {
 	}
 
 	if _, ok := FindPromptByID(input.TargetID); !ok {
-		return Comment{}, errors.New("prompt not found")
+		return Comment{}, ErrPromptNotFound
 	}
 
 	commentMu.Lock()
@@ -187,10 +186,10 @@ func CreateComment(input CreateCommentInput) (Comment, error) {
 	if input.ParentID != nil {
 		parent, found := findCommentByIDLocked(*input.ParentID)
 		if !found {
-			return Comment{}, errors.New("parent comment not found")
+			return Comment{}, ErrCommentParentNotFound
 		}
 		if parent.TargetType != "prompt" || parent.TargetID != input.TargetID {
-			return Comment{}, errors.New("parent comment does not match prompt")
+			return Comment{}, ErrCommentParentMismatch
 		}
 		value := parent.ID
 		parentID = &value

@@ -237,11 +237,11 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.validateUploadOwnership(userID, payload.Cover, payload.Images); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
-			Code:      http.StatusBadRequest,
-			ErrorCode: "INVALID_UPLOAD_OWNERSHIP",
-			Message:   err.Error(),
-		})
+		if errors.Is(err, errInvalidUploadOwnership) {
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: http.StatusBadRequest, ErrorCode: "INVALID_UPLOAD_OWNERSHIP", Message: "Upload reference is invalid"})
+		} else {
+			writeStoreError(w, err)
+		}
 		return
 	}
 
@@ -270,10 +270,7 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
-			Code:    400,
-			Message: err.Error(),
-		})
+		writeStoreError(w, err)
 		return
 	}
 
@@ -574,22 +571,52 @@ func (s *server) handleUserHistoryList(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeStoreError maps store sentinel errors to stable HTTP status codes and
-// machine-readable errorCodes. It deliberately never forwards err.Error() (or
-// any internal message) to the client, so database/wiring detail cannot leak.
-// Any unrecognized error is normalized to a 400 BAD_REQUEST.
+// machine-readable errorCodes. It deliberately never forwards internal error
+// text to the client, so database/wiring detail cannot leak.
+// Any unrecognized error is normalized to a 500 INTERNAL_ERROR. Treating an
+// unknown store failure as a client mistake would hide outages and encourage
+// retries that cannot succeed.
 func writeStoreError(w http.ResponseWriter, err error) {
 	var apiErr *apiError
 	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		apiErr = &apiError{Status: http.StatusNotFound, Code: "USER_NOT_FOUND", Message: "User not found"}
+	case errors.Is(err, store.ErrCannotFollowSelf):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "CANNOT_FOLLOW_SELF", Message: "You cannot follow yourself"}
+	case errors.Is(err, store.ErrInvalidUser):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_USER", Message: "Invalid user"}
 	case errors.Is(err, store.ErrPromptNotFound):
 		apiErr = &apiError{Status: http.StatusNotFound, Code: "PROMPT_NOT_FOUND", Message: "Prompt not found"}
 	case errors.Is(err, store.ErrPromptForbidden):
 		apiErr = &apiError{Status: http.StatusForbidden, Code: "PROMPT_FORBIDDEN", Message: "Forbidden"}
 	case errors.Is(err, store.ErrCommentNotFound):
 		apiErr = &apiError{Status: http.StatusNotFound, Code: "COMMENT_NOT_FOUND", Message: "Comment not found"}
+	case errors.Is(err, store.ErrInvalidCommentID):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_COMMENT_ID", Message: "Invalid comment id"}
+	case errors.Is(err, store.ErrInvalidCommentTarget):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_COMMENT_TARGET", Message: "Invalid comment target"}
+	case errors.Is(err, store.ErrInvalidCommentContent):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_COMMENT_CONTENT", Message: "Invalid comment content"}
+	case errors.Is(err, store.ErrInvalidCommentUser):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_USER", Message: "Invalid user"}
+	case errors.Is(err, store.ErrCommentParentNotFound):
+		apiErr = &apiError{Status: http.StatusNotFound, Code: "COMMENT_PARENT_NOT_FOUND", Message: "Parent comment not found"}
+	case errors.Is(err, store.ErrCommentParentMismatch):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "COMMENT_PARENT_MISMATCH", Message: "Parent comment does not match prompt"}
+	case errors.Is(err, store.ErrReportNotFound):
+		apiErr = &apiError{Status: http.StatusNotFound, Code: "REPORT_NOT_FOUND", Message: "Report not found"}
+	case errors.Is(err, store.ErrReportDetailTooLong):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "REPORT_DETAIL_TOO_LONG", Message: "Report detail is too long"}
+	case errors.Is(err, store.ErrInvalidCategory):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_CATEGORY", Message: "Category does not exist"}
+	case errors.Is(err, store.ErrInvalidTag):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_TAG", Message: "Invalid tag"}
+	case errors.Is(err, store.ErrInvalidImageURL):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_IMAGE_URL", Message: "Invalid image URL"}
 	case errors.Is(err, store.ErrInvalidReportReason):
 		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_REPORT_REASON", Message: "Invalid report reason"}
 	default:
-		apiErr = &apiError{Status: http.StatusBadRequest, Code: "BAD_REQUEST", Message: "Invalid request"}
+		apiErr = &apiError{Status: http.StatusInternalServerError, Code: "INTERNAL_ERROR", Message: "Internal server error"}
 	}
 	writeAPIError(w, apiErr)
 }
@@ -838,11 +865,11 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 	}
 
 	if err := s.validateUploadOwnership(userID, payload.Cover, payload.Images); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{
-			Code:      http.StatusBadRequest,
-			ErrorCode: "INVALID_UPLOAD_OWNERSHIP",
-			Message:   err.Error(),
-		})
+		if errors.Is(err, errInvalidUploadOwnership) {
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: http.StatusBadRequest, ErrorCode: "INVALID_UPLOAD_OWNERSHIP", Message: "Upload reference is invalid"})
+		} else {
+			writeStoreError(w, err)
+		}
 		return
 	}
 
@@ -871,14 +898,7 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		},
 	})
 	if err != nil {
-		status := http.StatusBadRequest
-		switch err.Error() {
-		case "forbidden":
-			status = http.StatusForbidden
-		case "prompt not found":
-			status = http.StatusNotFound
-		}
-		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 
@@ -894,14 +914,7 @@ func (s *server) handlePromptDelete(w http.ResponseWriter, r *http.Request, id i
 	}
 
 	if err := s.promptStore.Delete(id, userID); err != nil {
-		status := http.StatusBadRequest
-		switch err.Error() {
-		case "forbidden":
-			status = http.StatusForbidden
-		case "prompt not found":
-			status = http.StatusNotFound
-		}
-		writeJSON(w, status, apiResponse[any]{Code: status, Message: err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 

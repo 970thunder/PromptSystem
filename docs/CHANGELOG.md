@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
+- 统一 API 错误模型：存储层改用 sentinel error，错误响应始终带稳定 `errorCode`；未知内部错误返回 `500 INTERNAL_ERROR`，不泄露 SQL 或内部错误文本
 - 统一数据库初始化入口：backend 对真正空库自动应用 `schema.sql` 基线后运行迁移，开发 Compose 不再隐式挂载 schema；迁移矩阵新增真实空库场景并通过幂等验证
 - 开发 Compose 为 MySQL 显式创建与 backend 配套的 `promptos_app` 账号，避免新卷因账号缺失误降级到内存存储
 - 补全迁移目录文档中的 `0009`-`0014` 当前文件清单，避免运维按过期列表漏跑迁移

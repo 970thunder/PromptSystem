@@ -92,17 +92,17 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 	code, expiresAt, retryAfter, err := s.issueRedisCaptcha(r.Context(), payload.Email)
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidEmail) {
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
 			return
 		}
 
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to generate captcha"})
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "CAPTCHA_GENERATION_FAILED", Message: "Failed to generate captcha"})
 		return
 	}
 
 	if retryAfter > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
-		writeJSON(w, http.StatusTooManyRequests, apiResponse[any]{Code: 429, Message: "Captcha was sent too frequently"})
+		writeJSON(w, http.StatusTooManyRequests, apiResponse[any]{Code: 429, ErrorCode: "RATE_LIMITED", Message: "Captcha was sent too frequently"})
 		return
 	}
 	if s.config.IsProduction() {
@@ -155,13 +155,13 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.userStore.Authenticate(payload.Email, payload.Password)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Invalid email or password"})
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_INVALID_CREDENTIALS", Message: "Invalid email or password"})
 		return
 	}
 
 	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Token generation failed"})
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Token generation failed"})
 		return
 	}
 
@@ -197,17 +197,17 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Email and password are required"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_REQUEST", Message: "Email and password are required"})
 		return
 	}
 
 	if !store.IsValidEmail(payload.Email) {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
 		return
 	}
 
 	if !s.verifyRedisCaptcha(r.Context(), payload.Email, payload.Captcha) {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid or expired captcha"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_CAPTCHA", Message: "Invalid or expired captcha"})
 		return
 	}
 
@@ -219,13 +219,13 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 			// registered emails via the reset flow.
 			writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: resetGenericMessage})
 		case errors.Is(err, store.ErrInvalidEmail):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
 		case errors.Is(err, store.ErrWeakPassword):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be at least 8 characters"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "WEAK_PASSWORD", Message: "Password must be at least 8 characters"})
 		case errors.Is(err, store.ErrPasswordTooLong):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be 72 bytes or fewer"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_PASSWORD", Message: "Password must be 72 bytes or fewer"})
 		default:
-			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Reset password failed"})
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Reset password failed"})
 		}
 		return
 	}
@@ -255,17 +255,17 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(payload.Username) == "" || strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Username, email, and password are required"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_REQUEST", Message: "Username, email, and password are required"})
 		return
 	}
 
 	if !store.IsValidEmail(payload.Email) {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
 		return
 	}
 
 	if !s.verifyRedisCaptcha(r.Context(), payload.Email, payload.Captcha) {
-		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid or expired captcha"})
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_CAPTCHA", Message: "Invalid or expired captcha"})
 		return
 	}
 
@@ -273,22 +273,22 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserExists):
-			writeJSON(w, http.StatusConflict, apiResponse[any]{Code: 409, Message: "Email already registered"})
+			writeJSON(w, http.StatusConflict, apiResponse[any]{Code: 409, ErrorCode: "USER_EXISTS", Message: "Email already registered"})
 		case errors.Is(err, store.ErrInvalidEmail):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid email address"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
 		case errors.Is(err, store.ErrWeakPassword):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be at least 8 characters"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "WEAK_PASSWORD", Message: "Password must be at least 8 characters"})
 		case errors.Is(err, store.ErrPasswordTooLong):
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password must be 72 bytes or fewer"})
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_PASSWORD", Message: "Password must be 72 bytes or fewer"})
 		default:
-			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Register failed"})
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Register failed"})
 		}
 		return
 	}
 
 	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Token generation failed"})
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Token generation failed"})
 		return
 	}
 
@@ -555,11 +555,7 @@ func (s *server) handleUserFollow(w http.ResponseWriter, r *http.Request, target
 	}
 
 	if err != nil {
-		statusCode := http.StatusBadRequest
-		if errors.Is(err, store.ErrUserNotFound) {
-			statusCode = http.StatusNotFound
-		}
-		writeJSON(w, statusCode, apiResponse[any]{Code: statusCode, Message: err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 
@@ -587,11 +583,7 @@ func (s *server) handleUserFollowStatus(w http.ResponseWriter, r *http.Request, 
 
 	status, err := s.userStore.FollowStatus(targetID, userID)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if errors.Is(err, store.ErrUserNotFound) {
-			statusCode = http.StatusNotFound
-		}
-		writeJSON(w, statusCode, apiResponse[any]{Code: statusCode, Message: err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"reflect"
 	"time"
 
 	"promptos-backend/internal/auth"
@@ -235,6 +236,7 @@ func writeMethodNotAllowed(w http.ResponseWriter) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
+	payload = withDefaultErrorCode(status, payload)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	// Surface the machine-readable errorCode to the structured access log via
 	// the (possibly wrapped) ResponseWriter, without changing the client
@@ -248,6 +250,65 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// withDefaultErrorCode keeps the response envelope stable even for legacy
+// handlers that only supplied an HTTP status and message. Explicit business
+// error codes always win; this is only a final protocol-level fallback.
+func withDefaultErrorCode(status int, payload any) any {
+	if status < http.StatusBadRequest || payload == nil {
+		return payload
+	}
+
+	value := reflect.ValueOf(payload)
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return payload
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return payload
+	}
+	field := value.FieldByName("ErrorCode")
+	if !field.IsValid() || field.Kind() != reflect.String || field.String() != "" {
+		return payload
+	}
+
+	copyValue := reflect.New(value.Type()).Elem()
+	copyValue.Set(value)
+	copyValue.FieldByName("ErrorCode").SetString(defaultErrorCode(status))
+	return copyValue.Interface()
+}
+
+func defaultErrorCode(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "BAD_REQUEST"
+	case http.StatusUnauthorized:
+		return "UNAUTHORIZED"
+	case http.StatusForbidden:
+		return "FORBIDDEN"
+	case http.StatusNotFound:
+		return "NOT_FOUND"
+	case http.StatusMethodNotAllowed:
+		return "METHOD_NOT_ALLOWED"
+	case http.StatusConflict:
+		return "CONFLICT"
+	case http.StatusRequestEntityTooLarge:
+		return "REQUEST_TOO_LARGE"
+	case http.StatusTooManyRequests:
+		return "RATE_LIMITED"
+	case http.StatusBadGateway:
+		return "BAD_GATEWAY"
+	case http.StatusServiceUnavailable:
+		return "SERVICE_UNAVAILABLE"
+	default:
+		if status >= http.StatusInternalServerError {
+			return "INTERNAL_ERROR"
+		}
+		return "HTTP_ERROR"
+	}
 }
 
 // errorCoded lets writeJSON extract the stable errorCode from any apiResponse

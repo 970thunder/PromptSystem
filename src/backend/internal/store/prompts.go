@@ -612,7 +612,7 @@ func validateReportPromptInput(input ReportPromptInput) error {
 		return ErrPromptNotFound
 	}
 	if input.UserID <= 0 {
-		return fmt.Errorf("invalid user")
+		return ErrInvalidUser
 	}
 
 	reason := strings.TrimSpace(input.Reason)
@@ -620,7 +620,7 @@ func validateReportPromptInput(input ReportPromptInput) error {
 		return ErrInvalidReportReason
 	}
 	if len([]rune(strings.TrimSpace(input.Detail))) > MaxReportDetailRunes {
-		return fmt.Errorf("report detail must be %d characters or fewer", MaxReportDetailRunes)
+		return ErrReportDetailTooLong
 	}
 
 	return nil

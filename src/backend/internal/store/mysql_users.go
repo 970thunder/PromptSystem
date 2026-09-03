@@ -281,7 +281,7 @@ func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avata
 
 func (s *MySQLUserStore) Follow(followerID, followingID int) (FollowStatus, bool, error) {
 	if followerID == followingID {
-		return FollowStatus{}, false, errors.New("cannot follow yourself")
+		return FollowStatus{}, false, ErrCannotFollowSelf
 	}
 	if _, ok := s.FindByID(followerID); !ok {
 		return FollowStatus{}, false, ErrUserNotFound

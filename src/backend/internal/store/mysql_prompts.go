@@ -749,7 +749,7 @@ func (s *MySQLPromptStore) Report(id int, userID int, reason string, detail stri
 		return Report{}, false, err
 	}
 	if !found {
-		return Report{}, false, errors.New("report not found")
+		return Report{}, false, ErrReportNotFound
 	}
 
 	return report, affected > 0, nil
