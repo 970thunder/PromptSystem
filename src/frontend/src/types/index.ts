@@ -1,18 +1,23 @@
 // 文件作用：集中维护前后端共享的前端业务类型定义。
-// User types
-export interface User {
-  id: number
-  username: string
-  avatar: string
-  email: string
-  bio: string
-  level: number
-  experience: number
-  status: number
-  createdAt: string
-  hasGitHubBound?: boolean
-}
+import type {
+  ApiContractApiResponse,
+  ApiContractCategory,
+  ApiContractComment,
+  ApiContractPageResponse,
+  ApiContractPrompt,
+  ApiContractPromptParams,
+  ApiContractUser
+} from './api-contract.generated'
 
+export type User = ApiContractUser
+export type Prompt = ApiContractPrompt
+export type PromptParams = ApiContractPromptParams
+export type Category = ApiContractCategory
+export type Comment = ApiContractComment
+export type ApiResponse<T> = ApiContractApiResponse<T>
+export type PageResponse<T> = ApiContractPageResponse<T>
+
+// User types
 export interface FollowStatus {
   userId: number
   following: boolean
@@ -26,36 +31,6 @@ export interface FollowActionResponse {
 }
 
 // Prompt types
-export interface Prompt {
-  id: number
-  title: string
-  description: string
-  cover: string
-  images: string[]
-  content: string
-  systemPrompt: string
-  model: string
-  params: PromptParams
-  categoryId: number
-  categoryName: string
-  tags: string[]
-  userId: number
-  user: User
-  views: number
-  likes: number
-  favorites: number
-  status: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface PromptParams {
-  temperature?: number
-  topP?: number
-  maxTokens?: number
-  system?: string
-}
-
 export interface PromptExample {
   title: string
   input: string
@@ -68,13 +43,6 @@ export interface PromptWorkflowStep {
 }
 
 // Category types
-export interface Category {
-  id: number
-  name: string
-  icon: string
-  count: number
-}
-
 // Skill types
 export interface Skill {
   id: number
@@ -111,30 +79,9 @@ export interface SkillOutput {
   type: 'string' | 'number' | 'boolean' | 'json'
 }
 
-// Comment types
-export interface Comment {
-  id: number
-  targetType: 'prompt' | 'skill'
-  targetId: number
-  userId: number
-  user: User
-  content: string
-  likes: number
-  parentId: number | null
-  replies: Comment[]
-  createdAt: string
-}
-
 export interface CreateCommentRequest {
   content: string
   parentId?: number | null
-}
-
-// API response types
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export interface PromptActionResponse {
@@ -161,13 +108,6 @@ export interface Report {
 export interface ReportActionResponse {
   report: Report
   applied: boolean
-}
-
-export interface PageResponse<T> {
-  list: T[]
-  total: number
-  page: number
-  pageSize: number
 }
 
 export interface UserDataExport {

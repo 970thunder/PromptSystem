@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://promptsystem.isoumao.top/contracts/api-v1.json",
+  "title": "PromptOS API v1 shared DTOs",
+  "type": "object",
+  "definitions": {
+    "User": {
+      "type": "object",
+      "required": ["id", "username", "avatar", "bio", "level", "experience", "createdAt"],
+      "properties": {
+        "id": {"type": "integer"},
+        "username": {"type": "string"},
+        "avatar": {"type": "string"},
+        "email": {"type": "string"},
+        "bio": {"type": "string"},
+        "level": {"type": "integer"},
+        "experience": {"type": "integer"},
+        "status": {"type": "integer"},
+        "createdAt": {"type": "string"},
+        "hasGitHubBound": {"type": "boolean"}
+      }
+    },
+    "PromptParams": {
+      "type": "object",
+      "properties": {
+        "temperature": {"type": "number"},
+        "topP": {"type": "number"},
+        "maxTokens": {"type": "integer"},
+        "system": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "Prompt": {
+      "type": "object",
+      "required": ["id", "title", "description", "cover", "images", "content", "systemPrompt", "model", "params", "categoryId", "categoryName", "tags", "userId", "user", "views", "likes", "favorites", "status", "createdAt", "updatedAt"],
+      "properties": {
+        "id": {"type": "integer"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "cover": {"type": "string"},
+        "images": {"type": "array", "items": {"type": "string"}},
+        "content": {"type": "string"},
+        "systemPrompt": {"type": "string"},
+        "model": {"type": "string"},
+        "params": {"$ref": "#/definitions/PromptParams"},
+        "categoryId": {"type": "integer"},
+        "categoryName": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "userId": {"type": "integer"},
+        "user": {"$ref": "#/definitions/User"},
+        "views": {"type": "integer"},
+        "likes": {"type": "integer"},
+        "favorites": {"type": "integer"},
+        "status": {"type": "integer"},
+        "createdAt": {"type": "string"},
+        "updatedAt": {"type": "string"}
+      }
+    },
+    "Category": {
+      "type": "object",
+      "required": ["id", "name", "icon", "count"],
+      "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "icon": {"type": "string"},
+        "count": {"type": "integer"}
+      }
+    },
+    "Comment": {
+      "type": "object",
+      "required": ["id", "targetType", "targetId", "userId", "user", "content", "likes", "parentId", "replies", "createdAt"],
+      "properties": {
+        "id": {"type": "integer"},
+        "targetType": {"type": "string", "enum": ["prompt", "skill"]},
+        "targetId": {"type": "integer"},
+        "userId": {"type": "integer"},
+        "user": {"$ref": "#/definitions/User"},
+        "content": {"type": "string"},
+        "likes": {"type": "integer"},
+        "parentId": {"type": ["integer", "null"]},
+        "replies": {"type": "array", "items": {"$ref": "#/definitions/Comment"}},
+        "createdAt": {"type": "string"}
+      }
+    }
+  }
+}

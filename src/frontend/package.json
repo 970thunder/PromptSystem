@@ -12,7 +12,8 @@
     "format": "prettier --write src/",
     "prepare": "husky",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "contract:check": "node ../../scripts/generate-api-contract.mjs --check"
   },
   "dependencies": {
     "axios": "^1.6.8",
