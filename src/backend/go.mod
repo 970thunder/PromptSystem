@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/redis/go-redis/v9 v9.22.0
-	golang.org/x/crypto v0.43.0
+	golang.org/x/crypto v0.55.0
 )
 
 require (
@@ -31,5 +31,5 @@ require (
 	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )
