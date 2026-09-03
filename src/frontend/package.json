@@ -12,6 +12,7 @@
     "format": "prettier --write src/",
     "prepare": "husky",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "contract:check": "node ../../scripts/generate-api-contract.mjs --check"
   },
@@ -24,6 +25,7 @@
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^20.12.7",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",

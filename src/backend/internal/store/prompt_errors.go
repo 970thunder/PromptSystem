@@ -19,4 +19,8 @@ var (
 	// ErrInvalidReportReason is returned when a report reason is not one of the
 	// bounded, typed set (see report_reason.go).
 	ErrInvalidReportReason = errors.New("invalid report reason")
+	ErrAdminRequired       = errors.New("administrator role required")
+	ErrInvalidModeration   = errors.New("invalid moderation action")
+	ErrModerationNotFound  = errors.New("moderation target not found")
+	ErrCannotModerateSelf  = errors.New("administrator cannot disable self")
 )

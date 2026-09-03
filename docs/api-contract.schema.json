@@ -81,6 +81,39 @@
         "replies": {"type": "array", "items": {"$ref": "#/definitions/Comment"}},
         "createdAt": {"type": "string"}
       }
+    },
+    "Report": {
+      "type": "object",
+      "required": ["id", "userId", "targetType", "targetId", "reason", "detail", "status", "createdAt"],
+      "properties": {
+        "id": {"type": "integer"},
+        "userId": {"type": "integer"},
+        "targetType": {"type": "string"},
+        "targetId": {"type": "integer"},
+        "reason": {"type": "string"},
+        "detail": {"type": "string"},
+        "status": {"type": "string", "enum": ["pending", "reviewed", "rejected"]},
+        "updatedAt": {"type": "string"},
+        "reviewedBy": {"type": "integer"},
+        "reviewNote": {"type": "string"},
+        "createdAt": {"type": "string"}
+      }
+    },
+    "AuditEvent": {
+      "type": "object",
+      "required": ["id", "actorId", "action", "targetType", "targetId", "metadata", "requestId", "prevHash", "eventHash", "createdAt"],
+      "properties": {
+        "id": {"type": "integer"},
+        "actorId": {"type": "integer"},
+        "action": {"type": "string"},
+        "targetType": {"type": "string"},
+        "targetId": {"type": "integer"},
+        "metadata": {"type": "string"},
+        "requestId": {"type": "string"},
+        "prevHash": {"type": "string"},
+        "eventHash": {"type": "string"},
+        "createdAt": {"type": "string"}
+      }
     }
   }
 }

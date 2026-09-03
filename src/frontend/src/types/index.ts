@@ -3,6 +3,8 @@ import type {
   ApiContractApiResponse,
   ApiContractCategory,
   ApiContractComment,
+  ApiContractReport,
+  ApiContractAuditEvent,
   ApiContractPageResponse,
   ApiContractPrompt,
   ApiContractPromptParams,
@@ -14,6 +16,8 @@ export type Prompt = ApiContractPrompt
 export type PromptParams = ApiContractPromptParams
 export type Category = ApiContractCategory
 export type Comment = ApiContractComment
+export type Report = ApiContractReport
+export type AuditEvent = ApiContractAuditEvent
 export type ApiResponse<T> = ApiContractApiResponse<T>
 export type PageResponse<T> = ApiContractPageResponse<T>
 
@@ -92,17 +96,6 @@ export interface PromptActionResponse {
 export interface CommentActionResponse {
   comment: Comment
   applied: boolean
-}
-
-export interface Report {
-  id: number
-  userId: number
-  targetType: string
-  targetId: number
-  reason: string
-  detail: string
-  status: string
-  createdAt: string
 }
 
 export interface ReportActionResponse {

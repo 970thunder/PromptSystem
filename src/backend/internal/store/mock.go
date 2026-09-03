@@ -70,6 +70,9 @@ type Report struct {
 	Detail     string `json:"detail"`
 	Status     string `json:"status"`
 	CreatedAt  string `json:"createdAt"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
+	ReviewedBy int    `json:"reviewedBy,omitempty"`
+	ReviewNote string `json:"reviewNote,omitempty"`
 }
 
 func Categories() []Category {

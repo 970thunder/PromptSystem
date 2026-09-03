@@ -127,6 +127,19 @@ describe('prompt store comments pagination', () => {
     expect(store.searchLoading).toBe(false)
   })
 
+  it('uses deterministic search fixtures when the prompt API is disabled', async () => {
+    vi.stubEnv('VITE_ENABLE_PROMPT_API', 'false')
+    const search = vi.spyOn(promptApi, 'searchPrompts')
+    const store = usePromptStore()
+
+    const response = await store.searchPrompts({ keyword: 'code review', page: 1, pageSize: 24 })
+
+    expect(search).not.toHaveBeenCalled()
+    expect(response?.list.map((item) => item.id)).toEqual([103])
+    expect(store.searchTotal).toBe(1)
+    expect(store.usingMockData).toBe(true)
+  })
+
   it('cancels stale search requests and keeps the newest response', async () => {
     vi.stubEnv('MODE', 'development')
     const pending: Array<{

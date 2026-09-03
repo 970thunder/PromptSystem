@@ -30,6 +30,7 @@ type server struct {
 	userStore           store.UserManager
 	promptStore         store.PromptManager
 	commentStore        store.CommentManager
+	moderationStore     store.ModerationManager
 	uploadStore         store.UploadManager
 	imageStorage        storage.ImageStorage
 	emailSender         emailSender
@@ -50,19 +51,20 @@ type server struct {
 // resolves them from configuration; tests construct them directly so HTTP
 // integration tests do not depend on real MySQL, Redis, or the network.
 type serverDeps struct {
-	config       config.Config
-	tokenManager *auth.TokenManager
-	captcha      *captchaManager
-	githubClient *http.Client
-	cache        cache.Cache
-	userStore    store.UserManager
-	promptStore  store.PromptManager
-	commentStore store.CommentManager
-	uploadStore  store.UploadManager
-	imageStorage storage.ImageStorage
-	emailSender  emailSender
-	storageMode  string
-	readyCheck   func(context.Context) map[string]bool
+	config          config.Config
+	tokenManager    *auth.TokenManager
+	captcha         *captchaManager
+	githubClient    *http.Client
+	cache           cache.Cache
+	userStore       store.UserManager
+	promptStore     store.PromptManager
+	commentStore    store.CommentManager
+	moderationStore store.ModerationManager
+	uploadStore     store.UploadManager
+	imageStorage    storage.ImageStorage
+	emailSender     emailSender
+	storageMode     string
+	readyCheck      func(context.Context) map[string]bool
 }
 
 func NewServer(cfg config.Config) (http.Handler, error) {
@@ -74,6 +76,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 	userStore := store.UserManager(store.NewUserStore())
 	promptStore := store.PromptManager(store.NewMemoryPromptStore())
 	commentStore := store.CommentManager(store.NewMemoryCommentStore())
+	var moderationStore store.ModerationManager
 	uploadStore := store.UploadManager(store.NewMemoryUploadStore())
 	storageMode := "memory"
 	runtimeCache := cache.New(cfg)
@@ -107,6 +110,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 					s.SetAllowedImageDomains(cfg.AllowedImageDomains)
 				}
 				commentStore = store.NewMySQLCommentStore(db)
+				moderationStore = store.NewMySQLModerationStore(db)
 				uploadStore = store.NewMySQLUploadStore(db)
 				storageMode = "mysql"
 				readyCheck = func(ctx context.Context) map[string]bool {
@@ -131,19 +135,20 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 	}
 
 	return newServerWithDeps(serverDeps{
-		config:       cfg,
-		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
-		captcha:      newCaptchaManager(),
-		githubClient: newGitHubClient(),
-		cache:        runtimeCache,
-		userStore:    userStore,
-		promptStore:  promptStore,
-		commentStore: commentStore,
-		uploadStore:  uploadStore,
-		imageStorage: imageStorage,
-		emailSender:  newSMTPEmailSender(cfg),
-		storageMode:  storageMode,
-		readyCheck:   readyCheck,
+		config:          cfg,
+		tokenManager:    auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
+		captcha:         newCaptchaManager(),
+		githubClient:    newGitHubClient(),
+		cache:           runtimeCache,
+		userStore:       userStore,
+		promptStore:     promptStore,
+		commentStore:    commentStore,
+		moderationStore: moderationStore,
+		uploadStore:     uploadStore,
+		imageStorage:    imageStorage,
+		emailSender:     newSMTPEmailSender(cfg),
+		storageMode:     storageMode,
+		readyCheck:      readyCheck,
 	}), nil
 }
 
@@ -159,6 +164,7 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		userStore:        deps.userStore,
 		promptStore:      deps.promptStore,
 		commentStore:     deps.commentStore,
+		moderationStore:  deps.moderationStore,
 		uploadStore:      deps.uploadStore,
 		imageStorage:     deps.imageStorage,
 		emailSender:      deps.emailSender,
@@ -218,6 +224,7 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	mux.HandleFunc("/api/v1/user/followers", s.withAuth(s.handleUserFollowers))
 	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
 	mux.HandleFunc("/api/v1/users/", s.handleUserAction)
+	mux.HandleFunc("/api/v1/admin/", s.withAdmin(s.handleAdmin))
 	mux.HandleFunc("/uploads/", s.handleStaticUpload)
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))

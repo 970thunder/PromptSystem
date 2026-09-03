@@ -23,11 +23,11 @@
 |---|---|---|---|---|
 | 产品能力 | Skill 运行器、在线 Playground、创作者学院、提示词交易市场尚未实现 | 导航仅显示不可点击的“即将开放”，不能宣传为可用能力 | `F-06`（开关已完成）/后续产品迭代 | 需求、执行沙箱、计费和内容审核方案明确后再开放开关 |
 | 认证 | 生产验证码邮件发送尚未接入真实 SMTP | 注册/找回密码在生产不能安全闭环 | `P0-06` | SMTP 凭据、发信域名、退信处理、Redis 原子消费和限流验收 |
-| 治理 | 没有管理员举报审核、内容下架、用户禁用和不可抵赖审计后台 | 举报只能写入 pending，无法形成受控处置闭环 | `S-14` | 角色模型、最小权限 API、审计表/留存、管理员 MFA 或等价保护 |
+| 治理 | 管理员审核 API、角色表和哈希链审计已在代码中实现，但线上尚未配置管理员角色并完成真实审核验证 | 举报在生产仍不能承诺形成受控处置闭环 | `S-14` | 角色模型、最小权限 API、审计表/留存、管理员 MFA 或等价保护、线上审核记录 |
 | 对象数据 | 上传仍在 Docker 本地卷，未接入 PromptOS 独立 RustFS bucket | 单机卷故障会影响图片可用性，无法证明跨故障域副本 | `D-12/D-13` | 独立 bucket、最小权限凭据、迁移校验和第二故障域副本 |
 | 备份 | 当前有手工/发布备份和首次恢复演练，但没有每日 timer、失败告警和跨故障域复制 | RPO 仍取决于人工发布频率，备份失败可能无人发现 | `D-11/A-10/O-01` | 告警接收端、`flock` 串行任务、保留策略和容量预算 |
 | 运行时安全 | 新版 Cookie/CSP/Redis 密码/容器加固尚未发布到线上；线上仍是旧 release | 浏览器仍拿不到新 CSRF Header，CSP 和 Redis 隔离未生效 | `S-04/S-05/S-10/S-11` | 低峰发布、备份、迁移、ready/HTTPS/预检/容器属性验收 |
-| 发布治理 | 完整浏览器 E2E、密钥轮换流程和故障演练尚未形成自动化证据 | 变更回归、泄露处置和跨组件恢复依赖人工 | `F-10/S-13/O-10/R-06/R-08` | 测试账号、告警接收端、轮换窗口和可回滚制品 |
+| 发布治理 | 浏览器已有首页/详情/搜索/移动端 smoke，完整认证、互动、发布和工作台 E2E 仍未形成自动化证据；密钥轮换和故障演练也未完成 | 变更回归、泄露处置和跨组件恢复依赖人工 | `F-10/S-13/O-10/R-06/R-08` | 测试账号、告警接收端、轮换窗口和可回滚制品 |
 
 ### 架构、数据、安全的排期原则
 
@@ -118,7 +118,7 @@
 - [x] **S-11 容器加固**：非 root、`no-new-privileges`、`cap_drop`、可行的只读根文件系统、资源与日志限制。
 - [x] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
 - [ ] **S-13 密钥轮换**：JWT、MySQL、Redis、RustFS、OAuth、SMTP 均有���换和验证流程。
-- [ ] **S-14 审核权限与审计**：举报审核、内容下架、用户禁用使用管理员权限并记录不可抵赖审计。
+- [ ] **S-14 审核权限与审计**：代码已提供管理员角色校验、举报审核、内容下架、用户禁用和追加式哈希链审计；待生产配置管理员角色、真实审核记录和审计链校验后勾选。
 
 ## F 产品与前端
 
@@ -131,7 +131,7 @@
 - [x] **F-07 清理演示 fallback**：生产 API 失败显示真实错误，不自动切换成演示数据。
 - [x] **F-08 搜索与列表性能**：URL 恢复、取消旧请求、稳定图片尺寸、加载更多与错误恢复。
 - [x] **F-09 响应式与无障碍**：390/768/1440 px、键盘、焦点、Escape、reduced motion 全部验收。
-- [ ] **F-10 浏览器 E2E**：覆盖首页、导航、搜索、详情、注册登录、评论互动、发布、工作台、主题与移动端。
+- [ ] **F-10 浏览器 E2E**：已覆盖首页、详情、搜索和桌面/移动 smoke；仍需补齐注册登录、评论互动、发布、工作台、主题与完整导航流程。
 - [ ] **F-11 更新前端重设计手册状态**：以实际提交和验收证据补齐原 24 项状态，禁止批量虚假勾选。
 
 ## O 服务器和运维
@@ -212,3 +212,5 @@
 - `D-06`：MySQL Prompt/评论举报把公开目标校验、幂等写入和结果读取放入同一事务；关注/取关按稳定用户锁顺序在同一事务内写入关系并计算 follower/following 汇总；Prompt/标签写入原有事务保持不变；上传引用元数据使用单事务批量标记，跨 Prompt/上传 Store 失败时由 `FinalizeUploadReferences` 先重试标记当前引用再回收旧引用，补偿成功可安全返回，双失败保留可重试状态。新增 `TestMySQLReportAndFollowTransactions`（并发关注/举报、重复操作、删除目标拒绝）和 `TestPromptServiceCompensatesUploadReferenceFailure`；本机 `go test ./...`、`go vet ./...`、API/维护/完整性审计构建、`git diff --check` 通过；使用临时隔离 MySQL 库实测 `go test ./internal/store -count=1` 和 `TestMigrationMatrix` 均通过，测试库已清理。生产尚未发布。
 - 线上只读核验（2026-09-04）：服务器 `free -h` 显示总内存 7.7 GiB、可用约 3.3 GiB、Swap 0；`df -h /` 显示 58G 总量、28G 已用、30G 可用（48%）。`docker compose ls` 确认 `promptsystem` 使用 `/srv/releases/promptsystem/20260830-b584585/docker-compose.yml`，仅保留 `20260830-b584585` 与 `20260829-a9ba2cf` 两个 release 目录；frontend/backend 仍分别绑定 `127.0.0.1:3092/5092`，公网入口为 80/443，其他 Compose 项目保持运行。线上 ready 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`。RustFS 转发服务 active，当前实测 bridge 监听为 `172.21.0.1:13902`、隧道为 `127.0.0.1:13900`；总说明中的旧 `172.17.0.1` 已修正。当前线上容器仍是旧发布策略（`ReadonlyRootfs=false`、未设置 cap/pids 限制），故 `S-11` 生产验收、`D-12/D-13` RustFS 迁移和所有告警/timer 项目保持未完成。
 - `F-06`：新增统一 `siteCapabilities` 构建开关，OAuth、邮件验证、Skill、Playground、创作者学院和交易市场均由显式 `VITE_*` 配置控制；未实现模块继续以不可点击的“即将开放”项显示，关闭邮件能力时注册/找回表单不会发起请求。新增默认能力回归测试；前端 `npm run lint:check`、`npm test -- --run`（8 files/17 tests）和 `npm run build` 通过。生产构建默认关闭未完成模块，真实 SMTP 仍由 `P0-06` 验收。
+
+- `S-14/F-10`（本机候选，未完成生产/完整覆盖验收）：新增 `user_roles`、`audit_logs` 和举报审核/Prompt 下架/用户禁用 API；管理员 actor 从会话解析，操作在数据库事务中写入追加式哈希链审计，普通用户返回 `403 ADMIN_REQUIRED`。新增管理员权限 HTTP 回归测试、`0018_moderation_audit.sql` 迁移和 Report/AuditEvent 共享契约；Playwright 配置覆盖桌面/移动首页、详情、搜索 smoke，`npm run test:e2e` 4/4 通过。为避免 Vitest 扫描 Playwright 文件，明确排除 `e2e/**`；显式关闭 API 的 E2E mock 读取路径不再访问后端。后端 `go test ./...`、`gofmt -l .`、`go vet ./...`，前端 `npm test -- --run`（8 files/19 tests）、`npm run lint:check`、`npm run build`、`npm run contract:check` 和 `git diff --check` 通过。S-14 仍需生产管理员角色/真实审核验证，F-10 仍需扩展认证、互动、发布、工作台和主题流程。

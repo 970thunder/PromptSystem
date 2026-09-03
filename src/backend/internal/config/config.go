@@ -53,6 +53,7 @@ type Config struct {
 	SMTPUser             string
 	SMTPPassword         string
 	SMTPFrom             string
+	EmailAuthEnabled     bool
 }
 
 // DefaultAllowedOrigins is the comma-separated origin list used in development.
@@ -106,6 +107,7 @@ func Load() Config {
 		SMTPUser:             getEnv("SMTP_USER", ""),
 		SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:             getEnv("SMTP_FROM", ""),
+		EmailAuthEnabled:     getEnvAsBool("EMAIL_AUTH_ENABLED", true),
 	}
 }
 
@@ -166,7 +168,7 @@ func (c Config) Validate() error {
 	if prod && c.AllowedOrigin == "*" {
 		return errors.New("ALLOWED_ORIGIN must be an explicit origin list (not *) in non-development environments")
 	}
-	if prod {
+	if prod && c.EmailAuthEnabled {
 		if strings.TrimSpace(c.SMTPHost) == "" || strings.TrimSpace(c.SMTPFrom) == "" {
 			return errors.New("SMTP_HOST and SMTP_FROM must be configured in production")
 		}

@@ -9,6 +9,7 @@
 
 - 认证：浏览器生产会话使用 `HttpOnly; Secure; SameSite=Lax` 的 `promptos_session` Cookie，前端请求携带凭据并使用可读的 `promptos_csrf` Cookie 值设置 `X-CSRF-Token` 保护 `POST`/`PUT`/`PATCH`/`DELETE` 写操作。`GET`/`HEAD`/`OPTIONS`/`TRACE` 不要求 CSRF Header。旧版 API 客户端仍可使用 `Authorization: Bearer <token>`，Bearer 请求不读取会话 Cookie，也不要求 CSRF Header。
 - 跨域：生产 `ALLOWED_ORIGIN` 必须是正式 HTTPS 源的逗号分隔白名单，禁止 `*`；白名单源收到 `Access-Control-Allow-Credentials: true`，未列出的 Origin 返回 `403 ORIGIN_NOT_ALLOWED`。同源请求不需要 Origin Header，`OPTIONS` 预检成功返回 `204`。生产 Redis 必须设置独立 `REDIS_PASSWORD`，Redis 只接受 Compose 内网连接。
+- 管理审核：`/api/v1/admin/*` 必须使用有效会话并具备数据库 `user_roles.role=admin`；普通用户返回 `403 ADMIN_REQUIRED`。举报审核、内容下架和用户禁用均写入追加式 `audit_logs` 哈希链，管理接口不会接受 root 或客户端传入的 actor ID。
 - 分页：`page`（默认 1，`>=1`）、`pageSize`（默认 12，`1..100`）。非法值返回 `400`。
 - 请求体：单个 JSON 值，未知字段被拒绝，超限返回 `413 BODY_TOO_LARGE`。
 - 错误码示例：`AUTH_INVALID_CREDENTIALS`、`AUTH_TOKEN_MISSING`、`AUTH_TOKEN_INVALID`、`AUTH_TOKEN_EXPIRED`、`AUTH_TOKEN_REVOKED`、`AUTH_USER_DISABLED`、`USER_NOT_FOUND`、`CANNOT_FOLLOW_SELF`、`PROMPT_NOT_FOUND`、`PROMPT_FORBIDDEN`、`COMMENT_NOT_FOUND`、`COMMENT_PARENT_NOT_FOUND`、`COMMENT_PARENT_MISMATCH`、`INVALID_COMMENT_CONTENT`、`INVALID_REPORT_REASON`、`REPORT_DETAIL_TOO_LONG`、`INVALID_CATEGORY`、`INVALID_TAG`、`INVALID_PAGE`、`INVALID_PAGE_SIZE`、`INVALID_JSON`、`ORIGIN_NOT_ALLOWED`、`INVALID_UPLOAD_OWNERSHIP`、`INVALID_IMAGE_FORMAT`、`IMAGE_REQUIRED`、`IMAGE_TOO_LARGE`、`REQUEST_TOO_LARGE`、`UPLOAD_CONCURRENCY_LIMITED`、`UPLOAD_DAILY_QUOTA_EXCEEDED`、`UPLOAD_CAPACITY_EXCEEDED`、`UPLOAD_QUOTA_UNAVAILABLE`、`UPLOAD_REFERENCE_FAILED`、`UPLOAD_LIFECYCLE_FAILED`、`HISTORY_CLEAR_FAILED`、`DATA_EXPORT_FAILED`、`INTERNAL_ERROR`。
@@ -113,7 +114,10 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 - `detail` 上限 500 字（runes），超限拒绝。
 - 举报**幂等**：`reports` 表 `(user_id, target_type, target_id)` 唯一约束保证同一用户对同一目标只保留一条、重复提交不重复计数。
 - 对已软删除目标（Prompt/评论）举报返回 `404 PROMPT_NOT_FOUND` / `404 COMMENT_NOT_FOUND`。
-- 本轮不实现审核后台（Phase 3）；`reports.status` 保留 `pending/reviewed/rejected` 供未来审核流程使用。未来审核队列建议补充索引 `(target_type, target_id, status)` 与按 `status, created_at` 的取队列索引。
+- 管理员队列：`GET /admin/reports?status=pending&page=1&pageSize=20` 返回统一分页信封；`status` 可选 `pending`、`reviewed`、`rejected`。
+- 审核举报：`PATCH /admin/reports/{id}` 请求体 `{ "status": "reviewed|rejected", "action": "none|remove", "note": "..." }`。`remove` 仅允许 Prompt/Skill，将目标软删除；评论暂不提供物理删除路径，避免留下多态孤儿记录。
+- 管理内容：`PATCH /admin/prompts/{id}` 请求体 `{ "status": 1|-1, "reason": "..." }`；管理用户：`PATCH /admin/users/{id}` 请求体 `{ "status": 0|1, "reason": "..." }`。管理员不能禁用自己。
+- 审计查询：`GET /admin/audit?page=1&pageSize=20` 返回追加式事件链；每条事件包含 `prevHash`/`eventHash`，服务端不会提供更新或删除审计记录的 API。所有管理接口的 actor 均来自会话，不信任客户端传入的用户 ID。
 
 ## 用户与认证
 

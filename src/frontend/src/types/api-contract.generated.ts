@@ -78,3 +78,30 @@ export interface ApiContractComment {
   createdAt: string
 }
 
+export interface ApiContractReport {
+  id: number
+  userId: number
+  targetType: string
+  targetId: number
+  reason: string
+  detail: string
+  status: "pending" | "reviewed" | "rejected"
+  updatedAt?: string
+  reviewedBy?: number
+  reviewNote?: string
+  createdAt: string
+}
+
+export interface ApiContractAuditEvent {
+  id: number
+  actorId: number
+  action: string
+  targetType: string
+  targetId: number
+  metadata: string
+  requestId: string
+  prevHash: string
+  eventHash: string
+  createdAt: string
+}
+

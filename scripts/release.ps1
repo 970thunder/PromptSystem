@@ -9,6 +9,7 @@ param(
     [int]$SshPort = 2680,
     [string]$SshKey = 'E:\Web\服务器密钥\foxi_103.42.182.205',
     [string]$ProjectName = 'promptsystem',
+    [bool]$EmailAuthEnabled = $true,
     [switch]$SkipTests,
     [switch]$SkipDeploy
 )
@@ -58,7 +59,8 @@ $frontendImage = "$ProjectName-frontend`:$Version"
 
 Step '本机构建生产镜像'
 Invoke-Checked docker @('build', '--pull=false', '-t', $backendImage, 'src/backend')
-Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', 'VITE_EMAIL_AUTH_ENABLED=true', '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
+$emailArg = if ($EmailAuthEnabled) { 'true' } else { 'false' }
+Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', "VITE_EMAIL_AUTH_ENABLED=$emailArg", '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
 
 $imageArchive = Join-Path $releaseRoot "${ProjectName}-images-$Version.tar"
 Invoke-Checked docker @('save', '-o', $imageArchive, $backendImage, $frontendImage)

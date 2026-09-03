@@ -86,6 +86,44 @@ type CommentManager interface {
 	Report(input ReportCommentInput) (Report, bool, error)
 }
 
+// ModerationManager is the privileged boundary for review actions. Every
+// implementation must verify the actor's administrator role before mutating
+// content and append an audit event in the same transaction where possible.
+type ModerationManager interface {
+	IsAdmin(userID int) (bool, error)
+	ListReports(status string, page, pageSize int) ([]Report, int, error)
+	ReviewReport(input ReviewReportInput) (Report, error)
+	SetPromptStatus(promptID, actorID, status int, reason string) error
+	SetUserStatus(userID, actorID, status int, reason string) error
+	ListAuditEvents(page, pageSize int) ([]AuditEvent, int, error)
+}
+
+// ReviewReportInput describes an administrator decision on a user report.
+// Status is either reviewed or rejected; action may be "none" or "remove".
+type ReviewReportInput struct {
+	ReportID  int
+	ActorID   int
+	Status    string
+	Action    string
+	Note      string
+	RequestID string
+}
+
+// AuditEvent is an append-only moderation record. PrevHash/EventHash form a
+// tamper-evident chain that can be exported and checked independently.
+type AuditEvent struct {
+	ID         int64  `json:"id"`
+	ActorID    int    `json:"actorId"`
+	Action     string `json:"action"`
+	TargetType string `json:"targetType"`
+	TargetID   int64  `json:"targetId"`
+	Metadata   string `json:"metadata"`
+	RequestID  string `json:"requestId"`
+	PrevHash   string `json:"prevHash"`
+	EventHash  string `json:"eventHash"`
+	CreatedAt  string `json:"createdAt"`
+}
+
 // InteractionStatus is the per-user like/favorite state of a prompt, returned by
 // GetInteractionStatus so the frontend can render toggle buttons accurately.
 type InteractionStatus struct {

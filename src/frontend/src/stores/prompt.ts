@@ -157,7 +157,7 @@ export const usePromptStore = defineStore('prompt', () => {
     currentTag.value = tag?.trim() || undefined
 
     // Unit tests use deterministic fixtures; no runtime build uses this branch.
-    if (import.meta.env.MODE === 'test') {
+    if (import.meta.env.MODE === 'test' || import.meta.env.VITE_ENABLE_PROMPT_API === 'false') {
       categories.value = mockCategories
       const normalizedTag = currentTag.value?.toLowerCase()
       const filtered = mockPrompts.filter((prompt) => {
@@ -248,7 +248,7 @@ export const usePromptStore = defineStore('prompt', () => {
     const requestID = ++detailRequestID
     detailLoading.value = true
 
-    if (import.meta.env.MODE === 'test') {
+    if (import.meta.env.MODE === 'test' || import.meta.env.VITE_ENABLE_PROMPT_API === 'false') {
       const prompt = mockPrompts.find((item) => item.id === id) ?? null
       currentPrompt.value = prompt
       usingMockData.value = true
@@ -297,6 +297,58 @@ export const usePromptStore = defineStore('prompt', () => {
       searchError.value = ''
     }
 
+    if (import.meta.env.VITE_ENABLE_PROMPT_API === 'false') {
+      const keyword = params.keyword?.trim().toLowerCase() || ''
+      const model = params.model?.trim().toLowerCase() || ''
+      const tag = params.tag?.trim().toLowerCase() || ''
+      const filtered = mockPrompts
+        .filter((prompt) => {
+          if (params.categoryId && prompt.categoryId !== params.categoryId) return false
+          if (model && prompt.model.toLowerCase() !== model) return false
+          if (tag && !prompt.tags.some((item) => item.toLowerCase() === tag)) return false
+          if (!keyword) return true
+          const haystack = [
+            prompt.title,
+            prompt.description,
+            prompt.content,
+            prompt.model,
+            prompt.categoryName,
+            prompt.user.username,
+            ...prompt.tags
+          ].join(' ').toLowerCase()
+          return haystack.includes(keyword)
+        })
+        .sort((left, right) => {
+          if (params.sort === 'popular' || params.sort === 'hot') {
+            return right.likes - left.likes || right.views - left.views
+          }
+          return right.createdAt.localeCompare(left.createdAt) || right.id - left.id
+        })
+      const requestedPage = Math.max(1, params.page || 1)
+      const requestedSize = Math.max(1, params.pageSize || pageSize.value)
+      const start = (requestedPage - 1) * requestedSize
+      const data = {
+        list: filtered.slice(start, start + requestedSize),
+        total: filtered.length,
+        page: requestedPage,
+        pageSize: requestedSize
+      }
+      if (append) {
+        const existing = new Set(searchResults.value.map((item) => item.id))
+        searchResults.value = [
+          ...searchResults.value,
+          ...data.list.filter((item) => !existing.has(item.id))
+        ]
+      } else {
+        searchResults.value = data.list
+      }
+      searchTotal.value = data.total
+      searchPage.value = data.page
+      usingMockData.value = true
+      searchLoading.value = false
+      return data
+    }
+
     try {
       const response = await promptApi.searchPrompts(params, controller.signal)
       if (controller.signal.aborted || requestID !== searchRequestID) return null
@@ -335,6 +387,14 @@ export const usePromptStore = defineStore('prompt', () => {
     const requestID = ++commentsRequestID
     commentsLoading.value = true
     commentsError.value = false
+
+    if (import.meta.env.VITE_ENABLE_PROMPT_API === 'false') {
+      comments.value = []
+      commentsTotal.value = 0
+      commentsPage.value = 1
+      commentsLoading.value = false
+      return comments.value
+    }
 
     try {
       const response = await promptApi.getPromptComments(id, sort, 1, commentsPageSize.value, controller.signal)

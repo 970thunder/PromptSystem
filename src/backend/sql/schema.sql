@@ -150,6 +150,8 @@ CREATE TABLE reports (
     reason VARCHAR(80) NOT NULL,
     detail VARCHAR(500) DEFAULT '',
     status VARCHAR(20) DEFAULT 'pending' COMMENT 'pending, reviewed, rejected',
+    reviewed_by BIGINT NULL,
+    review_note VARCHAR(500) DEFAULT '',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_user_target (user_id, target_type, target_id),
@@ -204,6 +206,35 @@ CREATE TABLE uploads (
     INDEX idx_owner (owner_id),
     INDEX idx_status_created (status, created_at),
     INDEX idx_purpose (purpose)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Privileged roles are kept separate from the public user DTO. Only rows with
+-- role=admin and an active user may authorize moderation actions.
+CREATE TABLE user_roles (
+    user_id BIGINT PRIMARY KEY,
+    role VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_roles_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Append-only moderation audit chain. The application never updates or deletes
+-- these rows; event_hash commits to the previous row and canonical metadata.
+CREATE TABLE audit_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    actor_user_id BIGINT NOT NULL,
+    action VARCHAR(80) NOT NULL,
+    target_type VARCHAR(32) NOT NULL,
+    target_id BIGINT NOT NULL,
+    metadata JSON NOT NULL,
+    request_id VARCHAR(128) DEFAULT '',
+    prev_hash CHAR(64) NOT NULL DEFAULT '',
+    event_hash CHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (actor_user_id) REFERENCES users(id),
+    INDEX idx_audit_created (created_at, id),
+    INDEX idx_audit_target (target_type, target_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Default categories (prompt: image-focused Chinese labels)

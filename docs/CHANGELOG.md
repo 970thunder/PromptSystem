@@ -23,6 +23,8 @@
 - 生产播种回归测试确保空库不创建演示账号或 Prompt；线上演示账号已在备份后禁用并失效旧会话
 
 ### Added
+- 管理审核边界：新增管理员角色、举报审核、Prompt 下架、用户禁用和追加式哈希链审计 API；管理员 actor 只取自会话，生产角色配置与真实审核验收仍待完成
+- 补齐 Report/AuditEvent 共享 API 契约，并让 Playwright E2E 使用确定性 mock 读取路径；Vitest 排除 Playwright suite，桌面/移动 smoke 共 4 项通过
 - 新增 `docs/api-contract.schema.json` 共享 DTO Schema 和生成器，前端核心 User/Prompt/Comment/分页类型由生成文件提供，CI 增加生成结果漂移检查
 - 首页标题飘带使用已有提示词标题和封面图，支持多行、不同速度和 3D 视觉效果
 - 增加首页、提示词卡片与详情页冒烟测试

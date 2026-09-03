@@ -21,6 +21,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
+    // Playwright suites are run by `npm run test:e2e`, not Vitest.
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     env: {
       VITE_ENABLE_PROMPT_API: 'false'
     }

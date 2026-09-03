@@ -648,6 +648,14 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_IMAGE_URL", Message: "Invalid image URL"}
 	case errors.Is(err, store.ErrInvalidReportReason):
 		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_REPORT_REASON", Message: "Invalid report reason"}
+	case errors.Is(err, store.ErrAdminRequired):
+		apiErr = &apiError{Status: http.StatusForbidden, Code: "ADMIN_REQUIRED", Message: "Administrator role required"}
+	case errors.Is(err, store.ErrInvalidModeration):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_MODERATION", Message: "Invalid moderation action"}
+	case errors.Is(err, store.ErrModerationNotFound):
+		apiErr = &apiError{Status: http.StatusNotFound, Code: "MODERATION_NOT_FOUND", Message: "Moderation target not found"}
+	case errors.Is(err, store.ErrCannotModerateSelf):
+		apiErr = &apiError{Status: http.StatusBadRequest, Code: "CANNOT_MODERATE_SELF", Message: "Cannot disable your own account"}
 	case errors.Is(err, store.ErrInvalidContent):
 		apiErr = &apiError{Status: http.StatusBadRequest, Code: "INVALID_CONTENT", Message: "Content contains invalid characters"}
 	case errors.Is(err, store.ErrContentTooLong):
