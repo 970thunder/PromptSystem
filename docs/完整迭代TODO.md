@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：53/81 已完成，28 项待完成（2026-09-04）。
+当前进度：54/81 已完成，27 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -96,7 +96,7 @@
 - [x] **S-09 上传安全与配额**：MIME、解码、像素、格式、并发、单用户日配额和总容量限制。
 - [ ] **S-10 Redis 隔离**：独立网络、ACL/密码，禁止公网访问。
 - [x] **S-11 容器加固**：非 root、`no-new-privileges`、`cap_drop`、可行的只读根文件系统、资源与日志限制。
-- [ ] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
+- [x] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
 - [ ] **S-13 密钥轮换**：JWT、MySQL、Redis、RustFS、OAuth、SMTP 均有���换和验证流程。
 - [ ] **S-14 审核权限与审计**：举报审核、内容下架、用户禁用使用管理员权限并记录不可抵赖审计。
 
@@ -172,6 +172,7 @@
 - `D-10`：新增 `GET /api/v1/user/data-export`、`DELETE /api/v1/user/history` 和 `DELETE /api/v1/user/account`；内存/MySQL Store 均支持本人 Prompt 导出、历史清除和事务化注销。注销禁用账户、清除密码/GitHub 绑定、匿名化用户名/邮箱、递增 `session_version`，清理个人点赞/收藏/举报/关注/浏览明细并修正 Prompt/评论计数；保留 Prompt/评论记录以满足审计和外键保留策略，禁用作者内容不再公开。个人中心增加导出、清空浏览记录和注销入口。`go test ./...`、MySQL `TestMySQLDeleteAccountAnonymizesAndClearsPersonalRows`、前端 `npm run lint:check`、`npm test -- --run`（7 files/14 tests）和 `npm run build` 通过。生产尚未发布，注销后上传对象仍由 `D-04` 延迟回收任务负责，真实 SMTP/告警/RustFS 依赖项目保持未验收。
 - `A-11/D-05/S-07`：新增轻量 Prometheus `/metrics` 端点，记录 HTTP 请求/错误/平均延迟、上传、任务和 MySQL/Redis/上传依赖状态；新增只读 Prompt 计数审计并纳入低峰维护命令；登录、注册、验证码、重置、评论、举报、搜索、互动和上传按 IP/邮箱/用户分维度限流，生产 Redis 不可用时 fail-closed。新增限流与 metrics 回归测试。后端 `go test ./...`、`go vet ./...`、三个二进制构建和前端全量校验通过；生产 timer/告警尚未配置，故 `A-10/O-01` 仍待服务器验收。
 - `S-11`：生产 Compose 为 backend/frontend 增加 `no-new-privileges`、最小 Linux capabilities、只读根文件系统、tmpfs、PID/内存上限，并保留现有日志轮转和 loopback 端口边界；security workflow 增加策略断言。生产尚未重启验证，前端 nginx 的 `NET_BIND_SERVICE` 例外需在下一发布窗口用 `config`、启动和 HTTPS 冒烟验收。
+- `S-12`：security workflow 增加 Gitleaks 全历史机密扫描、Trivy backend/frontend 运行镜像高危/严重漏洞扫描；构建时固定 Go 官方模块校验，并升级 `golang.org/x/crypto` 到 `v0.55.0`、`golang.org/x/sys` 到 `v0.47.0`，前端运行镜像更新至 `nginx:1.29-alpine3.22` 并在构建阶段执行 `apk upgrade --no-cache`。本机 `go test ./...`、`go vet ./...`、`npm audit --audit-level=high`、前端构建通过；GitHub Actions security-scan `33808997369` 的依赖、Gitleaks、Trivy runtime image、Compose policy 全部成功，frontend-ci `33808997341` 全部成功。生产尚未发布，后续每次发布仍须复核镜像扫描结果。
 - `S-08`：`src/backend/internal/store/moderation.go` 统一校验 Prompt、评论、用户名和简介的 UTF-8、控制字符、长度及脚本/危险 URL 片段；标签和图片 URL 同步拒绝控制字符与超长值。内存/MySQL 写入路径共用规则，API 将校验错误映射为稳定 `errorCode`。新增边界回归测试；`gofmt -l .`、`go test ./...`、`go vet ./...`、`git diff --check` 通过。生产尚未发布，CSP 强制模式和浏览器渲染验证仍由 `S-04`/`F-10` 负责。
 - `A-04`：将 `SearchView` 的 API 直连、AbortController、请求序号、分页、去重、错误和 loading 状态收敛到 `src/frontend/src/stores/prompt.ts`；视图仅保留路由、筛选和展示职责，卸载时由 Store 统一取消搜索。新增搜索分页去重与旧请求响应隔离回归测试；前端 `npm test -- --run`（7 files/16 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过。生产尚未发布。
 - `S-09`：上传入口保留整请求/单文件大小限制、真实 MIME/扩展名一致性、标准解码和 20MP 像素上限，并新增 `UPLOAD_MAX_CONCURRENT` 并发槽、`UPLOAD_DAILY_QUOTA_MB` 用户日配额和 `UPLOAD_TOTAL_QUOTA_MB` 总容量；Redis 实现按用户/UTC 日期原子字节计数，开发/测试无 Redis 时使用进程内计数，数据库已用量与进程内预留量共同防止并发超卖。新增 `ActiveUploadBytes` Store 契约、Redis `IncrementBy`、配额/并发回归测试；`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过。生产尚未发布，RustFS 独立 bucket 和跨故障域副本仍由 `D-12/D-13` 负责。

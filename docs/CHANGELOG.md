@@ -30,6 +30,7 @@
 - 增加个人数据导出、浏览历史清除和账号注销 API；个人中心提供对应操作入口
 - 增加低内存友好的 Prometheus `/metrics` 端点、Prompt 计数审计和维护命令
 - 生产 Compose 增加最小 capability、只读根文件系统、tmpfs 及 PID/内存上限；前端 nginx 增加 CSP Report-Only
+- 安全 CI 增加 Gitleaks 全历史机密扫描和 Trivy backend/frontend 运行镜像扫描；Go 加密依赖升级至已修复版本，前端 nginx 运行基线同步安全补丁
 
 ### Changed
 - 上传回收命令改为可测试的安全清理核心：仅回收超过窗口的 `pending` 对象，provider 不匹配或删除失败保留待重试，物理删除成功后才转为 `trashed`
