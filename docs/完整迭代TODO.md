@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：36/81 已完成，45 项待完成（2026-09-04）。
+当前进度：37/81 已完成，44 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -61,7 +61,7 @@
 - [x] **A-06 统一错误模型**：所有接口返回稳定 `errorCode`，禁止返回内部错误文本或通过字符串分支。
 - [x] **A-07 请求取消与竞态**：搜索、详情、评论使用 AbortController/请求序列，旧响应不能覆盖新状态。
 - [x] **A-08 数据库连接池**：配置最大/空闲连接与生命周期，并采集连接池指标。
-- [ ] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
+- [x] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
 - [ ] **A-10 轻量后台任务**：上传回收、数据审计、备份校验优先使用 systemd timer/cron，不新增高内存常驻套件。
 - [ ] **A-11 可观测性**：提供请求、错误、延迟、数据库、Redis、上传和任务指标。
 - [ ] **A-12 发布架构自动化**：本机构建、镜像校验、上传、迁移、切换、验证和回滚脚本化；服务器不编译。
@@ -164,4 +164,5 @@
 - `A-06`：存储层统一使用 sentinel error（用户、Prompt、评论、举报、关注等），API 通过 `errors.Is` 集中映射稳定 `errorCode`；未知存储错误统一 `500 INTERNAL_ERROR`，不再返回内部错误文本或用错误字符串分支。响应写出层为遗漏的 4xx/5xx 信封补默认稳定码。新增登录、自己关注、不存在 Prompt 评论、越权更新和未知错误不泄露回归测试。`go test ./...`、`go vet ./...`、`go build ./cmd/api`、`docker compose config --quiet`、`git diff --check` 通过；本机 race 未执行成功（Windows 环境缺少 `gcc`），GitHub Actions backend `33784076660`（含 Linux `go test -race`、迁移矩阵、Docker health）和 security `33784076727` 均成功。提交 `3cdb64e` 已推送，生产尚未发布。
 - `A-07`：API 客户端支持 `AbortSignal`；Prompt Store 对首页列表、详情、评论及加载更多请求执行取消和请求序号校验；搜索页取消旧搜索并在卸载时终止；详情页卸载时取消待处理请求；Axios 取消不再触发网络错误提示。新增旧详情/评论响应不覆盖新状态测试。前端 `npm test -- --run`（7 files/14 tests）、`npm run lint:check`、`npm run build`、`git diff --check` 通过，生产尚未发布。
 - `D-07`：应用层和 MySQL 种子统一 trim、合并空白、大小写规范化、长度限制和去重；新增 `0015_normalize_prompt_tags.sql` 清理历史标签冲突并保持幂等，热门标签继续由后端聚合。新增 MySQL 隔离库迁移回归测试，验证旧标签归一化为单个 canonical 值且重复迁移无变化；`go test ./internal/store ./internal/database` 通过（未设置 `PROMPTOS_TEST_MYSQL_DSN` 时集成测试按约定跳过）。生产尚未发布。
-- `D-08`：内存和 MySQL 公开读取统一要求 Prompt 已发布且作者账号启用；首页汇总、分类计数、搜索、公开详情、历史、收藏/点赞列表及互动入口均过滤禁用作者内容，避免已发布数据因作者禁用而泄露。新增内存回归测试和 MySQL 隔离库集成测试；`go test ./...`、`go vet ./...`、`go build ./cmd/api` 通过（未设置 `PROMPTOS_TEST_MYSQL_DSN` 时集成测试按约定跳过）。生产尚未发布。
+- `D-08`：内存和 MySQL 公开读取统一要求 Prompt 已发布且作者账号启用；首页汇总、分类计数、搜索、公开详情、历史、收藏/点赞列表及互动入口均过滤禁用作者内容，避免已发布数据因作者禁用而泄露。新增内存回归测试和 MySQL 隔离库集成测试；本机 `go test ./...`、`go vet ./...`、`go build ./cmd/api` 通过，GitHub Actions backend `33788170152` 的真实 MySQL 集成/race、迁移矩阵和 Docker health 全部通过。生产尚未发布。
+- `A-09`：MySQL 评论列表按规范化 `latest`/`oldest`/`popular` 在 `LIMIT/OFFSET` 前排序，新增根评论时间与热度复合索引并保持 `schema.sql`/增量迁移一致；集成测试验证热门结果不会被分页截断，并用 `EXPLAIN FORMAT=JSON` 断言 `idx_target_parent_likes` 计划候选。GitHub Actions backend `33788170152` 全部通过，生产尚未发布。
