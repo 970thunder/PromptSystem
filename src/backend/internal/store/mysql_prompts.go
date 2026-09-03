@@ -421,6 +421,15 @@ func (s *MySQLPromptStore) Update(id int, userID int, input CreatePromptInput) (
 		return Prompt{}, err
 	}
 	if !found {
+		var ownerID int
+		if err := s.db.QueryRow(`SELECT user_id FROM prompts WHERE id = ? AND status <> -1`, id).Scan(&ownerID); errors.Is(err, sql.ErrNoRows) {
+			return Prompt{}, ErrPromptNotFound
+		} else if err != nil {
+			return Prompt{}, err
+		}
+		if ownerID != userID {
+			return Prompt{}, ErrPromptForbidden
+		}
 		return Prompt{}, ErrPromptNotFound
 	}
 	if current.UserID != userID {

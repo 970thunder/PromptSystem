@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：37/81 已完成，44 项待完成（2026-09-04）。
+当前进度：38/81 已完成，43 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -55,7 +55,7 @@
 
 - [x] **A-01 统一数据库初始化**：空库、旧 schema、部分迁移库通过同一入口到达最终版本，不再人工先导入 `schema.sql`。
 - [ ] **A-02 Service 层**：认证、互动、举报、上传引用和缓存失效从 handler 抽到窄业务服务。
-- [ ] **A-03 Store 语义一致**：MySQL/内存实现通过同一契约测试；内存实现仅限开发和测试。
+- [x] **A-03 Store 语义一致**：MySQL/内存实现通过同一契约测试；内存实现仅限开发和测试。
 - [ ] **A-04 前端数据层收敛**：View 不重复直连 API；Store 统一 loading/error/empty/success、缓存和竞态。
 - [ ] **A-05 API 单一契约**：引入 OpenAPI/JSON Schema 或等价生成校验，TypeScript DTO 不手工漂移。
 - [x] **A-06 统一错误模型**：所有接口返回稳定 `errorCode`，禁止返回内部错误文本或通过字符串分支。
@@ -166,3 +166,4 @@
 - `D-07`：应用层和 MySQL 种子统一 trim、合并空白、大小写规范化、长度限制和去重；新增 `0015_normalize_prompt_tags.sql` 清理历史标签冲突并保持幂等，热门标签继续由后端聚合。新增 MySQL 隔离库迁移回归测试，验证旧标签归一化为单个 canonical 值且重复迁移无变化；`go test ./internal/store ./internal/database` 通过（未设置 `PROMPTOS_TEST_MYSQL_DSN` 时集成测试按约定跳过）。生产尚未发布。
 - `D-08`：内存和 MySQL 公开读取统一要求 Prompt 已发布且作者账号启用；首页汇总、分类计数、搜索、公开详情、历史、收藏/点赞列表及互动入口均过滤禁用作者内容，避免已发布数据因作者禁用而泄露。新增内存回归测试和 MySQL 隔离库集成测试；本机 `go test ./...`、`go vet ./...`、`go build ./cmd/api` 通过，GitHub Actions backend `33788170152` 的真实 MySQL 集成/race、迁移矩阵和 Docker health 全部通过。生产尚未发布。
 - `A-09`：MySQL 评论列表按规范化 `latest`/`oldest`/`popular` 在 `LIMIT/OFFSET` 前排序，新增根评论时间与热度复合索引并保持 `schema.sql`/增量迁移一致；集成测试验证热门结果不会被分页截断，并用 `EXPLAIN FORMAT=JSON` 断言 `idx_target_parent_likes` 计划候选。GitHub Actions backend `33788170152` 全部通过，生产尚未发布。
+- `A-03`：新增 `runPromptManagerContract` 共享契约测试，内存和 MySQL 均覆盖创建与标签规范化、分页总数、互动幂等、浏览历史去重、删除隐藏及非所有者更新权限；修正 MySQL 非所有者更新返回 `ErrPromptForbidden` 的语义。生产尚未发布，真实 MySQL 由 backend CI 集成作业验证。
