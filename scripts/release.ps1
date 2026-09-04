@@ -1,4 +1,4 @@
-# PromptOS production release pipeline.
+﻿# PromptOS production release pipeline.
 # Builds locally; the server receives only a compose file and runtime images.
 [CmdletBinding()]
 param(
