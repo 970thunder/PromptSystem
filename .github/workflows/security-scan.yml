@@ -21,7 +21,26 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
       - name: npm audit
         working-directory: src/frontend
-        run: npm ci && npm audit --audit-level=high
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          for attempt in 1 2 3; do
+            audit_log="$(mktemp)"
+            if npm audit --audit-level=high 2>&1 | tee "$audit_log"; then
+              rm -f "$audit_log"
+              exit 0
+            fi
+            if ! grep -Eq '503|Service Unavailable|ECONNRESET|ECONNREFUSED|ETIMEDOUT|network timeout' "$audit_log"; then
+              rm -f "$audit_log"
+              exit 1
+            fi
+            rm -f "$audit_log"
+            if [ "$attempt" -lt 3 ]; then
+              sleep 10
+            fi
+          done
+          exit 1
       - uses: golang/govulncheck-action@v1
         with:
           go-version-input: '1.25'
