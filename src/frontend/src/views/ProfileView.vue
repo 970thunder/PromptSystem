@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
-import { Download, Eraser, UserRoundX } from 'lucide-vue-next'
+import { Download, Eraser, Shield, UserRoundX } from 'lucide-vue-next'
 import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
@@ -624,6 +624,16 @@ watch(() => route.params.userId, loadProfile)
                 账户数据
               </div>
               <div class="profile-account-actions">
+                <RouterLink
+                  to="/admin"
+                  class="profile-account-action"
+                >
+                  <Shield
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  审核控制台
+                </RouterLink>
                 <button
                   type="button"
                   class="profile-account-action"

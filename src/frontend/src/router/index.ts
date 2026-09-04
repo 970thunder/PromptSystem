@@ -68,6 +68,18 @@ const routes: RouteRecordRaw[] = [
     name: 'Community',
     component: () => import('@/views/CommunityView.vue'),
     meta: { title: '社区' }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('@/views/AdminView.vue'),
+    meta: { requiresAuth: true, title: '审核控制台' }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/NotFoundView.vue'),
+    meta: { title: '页面不存在' }
   }
 ]
 
