@@ -42,20 +42,20 @@
 - 仓库内只有 `.env.docker.example`（占位符）；真实值本地在 `E:\Web\secrets\promptsystem\`，服务器在 `/opt/secrets/promptsystem/`（chmod 600，不在任何 webroot 下）。
 - 生产密钥位于服务器 `/opt/secrets/promptsystem/app.env`（权限 `600`），不进入仓库；Compose 通过环境变量注入；
 - 生产入口由现有 nginx 反代，证书由 Certbot webroot 自动续期；
-- 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；确认无误后再切换强制 `Content-Security-Policy`，不得直接放宽为 `*`。
+- 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；`v0.3.0` 已切换为强制 `Content-Security-Policy`，不得直接放宽为 `*`。
 - 首次新库不需要人工导入 SQL：backend 检测到当前数据库无表时自动应用 `src/backend/sql/schema.sql` 基线，随后通过 `schema_migrations` 执行全部 `sql/migrations`。已有卷和部分迁移库只执行未记录的迁移，不会覆盖数据；
 
 ## 当前生产发布
 
-- 版本：`20260830-b584585`（Git `b584585`）
+- 版本：`v0.3.0`（CI 制品对应提交 `c9b5147`）
 - Compose 项目：`promptsystem`
-- 发布目录：`/srv/releases/promptsystem/20260830-b584585`
+- 发布目录：`/srv/releases/promptsystem/v0.3.0`；上一回滚目录：`/srv/releases/promptsystem/20260830-b584585`
 - 入口端口：前端 `127.0.0.1:3092`，后端 `127.0.0.1:5092`
 - 数据卷：`promptsystem_promptsystem_mysql_data`、`promptsystem_promptsystem_redis_data`、`promptsystem_promptsystem_uploads`
 - 上传存储：当前使用独立 Docker 本地卷；未复用其他站点的 RustFS 凭据
-- 健康检查：`/api/v1/health/ready` 返回 `storageMode=mysql`
+- 健康检查：`/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`
 
-截至 2026-09-04 的线上只读核验：上述版本仍在运行，内存可用约 `3.3 GiB`、根盘使用率约 `48%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。仓库中的新版生产 Compose 已加入只读根文件系统、`cap_drop`、PID/内存上限等加固项，但线上当前 release 尚未重启应用该策略，必须在下一次低峰发布中完成 `config`、启动、健康和 HTTPS 验收后，才能把 `S-11` 标记为生产完成。服务器实际 RustFS bridge 地址以 `ss -lntp` 为准，目前为 `172.21.0.1:13902`；PromptOS 当前尚未接入 RustFS，上传仍在本地卷。
+截至 2026-09-04 的线上核验：`v0.3.0` 运行稳定，内存可用约 `3.4 GiB`、根盘使用率约 `49%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。服务器实际 RustFS bridge 地址以 `ss -lntp` 为准，目前为 `172.21.0.1:13902`；PromptOS 当前尚未接入 RustFS，上传仍在本地卷。邮件认证保持关闭，SMTP、每日备份告警、密钥轮换和管理员账号仍未配置。
 
 ## 回滚
 
@@ -135,6 +135,14 @@ flock -n /run/lock/promptsystem-maintenance.lock \
 - 当前 release：`/srv/releases/promptsystem/20260830-b584585`；上一回滚版本：`20260829-a9ba2cf`。
 - 备份：`/srv/backups/promptsystem/20260830-b584585/`，MySQL 与 uploads 均通过 SHA-256、gzip/tar 完整性校验。
 - 发布验证：`/api/v1/health/ready` 返回 `200`、`storageMode=mysql`、`degraded=false`；HTTPS 首页、详情、评论分页和匿名浏览正常。
+
+### 本次发布记录（2026-09-04，v0.3.0）
+
+- CI `release-artifacts` run `33819216837` 成功构建并上传 backend/frontend 镜像；归档 SHA-256=`8a0da2f001aee1eda60df9890a85b4274f1b8f2593628936d9f40817160b2bba`。
+- `scripts/release.ps1 -ImageArchivePath ... -SkipTests` 在服务器未编译源码，串行完成 MySQL/上传卷备份和 `sha256sum -c`、`gzip -t`、`tar -tzf` 校验，加载镜像、Compose 重建、ready/HTTPS 验证后更新 `current`。
+- 线上 ready `200` 且 `environment=production`、`storageMode=mysql`、`degraded=false`；首页与 `/api/v1/home/summary` 返回 `200`。CSP 强制 Header、正式 Origin 预检 `204`、陌生 Origin `403 ORIGIN_NOT_ALLOWED`、Cookie 写请求缺 CSRF Header `403 CSRF_INVALID`。
+- backend/frontend `ReadonlyRootfs=true`、`cap_drop=ALL`，frontend 仅保留 `CHOWN/NET_BIND_SERVICE/SETGID/SETUID` 例外；PID/内存上限 `128/768 MiB`、`64/256 MiB`，重启计数 0。Redis 未认证访问返回 `NOAUTH`，秘密文件权限 `600`，邮件认证关闭。
+- 当前只保留 `/srv/releases/promptsystem/v0.3.0` 和 `/srv/releases/promptsystem/20260830-b584585`，旧 `20260829-a9ba2cf` release 与镜像标签已按清理规则移除；其他 Compose 项目未停止，未执行全局 prune、`down -v` 或删除卷。
 
 ### 生产演示数据处置记录（2026-08-30）
 
