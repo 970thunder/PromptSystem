@@ -2,6 +2,10 @@ package api
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -81,5 +85,48 @@ func TestCaptchaManagerExpires(t *testing.T) {
 	now = now.Add(captchaTTL + time.Second)
 	if manager.verify("user@example.com", code) {
 		t.Fatal("expected expired captcha to fail")
+	}
+}
+
+// TestCaptchaConcurrentIssueSingleWinner fires parallel captcha sends for one
+// email and asserts the rate limit (1 per cooldown window) admits exactly one
+// request, so concurrent callers cannot receive multiple live codes.
+func TestCaptchaConcurrentIssueSingleWinner(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	const concurrency = 8
+	results := make(chan int, concurrency)
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/user/captcha", strings.NewReader(`{"email":"user@example.com"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Forwarded-For", "10.0.0.1")
+			rec := httptest.NewRecorder()
+			s.handleCaptcha(rec, req)
+			results <- rec.Code
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	okCount, limitedCount := 0, 0
+	for status := range results {
+		switch status {
+		case http.StatusOK:
+			okCount++
+		case http.StatusTooManyRequests:
+			limitedCount++
+		default:
+			t.Fatalf("unexpected status %d during concurrent captcha issue", status)
+		}
+	}
+	if okCount != 1 {
+		t.Fatalf("expected exactly 1 accepted captcha send, got %d", okCount)
+	}
+	if limitedCount != concurrency-1 {
+		t.Fatalf("expected %d rate-limited sends, got %d", concurrency-1, limitedCount)
 	}
 }

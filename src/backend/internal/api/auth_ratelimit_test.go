@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 
 // fakeCache is a deterministic in-memory Cache used to exercise rate limiting
 // without a live Redis. Increment returns a fixed window as the retry-after so
-// tests can assert the Retry-After header value.
+// tests can assert the Retry-After header value. A mutex keeps concurrent
+// handler tests race-free while preserving Redis-like atomic counters.
 type fakeCache struct {
+	mu       sync.Mutex
 	counters map[string]int64
 	store    map[string]string
 }
@@ -42,11 +45,15 @@ func newFakeCache() *fakeCache {
 }
 
 func (f *fakeCache) Set(_ context.Context, key string, value any, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.store[key] = value.(string)
 	return nil
 }
 
 func (f *fakeCache) Get(_ context.Context, key string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	value, ok := f.store[key]
 	if !ok {
 		return "", nil
@@ -55,11 +62,15 @@ func (f *fakeCache) Get(_ context.Context, key string) (string, error) {
 }
 
 func (f *fakeCache) Exists(_ context.Context, key string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	_, ok := f.store[key]
 	return ok, nil
 }
 
 func (f *fakeCache) GetAndDelete(_ context.Context, key string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	value, ok := f.store[key]
 	if ok {
 		delete(f.store, key)
@@ -68,11 +79,15 @@ func (f *fakeCache) GetAndDelete(_ context.Context, key string) (string, error) 
 }
 
 func (f *fakeCache) Increment(_ context.Context, key string, window time.Duration) (int64, time.Duration, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.counters[key]++
 	return f.counters[key], window, nil
 }
 
 func (f *fakeCache) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	delete(f.store, key)
 	delete(f.counters, key)
 	return nil
