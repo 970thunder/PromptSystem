@@ -131,7 +131,7 @@
 - [x] **F-07 清理演示 fallback**：生产 API 失败显示真实错误，不自动切换成演示数据。
 - [x] **F-08 搜索与列表性能**：URL 恢复、取消旧请求、稳定图片尺寸、加载更多与错误恢复。
 - [x] **F-09 响应式与无障碍**：390/768/1440 px、键盘、焦点、Escape、reduced motion 全部验收。
-- [ ] **F-10 浏览器 E2E**：已覆盖首页、详情、搜索和桌面/移动 smoke；仍需补齐注册登录、评论互动、发布、工作台、主题与完整导航流程。
+- [x] **F-10 浏览器 E2E**：已覆盖首页、详情、搜索和桌面/移动 smoke，以及注册（验证码）、登录重定向、评论与点赞互动、发布向导（封面上传→基本信息→正文→提交）、工作台收藏切换、主题持久化与超级菜单导航。`2026-09-05` 新增 `e2e/flows.spec.ts`，`npm run test:e2e` 全量 14 passed / 4 skipped（移动端项目跳过桌面 hover/发布流程），桌面/移动双项目通过。
 - [ ] **F-11 更新前端重设计手册状态**：以实际提交和验收证据补齐原 24 项状态，禁止批量虚假勾选。
 
 ## O 服务器和运维
@@ -219,3 +219,4 @@
 ### 2026-09-05
 
 - `P0-06`：SMTP 生产接线完成。阿里云邮件推送凭据（`E:\Web\secrets\isoumao\community.env`，服务器侧同步注入 `/opt/secrets/promptsystem/app.env`，原文件备份 `app.env.bak-20260905-pre-smtp`）；部署 compose（`/srv/releases/promptsystem/current`，备份 `docker-compose.yml.bak-20260905-pre-smtp`）backend `environment` 补齐 `SMTP_HOST/PORT/USER/PASSWORD/FROM` 映射后 `config --quiet` 通过并重建，ready `200`、`degraded=false`。线上实测：`POST /api/v1/user/captcha` 首发返回 `200`（`expiresInSeconds=598`，响应无 `devCode`），同邮箱立即重发 `429 RATE_LIMITED`，backend 日志无验证码明文；失败路径此前已由 `TestProductionCaptchaResponseDoesNotExposeCode`、`TestProductionCaptchaFailsClosedWithoutRedis`、`TestProductionCaptchaSendFailureDeletesPendingCode`、`TestRedisCaptchaIsHashedAndSingleUse`（哈希+原子消费防重放）覆盖。本次新增 `TestCaptchaConcurrentIssueSingleWinner`（8 并发仅 1 胜出，fakeCache 加锁保证 -race 可跑），`go test ./internal/api/ -run 'Captcha|Email|RateLimit|Register|Reset'` 通过；真实凭据端到端冒烟新增 `-tags=smtp_live` 的 `TestLiveSMTPSend`（发送至客服邮箱成功，0.41s）。本地密钥镜像 `E:\Web\secrets\promptsystem\app.env` 已同步建立。
+- `F-10`：新增 `e2e/flows.spec.ts` 覆盖注册（邮箱验证码 mock → 提交 → 登录态头像）、登录（`redirect` 回跳 `/profile`）、详情互动（发表评论校验请求体 + 点赞计数 893→894）、发布向导（`setInputFiles` 上传封面 mock `/uploads/images` → 五步向导 → 捕获 `POST /prompts` payload 断言 title/categoryId/cover）、工作台（资料渲染 + 收藏页签切换显示收藏卡片）、主题（切换 `html[data-mode]` 且刷新后保持）、超级菜单（悬停"发现"→点击"工作流"→落到 `/search?tag=流程`）。`.env.e2e` 开启 `VITE_EMAIL_AUTH_ENABLED=true` 以驱动验证码 UI（能力关闭路径由 `capabilities.spec.ts` 单测覆盖）；e2e 网络拦截需注意带 query 的端点 glob 要以 `*` 结尾，否则穿透本地代理造成 401 污染。`npm run test:e2e` 14 passed / 4 skipped，`npx vitest run` 8 files/19 tests、`npm run lint:check` 通过。
