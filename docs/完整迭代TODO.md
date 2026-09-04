@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：64/81 已完成，17 项待完成（2026-09-04）。
+当前进度：76/81 已完成，5 项待完成（2026-09-05；待完成为 D-12/D-13 RustFS、S-13 剩余三类凭据轮换、O-10 剩余三项演练、R-08 终审）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -82,7 +82,7 @@
 - [x] **A-07 请求取消与竞态**：搜索、详情、评论使用 AbortController/请求序列，旧响应不能覆盖新状态。
 - [x] **A-08 数据库连接池**：配置最大/空闲连接与生命周期，并采集连接池指标。
 - [x] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
-- [ ] **A-10 轻量后台任务**：上传回收、数据审计、备份校验优先使用 systemd timer/cron，不新增高内存常驻套件。
+- [x] **A-10 轻量后台任务**：上传回收、数据审计、备份校验优先使用 systemd timer/cron，不新增高内存常驻套件。`2026-09-05` `promptos-maintenance.timer`（04:30）与 `promptos-integrity-audit.timer`（02:30）上线，一次性 oneshot 容器 + flock 串行 + `-T` 非交互；两个工具首次实跑成功（exit 0，无漂移、无可回收对象），与 03:30 备份错峰。
 - [x] **A-11 可观测性**：提供请求、错误、延迟、数据库、Redis、上传和任务指标。
 - [x] **A-12 发布架构自动化**：本机构建、镜像校验、上传、迁移、切换、验证和回滚脚本化；服务器不编译。`v0.3.0` CI 归档发布已实测通过。
 
@@ -118,7 +118,7 @@
 - [x] **S-11 容器加固**：非 root、`no-new-privileges`、`cap_drop`、可行的只读根文件系统、资源与日志限制。
 - [x] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
 - [ ] **S-13 密钥轮换**：JWT、MySQL、Redis、RustFS、OAuth、SMTP 均有轮换和验证流程。`2026-09-05` 进展：轮换手册落入 `docs/DEPLOYMENT.md`（统一 app.env 机制 + 每类凭据的动作与验证），并实机执行 REDIS_PASSWORD/JWT_SECRET/MYSQL_PASSWORD/MYSQL_MIGRATION_PASSWORD 四项轮换（旧 Redis 密码 `NOAUTH`、新密码 `PONG`；ready `200`、`degraded=false`）。剩余：SMTP/GitHub OAuth 需在各自控制台生成新凭据后按手册轮换；RustFS 凭据待 D-12 接入后纳入——三项完成前保持未勾选。
-- [ ] **S-14 审核权限与审计**：代码已提供管理员角色校验、举报审核、内容下架、用户禁用和追加式哈希链审计；待生产配置管理员角色、真实审核记录和审计链校验后勾选。
+- [x] **S-14 审核权限与审计**：代码已提供管理员角色校验、举报审核、内容下架、用户禁用和追加式哈希链审计。`2026-09-05` 生产完成：注册管理员账号（user 8，凭据 `/root/.promptos-admin-credentials`，600）、`user_roles` 写入 `admin`；审核演练下架 prompt 105（公开详情即变 `404`）后恢复（`200`），`audit_logs` 两条 `content.status` 事件哈希链 linkage 验证为真；未授权访问 admin API 为 `401`。演练同时发现并修复 moderation 两个生产级缺陷（目标表名与审计时间戳格式），随 `v0.3.1` 上线后复验通过。
 
 ## F 产品与前端
 
@@ -222,3 +222,4 @@
 - `F-10`：新增 `e2e/flows.spec.ts` 覆盖注册（邮箱验证码 mock → 提交 → 登录态头像）、登录（`redirect` 回跳 `/profile`）、详情互动（发表评论校验请求体 + 点赞计数 893→894）、发布向导（`setInputFiles` 上传封面 mock `/uploads/images` → 五步向导 → 捕获 `POST /prompts` payload 断言 title/categoryId/cover）、工作台（资料渲染 + 收藏页签切换显示收藏卡片）、主题（切换 `html[data-mode]` 且刷新后保持）、超级菜单（悬停"发现"→点击"工作流"→落到 `/search?tag=流程`）。`.env.e2e` 开启 `VITE_EMAIL_AUTH_ENABLED=true` 以驱动验证码 UI（能力关闭路径由 `capabilities.spec.ts` 单测覆盖）；e2e 网络拦截需注意带 query 的端点 glob 要以 `*` 结尾，否则穿透本地代理造成 401 污染。`npm run test:e2e` 14 passed / 4 skipped，`npx vitest run` 8 files/19 tests、`npm run lint:check` 通过。
 - `D-11/O-01`（2026-09-05）：告警接收端为客服邮箱 `3038414005@qq.com`，SMTP 凭据复用阿里云邮件推送账号（`/opt/secrets/promptsystem/alert.env`，600）。备份脚本与看门狗均入仓 `scripts/ops/`（`promptos-backup.sh`/`promptos-alert.sh`/`promptos-watchdog.sh`），systemd 单元 `promptos-backup.{service,timer}`（03:30+RandomizedDelay 600s，Persistent）与 `promptos-watchdog.{service,timer}`（`*:00/15`）。看门狗首次运行即发现 RustFS 13902 实际绑定 `172.21.0.1`（docker 网桥）而非 `127.0.0.1`，端口基线已按实测修正。
 - `O-04/O-05/O-06/O-07`（2026-09-05）：nginx 权威控制路径为 `/www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf && … -s reload -c …`；certbot deploy 钩子（reload-isoumao-nginx.sh 等）已验证指向一致，未新增冗余钩子。O-10 故障演练本批完成 backend（stop→ready+容器双告警→start→自动恢复）、Redis（stop→告警→start→恢复）、MySQL（restart→ready 200）、nginx（reload+HTTPS 探测）四项；RustFS/证书/磁盘三项因涉及共享基础设施或高风险注入，保持未勾选并记录原因。
+- `v0.3.1` 生产发布（2026-09-05）：CI `release-artifacts` run `33910511955` 构建镜像（backend sha256=`d8746224…`、frontend sha256=`d1b05298…`、归档 `230addb7…`），`release.ps1 -ImageArchivePath` 串行完成服务器 MySQL/上传卷备份（`sha256sum -c` + `gzip -t` 通过）、镜像加载、Compose 重建、ready/HTTPS 验证，`current` 指向 `/srv/releases/promptsystem/v0.3.1`。线上 ready `200`、`degraded=false`、`storageMode=mysql`；HTTPS 首页 `200`。发布同时随版本上线：P0-06 SMTP 验证码、moderation 双缺陷修复、E2E 流程套件。发布脚本本次修复为 UTF-8 BOM（Windows PowerShell 5.1 可直接解析）。
