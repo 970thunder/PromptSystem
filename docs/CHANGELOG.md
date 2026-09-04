@@ -4,6 +4,8 @@
 
 ## [v0.3.1] - 2026-09-05
 
+镜像：`promptsystem-backend:v0.3.1` sha256=`d8746224698de967ba275eba774cde0242670877240dac839fec233eb3f20e98`，`promptsystem-frontend:v0.3.1` sha256=`d1b05298492a0e4d2d31aa369ee62a861e63d9ebc0f29752e76d8046e4b1ba44`；CI 构建 commit `339a44d`，归档 SHA-256=`230addb7fcb9a2f551f53c288bc0bcffac874bf39a464a903aa512a6fb4dd74a`。
+
 ### Fixed
 - 修复管理员 Prompt 下架/恢复在 MySQL 上必然失败的两个缺陷：目标表误写为不存在的 `prompt`（应为 `prompts`），以及审计时间戳使用 MySQL 不接受的 RFC3339 `T`/`Z` 格式；两者由生产 S-14 审核演练发现并新增 MySQL 集成回归覆盖
 
