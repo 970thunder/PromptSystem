@@ -99,8 +99,8 @@
 - [x] **D-09 数据字典**：记录全部表、字段、状态值、索引、外键和保留期限。
 - [x] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
 - [x] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。`2026-09-05` `scripts/ops/promptos-backup.sh`（flock 串行 + mysqldump single-transaction + gzip + SHA-256 + 14 天保留 + 失败告警）部署至服务器 `/usr/local/bin/`，`promptos-backup.timer` 每日 03:30+抖动执行；首次备份 `/srv/backups/promptsystem/daily/2026-09-05/`（5559B，SHA-256 与 gzip 校验通过），告警通道 `promptos-alert.sh`（curl SMTP→客服邮箱）实测发送成功。
-- [ ] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。
-- [ ] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。
+- [ ] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。阻塞记录（2026-09-05）：后端已具备 `UploadProvider=rustfs/s3` 能力（`internal/storage/storage.go`，S3 兼容客户端）；待平板服务器 RustFS 侧为 PromptOS 创建独立 bucket 与最小权限 AccessKey（RustFS 管理端与凭据在平板，属跨设备操作，需平板侧配合窗口）。
+- [ ] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。阻塞记录（2026-09-05）：生产 `uploads` 表当前为空、上传仍在本地卷，迁移本身工作量小；前置条件是 D-12 的 bucket/凭据与跨故障域副本方案（RustFS 数据在平板，第二副本落点待定）。
 - [x] **D-14 恢复演练**：每月恢复数据库和对象，使用上一应用版本通过 ready 与关键流程。`2026-09-05` 首次每日备份恢复演练：独立临时 `mysql:8.4` 容器加载 `daily/2026-09-05/mysql-promptos.sql.gz`，15 张表全部重建、`prompts=6` 与生产一致，演练容器即弃（本次覆盖数据库恢复；对象存储恢复待 D-13 迁移后补充为完整双项演练）。
 
 ## S 安全
