@@ -177,7 +177,7 @@ func (s *MySQLModerationStore) SetPromptStatus(promptID, actorID, status int, re
 	if promptID <= 0 || actorID <= 0 || (status != -1 && status != 1) {
 		return ErrInvalidModeration
 	}
-	return s.setTargetStatus("prompt", promptID, actorID, status, reason)
+	return s.setTargetStatus("prompts", promptID, actorID, status, reason)
 }
 
 func (s *MySQLModerationStore) setTargetStatus(targetType string, targetID, actorID, status int, reason string) error {
@@ -318,7 +318,10 @@ func appendAuditTx(tx *sql.Tx, actorID int, action, targetType string, targetID 
 	if err := tx.QueryRow(`SELECT event_hash FROM audit_logs ORDER BY id DESC LIMIT 1 FOR UPDATE`).Scan(&previousHash); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	createdAt := time.Now().UTC().Format(time.RFC3339Nano)
+	// MySQL rejects RFC3339's `T`/`Z` layout for TIMESTAMP columns, so the
+	// stored timestamp uses the driver-native layout. The canonical hash is
+	// computed over exactly this string, keeping the chain self-consistent.
+	createdAt := time.Now().UTC().Format("2006-01-02 15:04:05.999999")
 	canonical := strings.Join([]string{
 		previousHash,
 		strconvFormatInt(int64(actorID)),

@@ -614,3 +614,81 @@ func TestMySQLPromptCounterAuditDetectsDrift(t *testing.T) {
 		t.Fatalf("counter audit report = %+v, want like drift", report)
 	}
 }
+
+// TestMySQLModerationSetPromptStatusWritesAudit is a regression test for the
+// S-14 production drill: SetPromptStatus used to UPDATE a non-existent
+// `prompt` table, so admin takedowns failed with a 500 and no audit event was
+// appended. It also verifies the hash chain links consecutive events.
+func TestMySQLModerationSetPromptStatusWritesAudit(t *testing.T) {
+	dsn := testMySQLDSN(t)
+	db := openTestMySQL(t, dsn)
+
+	suffix := time.Now().UnixNano()
+	users := NewMySQLUserStore(db)
+	author, err := users.Register(fmt.Sprintf("it_mod_author_%d", suffix), fmt.Sprintf("it-mod-author-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register author: %v", err)
+	}
+	admin, err := users.Register(fmt.Sprintf("it_mod_admin_%d", suffix), fmt.Sprintf("it-mod-admin-%d@example.com", suffix), "StrongPass123!")
+	if err != nil {
+		t.Fatalf("register admin: %v", err)
+	}
+
+	prompts := NewMySQLPromptStore(db)
+	prompt, err := prompts.Create(CreatePromptInput{
+		Title:       "MySQL moderation regression",
+		Description: "integration",
+		Content:     "content",
+		Model:       "gpt-4o",
+		CategoryID:  1,
+		Tags:        []string{"mysql-it"},
+		User:        User{ID: author.ID, Username: author.Username, Email: author.Email, Status: 1},
+		Status:      1,
+	})
+	if err != nil {
+		t.Fatalf("create prompt: %v", err)
+	}
+
+	moderation := NewMySQLModerationStore(db)
+	if _, err := db.Exec(`INSERT INTO user_roles (user_id, role) VALUES (?, 'admin')`, admin.ID); err != nil {
+		t.Fatalf("grant admin role: %v", err)
+	}
+
+	if err := moderation.SetPromptStatus(prompt.ID, admin.ID, -1, "integration takedown"); err != nil {
+		t.Fatalf("SetPromptStatus takedown: %v", err)
+	}
+
+	var status int
+	if err := db.QueryRow(`SELECT status FROM prompts WHERE id = ?`, prompt.ID).Scan(&status); err != nil {
+		t.Fatalf("read prompt status: %v", err)
+	}
+	if status != -1 {
+		t.Fatalf("expected prompt status -1 after takedown, got %d", status)
+	}
+
+	events, total, err := moderation.ListAuditEvents(1, 10)
+	if err != nil {
+		t.Fatalf("ListAuditEvents: %v", err)
+	}
+	if total < 1 || len(events) == 0 {
+		t.Fatal("expected at least one audit event after takedown")
+	}
+	latest := events[0]
+	if latest.Action != "content.status" {
+		t.Fatalf("expected action content.status, got %q", latest.Action)
+	}
+
+	if err := moderation.SetPromptStatus(prompt.ID, admin.ID, 1, "integration restore"); err != nil {
+		t.Fatalf("SetPromptStatus restore: %v", err)
+	}
+	events, _, err = moderation.ListAuditEvents(1, 10)
+	if err != nil {
+		t.Fatalf("ListAuditEvents after restore: %v", err)
+	}
+	if len(events) < 2 {
+		t.Fatal("expected two audit events after takedown and restore")
+	}
+	if events[0].PrevHash != events[1].EventHash {
+		t.Fatal("expected audit hash chain to link restore event to takedown event")
+	}
+}
