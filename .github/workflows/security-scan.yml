@@ -24,6 +24,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export npm_config_fetch_timeout=30000
+          export npm_config_fetch_retries=2
+          export npm_config_fetch_retry_mintimeout=5000
+          export npm_config_fetch_retry_maxtimeout=30000
           npm ci
           for attempt in 1 2 3; do
             audit_log="$(mktemp)"
