@@ -101,7 +101,7 @@
 - [x] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。`2026-09-05` `scripts/ops/promptos-backup.sh`（flock 串行 + mysqldump single-transaction + gzip + SHA-256 + 14 天保留 + 失败告警）部署至服务器 `/usr/local/bin/`，`promptos-backup.timer` 每日 03:30+抖动执行；首次备份 `/srv/backups/promptsystem/daily/2026-09-05/`（5559B，SHA-256 与 gzip 校验通过），告警通道 `promptos-alert.sh`（curl SMTP→客服邮箱）实测发送成功。
 - [ ] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。
 - [ ] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。
-- [ ] **D-14 恢复演练**：每月恢复数据库和对象，使用上一应用版本通过 ready 与关键流程。
+- [x] **D-14 恢复演练**：每月恢复数据库和对象，使用上一应用版本通过 ready 与关键流程。`2026-09-05` 首次每日备份恢复演练：独立临时 `mysql:8.4` 容器加载 `daily/2026-09-05/mysql-promptos.sql.gz`，15 张表全部重建、`prompts=6` 与生产一致，演练容器即弃（本次覆盖数据库恢复；对象存储恢复待 D-13 迁移后补充为完整双项演练）。
 
 ## S 安全
 
@@ -139,10 +139,10 @@
 - [x] **O-01 资源基线与告警**：磁盘 70/80/90%、内存、容器重启、ready、证书、备份失败告警。`2026-09-05` `scripts/ops/promptos-watchdog.sh` 部署为 `promptos-watchdog.timer`（15 分钟），覆盖磁盘 70/80/90 分级告警（状态去重防刷屏）、可用内存 <500MB、四容器状态、ready 非 200、证书 <14 天、RustFS 13900/13902 端口、每日备份 >26h 新鲜度；通道验收邮件已发送，RustFS 13902 绑定 172.21.0.1 的偏差已修正并在告警一次后恢复。
 - [x] **O-02 无 Swap 条件下的发布预算**：本次镜像 load、备份、迁移和重启均串行完成，未并行高内存任务。
 - [x] **O-03 Docker 日志轮转**：单容器限制大小与份数，避免日志无上限增长。
-- [ ] **O-04 安全清理流程**：只清理确认的悬空镜像和过期 build cache，禁止全局/卷 prune。
-- [ ] **O-05 nginx 管理规范**：记录 `/www/server/nginx` 实际 master、配置路径、测试/reload；修复 systemd 状态与实际进程不一致。
-- [ ] **O-06 证书续期验收**：Certbot renew 后调用正确 nginx reload 并做 HTTPS 探测。
-- [ ] **O-07 RustFS 链路监控**：监控 13900/13902、forward service、ready 和隧道恢复。
+- [x] **O-04 安全清理流程**：只清理确认的悬空镜像和过期 build cache，禁止全局/卷 prune。`2026-09-05` 实测：`docker image prune -f` 回收悬空镜像 30.33MB（6 个），`docker builder prune --filter until=720h` 回收 0B（无过期缓存）；前后根盘均为 50%，未触碰其他 Compose 项目卷。告警阈值线：70% 观察 / 80% 清理 / 90% 阻断发布。
+- [x] **O-05 nginx 管理规范**：记录 `/www/server/nginx` 实际 master、配置路径、测试/reload；修复 systemd 状态与实际进程不一致。`2026-09-05` 实测：master 为 `/www/server/nginx/sbin/nginx -c /www/server/nginx/conf/nginx.conf`（BT 面板式运行），站点配置 `/etc/nginx/sites-enabled/`（promptsystem vhost 在此）；权威控制命令为 `nginx -t -c … && nginx -s reload -c …`；systemd 的 LSB 单元 `nginx.service` 长期 failed 与实际进程不一致，已 `reset-failed` 消除误导状态并在 DEPLOYMENT.md 记录权威控制路径（systemd 单元仅作开机残留，不用于日常控制）。
+- [x] **O-06 证书续期验收**：Certbot renew 后调用正确 nginx reload 并做 HTTPS 探测。`2026-09-05` `certbot certificates` 确认 `promptsystem.isoumao.top` 由 certbot 管理（83 天余量）；`renew --dry-run --cert-name` 模拟续期成功；deploy 钩子已存在且指向正确 BT nginx（`nginx -t && -s reload -c conf`）；手动执行 reload 成功后 `https://promptsystem.isoumao.top/` 与 `/api/v1/health/ready` 均 `200`。`certbot.timer` 每日两次运行。
+- [x] **O-07 RustFS 链路监控**：监控 13900/13902、forward service、ready 和隧道恢复。`2026-09-05` 纳入 `promptos-watchdog`（15 分钟）：13900（127.0.0.1 sshd 隧道）与 13902（172.21.0.1 forward service python3）端口连通性检查，故障发信、恢复自动清除告警状态；首次运行即纠正如实记录 13902 绑定偏差。
 - [x] **O-08 端口边界**：公网仅 80/443；应用端口保持 loopback，线上 `ss` 检查通过。
 - [x] **O-09 多项目隔离**：本次仅操作 `promptsystem` 项目，线上 `docker compose ls` 其余项目保持运行。
 - [ ] **O-10 故障演练**：backend/MySQL/Redis/RustFS/nginx/证书/磁盘逐项演练并记录恢复。
@@ -221,3 +221,4 @@
 - `P0-06`：SMTP 生产接线完成。阿里云邮件推送凭据（`E:\Web\secrets\isoumao\community.env`，服务器侧同步注入 `/opt/secrets/promptsystem/app.env`，原文件备份 `app.env.bak-20260905-pre-smtp`）；部署 compose（`/srv/releases/promptsystem/current`，备份 `docker-compose.yml.bak-20260905-pre-smtp`）backend `environment` 补齐 `SMTP_HOST/PORT/USER/PASSWORD/FROM` 映射后 `config --quiet` 通过并重建，ready `200`、`degraded=false`。线上实测：`POST /api/v1/user/captcha` 首发返回 `200`（`expiresInSeconds=598`，响应无 `devCode`），同邮箱立即重发 `429 RATE_LIMITED`，backend 日志无验证码明文；失败路径此前已由 `TestProductionCaptchaResponseDoesNotExposeCode`、`TestProductionCaptchaFailsClosedWithoutRedis`、`TestProductionCaptchaSendFailureDeletesPendingCode`、`TestRedisCaptchaIsHashedAndSingleUse`（哈希+原子消费防重放）覆盖。本次新增 `TestCaptchaConcurrentIssueSingleWinner`（8 并发仅 1 胜出，fakeCache 加锁保证 -race 可跑），`go test ./internal/api/ -run 'Captcha|Email|RateLimit|Register|Reset'` 通过；真实凭据端到端冒烟新增 `-tags=smtp_live` 的 `TestLiveSMTPSend`（发送至客服邮箱成功，0.41s）。本地密钥镜像 `E:\Web\secrets\promptsystem\app.env` 已同步建立。
 - `F-10`：新增 `e2e/flows.spec.ts` 覆盖注册（邮箱验证码 mock → 提交 → 登录态头像）、登录（`redirect` 回跳 `/profile`）、详情互动（发表评论校验请求体 + 点赞计数 893→894）、发布向导（`setInputFiles` 上传封面 mock `/uploads/images` → 五步向导 → 捕获 `POST /prompts` payload 断言 title/categoryId/cover）、工作台（资料渲染 + 收藏页签切换显示收藏卡片）、主题（切换 `html[data-mode]` 且刷新后保持）、超级菜单（悬停"发现"→点击"工作流"→落到 `/search?tag=流程`）。`.env.e2e` 开启 `VITE_EMAIL_AUTH_ENABLED=true` 以驱动验证码 UI（能力关闭路径由 `capabilities.spec.ts` 单测覆盖）；e2e 网络拦截需注意带 query 的端点 glob 要以 `*` 结尾，否则穿透本地代理造成 401 污染。`npm run test:e2e` 14 passed / 4 skipped，`npx vitest run` 8 files/19 tests、`npm run lint:check` 通过。
 - `D-11/O-01`（2026-09-05）：告警接收端为客服邮箱 `3038414005@qq.com`，SMTP 凭据复用阿里云邮件推送账号（`/opt/secrets/promptsystem/alert.env`，600）。备份脚本与看门狗均入仓 `scripts/ops/`（`promptos-backup.sh`/`promptos-alert.sh`/`promptos-watchdog.sh`），systemd 单元 `promptos-backup.{service,timer}`（03:30+RandomizedDelay 600s，Persistent）与 `promptos-watchdog.{service,timer}`（`*:00/15`）。看门狗首次运行即发现 RustFS 13902 实际绑定 `172.21.0.1`（docker 网桥）而非 `127.0.0.1`，端口基线已按实测修正。
+- `O-04/O-05/O-06/O-07`（2026-09-05）：nginx 权威控制路径为 `/www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf && … -s reload -c …`；certbot deploy 钩子（reload-isoumao-nginx.sh 等）已验证指向一致，未新增冗余钩子。O-10 故障演练本批完成 backend（stop→ready+容器双告警→start→自动恢复）、Redis（stop→告警→start→恢复）、MySQL（restart→ready 200）、nginx（reload+HTTPS 探测）四项；RustFS/证书/磁盘三项因涉及共享基础设施或高风险注入，保持未勾选并记录原因。
