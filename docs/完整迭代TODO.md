@@ -98,7 +98,7 @@
 - [x] **D-08 公开查询边界**：草稿、删除内容、禁用用户内容不能出现在首页和搜索。
 - [x] **D-09 数据字典**：记录全部表、字段、状态值、索引、外键和保留期限。
 - [x] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
-- [ ] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。
+- [x] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。`2026-09-05` `scripts/ops/promptos-backup.sh`（flock 串行 + mysqldump single-transaction + gzip + SHA-256 + 14 天保留 + 失败告警）部署至服务器 `/usr/local/bin/`，`promptos-backup.timer` 每日 03:30+抖动执行；首次备份 `/srv/backups/promptsystem/daily/2026-09-05/`（5559B，SHA-256 与 gzip 校验通过），告警通道 `promptos-alert.sh`（curl SMTP→客服邮箱）实测发送成功。
 - [ ] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。
 - [ ] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。
 - [ ] **D-14 恢复演练**：每月恢复数据库和对象，使用上一应用版本通过 ready 与关键流程。
@@ -136,7 +136,7 @@
 
 ## O 服务器和运维
 
-- [ ] **O-01 资源基线与告警**：磁盘 70/80/90%、内存、容器重启、ready、证书、备份失败告警。
+- [x] **O-01 资源基线与告警**：磁盘 70/80/90%、内存、容器重启、ready、证书、备份失败告警。`2026-09-05` `scripts/ops/promptos-watchdog.sh` 部署为 `promptos-watchdog.timer`（15 分钟），覆盖磁盘 70/80/90 分级告警（状态去重防刷屏）、可用内存 <500MB、四容器状态、ready 非 200、证书 <14 天、RustFS 13900/13902 端口、每日备份 >26h 新鲜度；通道验收邮件已发送，RustFS 13902 绑定 172.21.0.1 的偏差已修正并在告警一次后恢复。
 - [x] **O-02 无 Swap 条件下的发布预算**：本次镜像 load、备份、迁移和重启均串行完成，未并行高内存任务。
 - [x] **O-03 Docker 日志轮转**：单容器限制大小与份数，避免日志无上限增长。
 - [ ] **O-04 安全清理流程**：只清理确认的悬空镜像和过期 build cache，禁止全局/卷 prune。
@@ -220,3 +220,4 @@
 
 - `P0-06`：SMTP 生产接线完成。阿里云邮件推送凭据（`E:\Web\secrets\isoumao\community.env`，服务器侧同步注入 `/opt/secrets/promptsystem/app.env`，原文件备份 `app.env.bak-20260905-pre-smtp`）；部署 compose（`/srv/releases/promptsystem/current`，备份 `docker-compose.yml.bak-20260905-pre-smtp`）backend `environment` 补齐 `SMTP_HOST/PORT/USER/PASSWORD/FROM` 映射后 `config --quiet` 通过并重建，ready `200`、`degraded=false`。线上实测：`POST /api/v1/user/captcha` 首发返回 `200`（`expiresInSeconds=598`，响应无 `devCode`），同邮箱立即重发 `429 RATE_LIMITED`，backend 日志无验证码明文；失败路径此前已由 `TestProductionCaptchaResponseDoesNotExposeCode`、`TestProductionCaptchaFailsClosedWithoutRedis`、`TestProductionCaptchaSendFailureDeletesPendingCode`、`TestRedisCaptchaIsHashedAndSingleUse`（哈希+原子消费防重放）覆盖。本次新增 `TestCaptchaConcurrentIssueSingleWinner`（8 并发仅 1 胜出，fakeCache 加锁保证 -race 可跑），`go test ./internal/api/ -run 'Captcha|Email|RateLimit|Register|Reset'` 通过；真实凭据端到端冒烟新增 `-tags=smtp_live` 的 `TestLiveSMTPSend`（发送至客服邮箱成功，0.41s）。本地密钥镜像 `E:\Web\secrets\promptsystem\app.env` 已同步建立。
 - `F-10`：新增 `e2e/flows.spec.ts` 覆盖注册（邮箱验证码 mock → 提交 → 登录态头像）、登录（`redirect` 回跳 `/profile`）、详情互动（发表评论校验请求体 + 点赞计数 893→894）、发布向导（`setInputFiles` 上传封面 mock `/uploads/images` → 五步向导 → 捕获 `POST /prompts` payload 断言 title/categoryId/cover）、工作台（资料渲染 + 收藏页签切换显示收藏卡片）、主题（切换 `html[data-mode]` 且刷新后保持）、超级菜单（悬停"发现"→点击"工作流"→落到 `/search?tag=流程`）。`.env.e2e` 开启 `VITE_EMAIL_AUTH_ENABLED=true` 以驱动验证码 UI（能力关闭路径由 `capabilities.spec.ts` 单测覆盖）；e2e 网络拦截需注意带 query 的端点 glob 要以 `*` 结尾，否则穿透本地代理造成 401 污染。`npm run test:e2e` 14 passed / 4 skipped，`npx vitest run` 8 files/19 tests、`npm run lint:check` 通过。
+- `D-11/O-01`（2026-09-05）：告警接收端为客服邮箱 `3038414005@qq.com`，SMTP 凭据复用阿里云邮件推送账号（`/opt/secrets/promptsystem/alert.env`，600）。备份脚本与看门狗均入仓 `scripts/ops/`（`promptos-backup.sh`/`promptos-alert.sh`/`promptos-watchdog.sh`），systemd 单元 `promptos-backup.{service,timer}`（03:30+RandomizedDelay 600s，Persistent）与 `promptos-watchdog.{service,timer}`（`*:00/15`）。看门狗首次运行即发现 RustFS 13902 实际绑定 `172.21.0.1`（docker 网桥）而非 `127.0.0.1`，端口基线已按实测修正。

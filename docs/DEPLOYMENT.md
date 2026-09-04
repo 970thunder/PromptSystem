@@ -158,3 +158,10 @@ flock -n /run/lock/promptsystem-maintenance.lock \
 - 使用上一版本镜像 `promptsystem-backend:20260829-a9ba2cf` 加入临时网络和 Redis，`/api/v1/health/ready` 返回 `200`、`storageMode=mysql`、`degraded=false`。
 - 约 50 秒完成备份恢复到 ready（演练 RTO）；RPO 为备份时间点，当前尚未设置每日定时备份。
 - 演练结束删除临时容器、网络、卷和 `/srv/tmp/promptos-restore-uploads-20260830`，服务器复核无残留。演练不影响 `promptsystem` 正式 Compose 项目。
+
+## 每日备份与资源告警（D-11/O-01，2026-09-05 起）
+
+- 服务器安装 `scripts/ops/` 下三个脚本至 `/usr/local/bin/`：`promptos-backup.sh`（每日逻辑备份：flock 串行、mysqldump `--single-transaction --routines --events --databases promptos`、gzip、SHA-256、保留 14 天）、`promptos-watchdog.sh`（磁盘 70/80/90 分级、内存、容器、ready、证书、RustFS 端口、备份新鲜度）、`promptos-alert.sh`（curl SMTP 告警，凭据 `/opt/secrets/promptsystem/alert.env`，接收端客服邮箱）。
+- systemd：`promptos-backup.timer`（03:30 + 随机 600s，Persistent 补跑）、`promptos-watchdog.timer`（每 15 分钟）。查看：`systemctl list-timers "promptos-*"`；日志：`journalctl -u promptos-backup/-watchdog`。
+- 备份产物：`/srv/backups/promptsystem/daily/<日期>/mysql-promptos.sql.gz` + `SHA256SUMS`。恢复演练（D-14）使用独立临时 MySQL 容器加载，不得直接对生产库执行含 `CREATE DATABASE` 的 dump。
+- 告警去重：看门狗状态存于 `/var/lib/promptos-watchdog/`，仅级别变化时发信；告警通道变更时同步更新 `alert.env` 并重发验收邮件。
