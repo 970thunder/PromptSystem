@@ -115,7 +115,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
-      - /var/cache/nginx:rw,nosuid,size=16m
+      - /var/cache/nginx:rw,nosuid,size=16m,uid=101,gid=101,mode=755
       - /var/run:rw,nosuid,size=1m
     pids_limit: 64
     mem_limit: 256m
