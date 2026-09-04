@@ -5,7 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
-- 修复 hardened frontend 容器中 nginx 缓存 tmpfs 权限不匹配导致的启动循环，补充仅用于初始化目录的 `CHOWN` capability，并保留只读根文件系统和其他 capability 限制
+- 修复 hardened frontend 容器中 nginx 缓存及 worker 降权所需 capability 缺失导致的启动循环，补充 `CHOWN`/`SETGID`/`SETUID`，并保留只读根文件系统和其他 capability 限制
 - 修复 Windows 发布脚本向自定义 SSH 端口上传文件时误用 `scp -p` 的问题，统一使用 `scp -P`
 - 修复 MySQL 大小写不敏感排序规则下标签迁移未执行大小写更新的问题，改用二进制比较并补充 CI 失败回归
 - 统一 API 错误模型：存储层改用 sentinel error，错误响应始终带稳定 `errorCode`；未知内部错误返回 `500 INTERNAL_ERROR`，不泄露 SQL 或内部错误文本
