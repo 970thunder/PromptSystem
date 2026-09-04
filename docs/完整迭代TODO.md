@@ -2,7 +2,7 @@
 
 更新时间：2026-09-04
 
-当前进度：76/81 已完成，5 项待完成（2026-09-05；待完成为 D-12/D-13 RustFS、S-13 剩余三类凭据轮换、O-10 剩余三项演练、R-08 终审）。
+当前进度：78/81 已完成，3 项待完成（2026-09-05；待完成为 S-13 剩余 SMTP/OAuth 控制台侧轮换、O-10 剩余 RustFS/证书/磁盘演练、R-08 终审；D-12/D-13 已完成）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
@@ -99,8 +99,8 @@
 - [x] **D-09 数据字典**：记录全部表、字段、状态值、索引、外键和保留期限。
 - [x] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
 - [x] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。`2026-09-05` `scripts/ops/promptos-backup.sh`（flock 串行 + mysqldump single-transaction + gzip + SHA-256 + 14 天保留 + 失败告警）部署至服务器 `/usr/local/bin/`，`promptos-backup.timer` 每日 03:30+抖动执行；首次备份 `/srv/backups/promptsystem/daily/2026-09-05/`（5559B，SHA-256 与 gzip 校验通过），告警通道 `promptos-alert.sh`（curl SMTP→客服邮箱）实测发送成功。
-- [ ] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。阻塞记录（2026-09-05）：后端已具备 `UploadProvider=rustfs/s3` 能力（`internal/storage/storage.go`，S3 兼容客户端）；待平板服务器 RustFS 侧为 PromptOS 创建独立 bucket 与最小权限 AccessKey（RustFS 管理端与凭据在平板，属跨设备操作，需平板侧配合窗口）。
-- [ ] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。阻塞记录（2026-09-05）：生产 `uploads` 表当前为空、上传仍在本地卷，迁移本身工作量小；前置条件是 D-12 的 bucket/凭据与跨故障域副本方案（RustFS 数据在平板，第二副本落点待定）。
+- [x] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。`2026-09-05` 发现平板已运行 PromptOS 专用 RustFS 实例（`:3910`，独立 `~/promptsystem-rustfs/` 数据/密钥目录，与 isoumao 的 `:3900` 实例完全隔离），桶 `promptsystem-prod` 已预建。链路：平板 `start-promptsystem-tunnel`（setsid 常驻）→ 主服务器 `127.0.0.1:13910`（sshd -R）→ `promptsystem-rustfs-forward.service`（`172.22.0.1:13912`，promptsystem 网桥）→ backend 容器；公开读取经 nginx `/objects/` 代理（桶策略仅允许匿名 `s3:GetObject`，`Principal:"*"`）。凭据存放 `/opt/secrets/promptsystem/rustfs.env`（600）与本地镜像，独立于 isoumao/Nebula 主凭据。
+- [x] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。`2026-09-05` 生产 `UPLOAD_PROVIDER=rustfs` 生效（部署 compose 的 `environment:` 覆盖修正为变量注入 `${UPLOAD_PROVIDER:-local}`，仓库 compose 走 `PROMPTOS_UPLOAD_PROVIDER`），端到端实测：管理员 API 上传 PNG 返回 200 与公网 URL，匿名读取该 URL 返回 200 且字节一致；新增 `scripts/ops/promptos-rustfs-replica.sh` + `promptos-rustfs-replica.timer`（05:00）把桶全量镜像到主服务器 `/srv/backups/promptsystem/rustfs-replica/`（首跑 8 对象），构成平板（主）+ 公网服务器（副本）跨故障域双副本。生产原上传卷为空，无存量迁移。
 - [x] **D-14 恢复演练**：每月恢复数据库和对象，使用上一应用版本通过 ready 与关键流程。`2026-09-05` 首次每日备份恢复演练：独立临时 `mysql:8.4` 容器加载 `daily/2026-09-05/mysql-promptos.sql.gz`，15 张表全部重建、`prompts=6` 与生产一致，演练容器即弃（本次覆盖数据库恢复；对象存储恢复待 D-13 迁移后补充为完整双项演练）。
 
 ## S 安全
@@ -224,3 +224,4 @@
 - `O-04/O-05/O-06/O-07`（2026-09-05）：nginx 权威控制路径为 `/www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf && … -s reload -c …`；certbot deploy 钩子（reload-isoumao-nginx.sh 等）已验证指向一致，未新增冗余钩子。O-10 故障演练本批完成 backend（stop→ready+容器双告警→start→自动恢复）、Redis（stop→告警→start→恢复）、MySQL（restart→ready 200）、nginx（reload+HTTPS 探测）四项；RustFS/证书/磁盘三项因涉及共享基础设施或高风险注入，保持未勾选并记录原因。
 - `v0.3.1` 生产发布（2026-09-05）：CI `release-artifacts` run `33910511955` 构建镜像（backend sha256=`d8746224…`、frontend sha256=`d1b05298…`、归档 `230addb7…`），`release.ps1 -ImageArchivePath` 串行完成服务器 MySQL/上传卷备份（`sha256sum -c` + `gzip -t` 通过）、镜像加载、Compose 重建、ready/HTTPS 验证，`current` 指向 `/srv/releases/promptsystem/v0.3.1`。线上 ready `200`、`degraded=false`、`storageMode=mysql`；HTTPS 首页 `200`。发布同时随版本上线：P0-06 SMTP 验证码、moderation 双缺陷修复、E2E 流程套件。发布脚本本次修复为 UTF-8 BOM（Windows PowerShell 5.1 可直接解析）。
 - `D-12/D-13`（2026-09-05）：实施要点与坑位记录——①SigV4 匿名策略的 Principal 必须为 `"*"`（`{"AWS":["*"]}` 不生效）；②`rustfs-forward.py` 克隆时 LISTEN/TARGET 都要改（漏改 TARGET 会把流量转去 isoumao 实例并报 `InvalidAccessKeyId`）；③RustFS 桶策略变更存在分钟级传播延迟；④后端容器所在网络网关是 `172.22.0.1`（非 isoumao 的 `172.21.0.1`），跨网桥访问会被 INPUT DROP，转发器监听地址必须用本网络网关；⑤部署 compose 的 `environment:` 优先于 `env_file:`，`UPLOAD_PROVIDER` 需变量化。管理员凭据在演练后已整轮换（`/root/.promptos-admin-credentials`）。
+- `D-12/D-13`（2026-09-05）实施要点与坑位：①SigV4 匿名读策略的 Principal 必须为 `"*"`（`{"AWS":["*"]}` 在 RustFS 上不生效）；②桶策略变更存在分钟级传播延迟，期间匿名读会间歇 403；③`rustfs-forward.py` 克隆时 LISTEN 与 TARGET 都必须改（漏改 TARGET 会把流量转去 isoumao 实例并报 `InvalidAccessKeyId`）；④PromptOS 后端容器网关是 `172.22.0.1`（isoumao 是 `172.21.0.1`），跨网桥访问会被 INPUT 链 DROP，转发器监听地址必须用本网络网关，nginx（宿主机进程）则直连 `127.0.0.1:13910` 隧道口；⑤部署 compose 的 `environment:` 优先于 `env_file:`，`UPLOAD_PROVIDER` 必须变量化。管理员凭据演练后已整轮换（`/root/.promptos-admin-credentials`，600）。
