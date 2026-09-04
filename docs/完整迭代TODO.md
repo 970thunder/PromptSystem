@@ -2,14 +2,14 @@
 
 更新时间：2026-09-04
 
-当前进度：58/81 已完成，23 项待完成（2026-09-04）。
+当前进度：64/81 已完成，17 项待完成（2026-09-04）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
 ## 当前基线
 
 - 生产域名：`https://promptsystem.isoumao.top`
-- Compose 项目：`promptsystem`；当前发布目录：`/srv/releases/promptsystem/20260830-b584585`；上一回滚目录：`/srv/releases/promptsystem/20260829-a9ba2cf`
+- Compose 项目：`promptsystem`；当前发布目录：`/srv/releases/promptsystem/v0.3.0`；上一回滚目录：`/srv/releases/promptsystem/20260830-b584585`
 - 服务器：7.7 GiB 内存、无 Swap、58 GiB 根盘（2026-09-04 实测可用内存约 3.3 GiB、剩余约 30 GiB，根盘使用率 48%）
 - 公网只开放 80/443；PromptOS 前端/后端分别绑定 `127.0.0.1:3092/5092`
 - RustFS 转发链路可用，但 PromptOS 尚无独立 bucket/低权限凭据，上传暂存独立 Docker 卷
@@ -26,7 +26,7 @@
 | 治理 | 管理员审核 API、角色表和哈希链审计已在代码中实现，但线上尚未配置管理员角色并完成真实审核验证 | 举报在生产仍不能承诺形成受控处置闭环 | `S-14` | 角色模型、最小权限 API、审计表/留存、管理员 MFA 或等价保护、线上审核记录 |
 | 对象数据 | 上传仍在 Docker 本地卷，未接入 PromptOS 独立 RustFS bucket | 单机卷故障会影响图片可用性，无法证明跨故障域副本 | `D-12/D-13` | 独立 bucket、最小权限凭据、迁移校验和第二故障域副本 |
 | 备份 | 当前有手工/发布备份和首次恢复演练，但没有每日 timer、失败告警和跨故障域复制 | RPO 仍取决于人工发布频率，备份失败可能无人发现 | `D-11/A-10/O-01` | 告警接收端、`flock` 串行任务、保留策略和容量预算 |
-| 运行时安全 | 新版 Cookie/CSP/Redis 密码/容器加固尚未发布到线上；线上仍是旧 release | 浏览器仍拿不到新 CSRF Header，CSP 和 Redis 隔离未生效 | `S-04/S-05/S-10/S-11` | 低峰发布、备份、迁移、ready/HTTPS/预检/容器属性验收 |
+| 运行时安全 | Cookie/CSP/Redis 密码/容器加固已随 `v0.3.0` 发布并验收 | 生产安全基线已生效；仍需密钥轮换和告警配置 | `S-04/S-05/S-10/S-11/S-13/O-01` | 保留验收证据，后续按轮换窗口和告警门槛维护 |
 | 发布治理 | 浏览器已有首页/详情/搜索/移动端 smoke，完整认证、互动、发布和工作台 E2E 仍未形成自动化证据；密钥轮换和故障演练也未完成 | 变更回归、泄露处置和跨组件恢复依赖人工 | `F-10/S-13/O-10/R-06/R-08` | 测试账号、告警接收端、轮换窗口和可回滚制品 |
 
 ### 架构、数据、安全的排期原则
@@ -84,7 +84,7 @@
 - [x] **A-09 SQL 分页与排序**：评论热门排序在数据库完成；主要列表执行 `EXPLAIN` 并补必要复合索引。
 - [ ] **A-10 轻量后台任务**：上传回收、数据审计、备份校验优先使用 systemd timer/cron，不新增高内存常驻套件。
 - [x] **A-11 可观测性**：提供请求、错误、延迟、数据库、Redis、上传和任务指标。
-- [ ] **A-12 发布架构自动化**：本机构建、镜像校验、上传、迁移、切换、验证和回滚脚本化；服务器不编译。
+- [x] **A-12 发布架构自动化**：本机构建、镜像校验、上传、迁移、切换、验证和回滚脚本化；服务器不编译。`v0.3.0` CI 归档发布已实测通过。
 
 ## D 数据
 
@@ -108,13 +108,13 @@
 - [x] **S-01 会话撤销**：登出调用后端；密码重置、禁用、注销使旧 token 立即失效。
 - [x] **S-02 JWT 存储策略**：先完成 CSP/XSS 审计，再迁移 HttpOnly+Secure+SameSite Cookie。
 - [x] **S-03 GitHub OAuth 开关**：显式 enable 配置；未配置时前端不显示可点击入口，启用时校验 redirect/state/code。
-- [ ] **S-04 CSP**：从 Report-Only 开始制定 Vue 生产 CSP，再切换强制模式。（已加入 Report-Only，待生产报告复核后切换强制）
-- [ ] **S-05 CORS/CSRF**：生产仅允许正式域名；Cookie 会话启用 CSRF 防护。
+- [x] **S-04 CSP**：从 Report-Only 开始制定 Vue 生产 CSP，再切换强制模式。`v0.3.0` 首页已返回强制 CSP。
+- [x] **S-05 CORS/CSRF**：生产仅允许正式域名；Cookie 会话启用 CSRF 防护。正式 Origin 预检为 `204`，陌生 Origin 为 `403`，缺 CSRF Header 的 Cookie 写请求为 `403`。
 - [x] **S-06 重定向安全**：站内 redirect 覆盖双斜杠、反斜杠、协议相对和编码变体。
 - [x] **S-07 分维度限流**：登录、注册、验证码、重置、评论、举报、搜索、上传按 IP/账号/用户限制。
 - [x] **S-08 内容安全**：Prompt/评论/用户名/标签/Markdown/URL 统一长度、控制字符和脚本校验。
 - [x] **S-09 上传安全与配额**：MIME、解码、像素、格式、并发、单用户日配额和总容量限制。
-- [ ] **S-10 Redis 隔离**：独立网络、ACL/密码，禁止公网访问。
+- [x] **S-10 Redis 隔离**：独立网络、requirepass/protected mode，禁止公网访问；生产秘密文件已配置随机 `REDIS_PASSWORD`，未认证访问返回 `NOAUTH`。
 - [x] **S-11 容器加固**：非 root、`no-new-privileges`、`cap_drop`、可行的只读根文件系统、资源与日志限制。
 - [x] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
 - [ ] **S-13 密钥轮换**：JWT、MySQL、Redis、RustFS、OAuth、SMTP 均有���换和验证流程。
@@ -154,8 +154,8 @@
 - [x] **R-03 契约 CI**：已新增契约回归 workflow；需 GitHub Actions 实际成功运行后勾选。
 - [x] **R-04 Docker fresh-start CI**：空卷启动必须使用 MySQL、ready 正常、重启数据不丢。
 - [x] **R-05 发布清单实化**：替换占位符，写明域名、脚本、备份、迁移、回滚和人工冒烟。
-- [ ] **R-06 版本与 Changelog**：每次发布有版本 tag、镜像 tag/digest、CHANGELOG 和部署记录。
-- [ ] **R-07 当前版+回滚版**：服务器只保留当前与上一可回滚的小型发布文件和所需镜像。
+- [x] **R-06 版本与 Changelog**：`v0.3.0` tag、CI 镜像 tag/digest、CHANGELOG 和部署记录一致。
+- [x] **R-07 当前版+回滚版**：服务器仅保留当前 `v0.3.0` 与上一版 `20260830-b584585` 发布文件及镜像标签。
 - [ ] **R-08 全量完成审计**：逐条核对本文证据；工作树干净；推送 GitHub；线上关键流程通过。
 
 ## 完成记录
@@ -179,14 +179,13 @@
 
 ### 2026-09-04
 
-- `F-09`：主要页面（首页、搜索、社区、详情、认证和受保护路由）在 390/768/1440 px 浏览器视口无横向溢出；交互元素可访问名称扫描为 0，补充公开作者页头像文件输入 `aria-label`；顶栏键盘 Enter 展开、Escape 关闭并恢复焦点；组件统一保留 `:focus-visible` 焦点环，动画均提供 `prefers-reduced-motion` 分支。`npm run lint:check`、`npm test -- --run`（8 files/18 tests）和 `npm run build` 通过。生产尚未发布。
-- `A-12`（发布工具增强，待生产验收）：`scripts/release.ps1` 对远端镜像归档 SHA-256 与本地期望值做强校验，`docker load` 后删除压缩包，健康检查通过后才更新 `/srv/releases/promptsystem/current`；仍需低峰服务器实测备份、迁移、ready、HTTPS 和回滚链路，A-12/R-06/R-07 保持未勾选。
+- `F-09`：主要页面（首页、搜索、社区、详情、认证和受保护路由）在 390/768/1440 px 浏览器视口无横向溢出；交互元素可访问名称扫描为 0，补充公开作者页头像文件输入 `aria-label`；顶栏键盘 Enter 展开、Escape 关闭并恢复焦点；组件统一保留 `:focus-visible` 焦点环，动画均提供 `prefers-reduced-motion` 分支。`npm run lint:check`、`npm test -- --run`（8 files/18 tests）和 `npm run build` 通过；`v0.3.0` 首页 HTTPS 冒烟通过。
+- `A-12/R-06/R-07`：CI run `33819216837` 构建并上传 `v0.3.0` backend/frontend 镜像，归档 SHA-256=`8a0da2f001aee1eda60df9890a85b4274f1b8f2593628936d9f40817160b2bba`；`scripts/release.ps1 -ImageArchivePath ... -SkipTests` 在服务器串行完成备份校验、镜像加载、Compose 重建、ready/HTTPS 验证并更新 `current`。服务器仅保留 `/srv/releases/promptsystem/v0.3.0` 和上一版 `20260830-b584585` 目录及对应镜像标签；发布脚本同时修复 Windows `scp -P` 端口参数。
 
-- `F-08`：搜索页通过 URL 查询恢复筛选和页码，Prompt Store 统一 AbortController、请求序号、分页去重、加载更多和错误重试；PromptCard 固定 4:3 封面比例并使用宽高属性避免布局跳动。修复首页标题飘带在 computed 中重复随机导致轨道重排/抽搐的问题，改为仅在提示词数据源变化时抽样。新增稳定性回归；`npm test -- --run`（8 files/18 tests）、`npm run lint:check`、`npm run build` 通过；浏览器实测 `/prompt/104` 详情导航、390/768/1440 视口无横向溢出。生产尚未发布。
+- `F-08`：搜索页通过 URL 查询恢复筛选和页码，Prompt Store 统一 AbortController、请求序号、分页去重、加载更多和错误重试；PromptCard 固定 4:3 封面比例并使用宽高属性避免布局跳动。修复首页标题飘带在 computed 中重复随机导致轨道重排/抽搐的问题，改为仅在提示词数据源变化时抽样。新增稳定性回归；`npm test -- --run`（8 files/18 tests）、`npm run lint:check`、`npm run build` 通过；浏览器实测 `/prompt/104` 详情导航、390/768/1440 视口无横向溢出，`v0.3.0` 首页/详情线上接口正常。
 
-- `S-02`：浏览器会话改用 `HttpOnly; Secure; SameSite=Lax` 的 `promptos_session` Cookie，配套可读 `promptos_csrf` Cookie 与 `X-CSRF-Token` 写请求校验；旧版 Bearer 客户端保持兼容，前端不再把 JWT 写入 `localStorage`。新增 Cookie 标志、Cookie 鉴权和 CSRF 回归测试；前端主题初始化移出内联脚本，生产 nginx CSP 改为强制策略。`go test ./...`、`go vet ./...`、`npm run lint:check`、`npm test -- --run`（8 files/17 tests）、`npm run build` 和本地浏览器无 CSP 控制台错误通过。生产当前仍运行旧 release，S-04/S-05 需下一发布窗口验证线上 Header 后再勾选。
-- `S-05`（代码待生产验收）：新增 CORS 白名单预检/非法 Origin/Bearer 兼容回归测试，API 契约补充 Cookie、CSRF、预检和生产 Origin 规则。线上只读检查（2026-09-04）确认陌生 Origin 返回 `403 ORIGIN_NOT_ALLOWED`，但旧 release 的 `Access-Control-Allow-Headers` 尚未包含 `X-CSRF-Token`，因此不勾选。
-- `S-10`（配置待生产验收）：生产 Compose 强制独立 `REDIS_PASSWORD`，Redis 使用 protected mode + requirepass，backend/healthcheck 通过认证连接；配置校验在 production 缺少密码时 fail-closed。本地 Compose 支持空密码开发模式或显式密码模式。服务器尚未配置新密码和重启验证，保持未勾选。
+- `S-02/S-04/S-05`：浏览器会话改用 `HttpOnly; Secure; SameSite=Lax` 的 `promptos_session` Cookie，配套可读 `promptos_csrf` Cookie 与 `X-CSRF-Token` 写请求校验；旧版 Bearer 客户端保持兼容，前端不再把 JWT 写入 `localStorage`。`v0.3.0` 首页返回强制 CSP；正式 Origin 预检 `204`、陌生 Origin `403 ORIGIN_NOT_ALLOWED`、带会话 Cookie 缺 CSRF Header 的写请求 `403 CSRF_INVALID`。相关 `go test`、前端 lint/Vitest/build 和线上 HTTPS 验证通过。
+- `S-10`：生产 Compose 强制独立 `REDIS_PASSWORD`，Redis 使用 protected mode + requirepass，backend/healthcheck 通过认证连接；服务器秘密文件已追加随机密码并保持 `600` 权限，Redis 未认证 `redis-cli ping` 返回 `NOAUTH`，容器未映射公网端口。
 
 - `A-01`：`src/backend/internal/database/migrate.go` 在当前数据库无任何表时自动应用随镜像发布的 `sql/schema.sql` 基线，再通过 `schema_migrations` 顺序执行增量迁移；已有 schema 或部分迁移库不会覆盖数据。基线执行跳过仅用于已创建数据库的 `CREATE DATABASE`/`USE` 引导语句，兼容生产最小权限迁移账号。开发 Compose 移除 MySQL 的 `schema.sql` 隐式挂载并显式创建与 backend 配套的 `promptos_app` 账号，`README.md`、`docs/DEPLOYMENT.md` 和迁移 README 改为单一启动入口。
 - 验证：`go test ./...`、`go vet ./...`、`docker compose config --quiet`、`git diff --check` 通过；临时 MySQL 实测 `TestMigrationMatrix` 的 fresh（真正空库）、baseline、partial 三场景及二次运行幂等性全部通过。提交 `15ea2f9` 的 GitHub Actions backend `33781675791`、frontend `33781675792`、security `33781675829` 全部成功。生产尚未在本批发布，下一次发布仍需按备份、迁移、ready 和回滚流程执行。
@@ -214,3 +213,5 @@
 - `F-06`：新增统一 `siteCapabilities` 构建开关，OAuth、邮件验证、Skill、Playground、创作者学院和交易市场均由显式 `VITE_*` 配置控制；未实现模块继续以不可点击的“即将开放”项显示，关闭邮件能力时注册/找回表单不会发起请求。新增默认能力回归测试；前端 `npm run lint:check`、`npm test -- --run`（8 files/17 tests）和 `npm run build` 通过。生产构建默认关闭未完成模块，真实 SMTP 仍由 `P0-06` 验收。
 
 - `S-14/F-10`（本机候选，未完成生产/完整覆盖验收）：新增 `user_roles`、`audit_logs` 和举报审核/Prompt 下架/用户禁用 API；管理员 actor 从会话解析，操作在数据库事务中写入追加式哈希链审计，普通用户返回 `403 ADMIN_REQUIRED`。新增管理员权限 HTTP 回归测试、`0018_moderation_audit.sql` 迁移和 Report/AuditEvent 共享契约；Playwright 配置覆盖桌面/移动首页、详情、搜索 smoke，`npm run test:e2e` 4/4 通过。为避免 Vitest 扫描 Playwright 文件，明确排除 `e2e/**`；显式关闭 API 的 E2E mock 读取路径不再访问后端。后端 `go test ./...`、`gofmt -l .`、`go vet ./...`，前端 `npm test -- --run`（8 files/19 tests）、`npm run lint:check`、`npm run build`、`npm run contract:check` 和 `git diff --check` 通过。S-14 仍需生产管理员角色/真实审核验证，F-10 仍需扩展认证、互动、发布、工作台和主题流程。
+
+- `v0.3.0` 生产发布（2026-09-04）：CI `release-artifacts` run `33819216837` 成功，镜像归档 SHA-256=`8a0da2f001aee1eda60df9890a85b4274f1b8f2593628936d9f40817160b2bba`；服务器发布脚本完成 MySQL/上传卷备份并通过 `sha256sum -c`、`gzip -t`、`tar -tzf`，加载镜像、迁移/Compose 重建、ready 和 HTTPS 验证成功，`current` 指向 `/srv/releases/promptsystem/v0.3.0`。线上 ready 为 `200` 且 `environment=production/storageMode=mysql/degraded=false`，首页与 `/api/v1/home/summary` 返回 `200`；CSP 强制 Header、正式 Origin 预检 `204`、陌生 Origin `403 ORIGIN_NOT_ALLOWED`、Cookie 写请求缺 CSRF Header `403 CSRF_INVALID`；Redis 未认证访问 `NOAUTH`。backend/frontend 均 `ReadonlyRootfs=true`、`cap_drop=ALL`（frontend 仅 `CHOWN/NET_BIND_SERVICE/SETGID/SETUID` 例外）、PID/内存限制生效且重启计数为 0；端口仍为 loopback `3092/5092`，公网仅 `80/443`。清理后服务器仅保留当前 `v0.3.0` 与上一版 `20260830-b584585` release/镜像，其他 Compose 项目保持运行。当前剩余风险：SMTP、RustFS 独立 bucket/双副本、每日备份告警、密钥轮换、管理员账号和完整 E2E/故障演练仍未配置，相关项目不得勾选。
