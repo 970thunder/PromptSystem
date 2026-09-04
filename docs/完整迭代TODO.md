@@ -117,7 +117,7 @@
 - [x] **S-10 Redis 隔离**：独立网络、requirepass/protected mode，禁止公网访问；生产秘密文件已配置随机 `REDIS_PASSWORD`，未认证访问返回 `NOAUTH`。
 - [x] **S-11 容器加固**：非 root、`no-new-privileges`、`cap_drop`、可行的只读根文件系统、资源与日志限制。
 - [x] **S-12 依赖与镜像扫描**：npm audit、govulncheck、镜像扫描、secret scanning 纳入 CI。
-- [ ] **S-13 密钥轮换**：JWT、MySQL、Redis、RustFS、OAuth、SMTP 均有轮换和验证流程。
+- [ ] **S-13 密钥轮换**：JWT、MySQL、Redis、RustFS、OAuth、SMTP 均有轮换和验证流程。`2026-09-05` 进展：轮换手册落入 `docs/DEPLOYMENT.md`（统一 app.env 机制 + 每类凭据的动作与验证），并实机执行 REDIS_PASSWORD/JWT_SECRET/MYSQL_PASSWORD/MYSQL_MIGRATION_PASSWORD 四项轮换（旧 Redis 密码 `NOAUTH`、新密码 `PONG`；ready `200`、`degraded=false`）。剩余：SMTP/GitHub OAuth 需在各自控制台生成新凭据后按手册轮换；RustFS 凭据待 D-12 接入后纳入——三项完成前保持未勾选。
 - [ ] **S-14 审核权限与审计**：代码已提供管理员角色校验、举报审核、内容下架、用户禁用和追加式哈希链审计；待生产配置管理员角色、真实审核记录和审计链校验后勾选。
 
 ## F 产品与前端

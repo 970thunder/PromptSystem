@@ -165,3 +165,18 @@ flock -n /run/lock/promptsystem-maintenance.lock \
 - systemd：`promptos-backup.timer`（03:30 + 随机 600s，Persistent 补跑）、`promptos-watchdog.timer`（每 15 分钟）。查看：`systemctl list-timers "promptos-*"`；日志：`journalctl -u promptos-backup/-watchdog`。
 - 备份产物：`/srv/backups/promptsystem/daily/<日期>/mysql-promptos.sql.gz` + `SHA256SUMS`。恢复演练（D-14）使用独立临时 MySQL 容器加载，不得直接对生产库执行含 `CREATE DATABASE` 的 dump。
 - 告警去重：看门狗状态存于 `/var/lib/promptos-watchdog/`，仅级别变化时发信；告警通道变更时同步更新 `alert.env` 并重发验收邮件。
+
+## 密钥轮换流程（S-13）
+
+统一机制：所有服务端秘密集中在 `/opt/secrets/promptsystem/app.env`（600 root:root），轮换 = 生成新值 → 更新 app.env（先备份 `app.env.bak-<日期>-pre-rotation`）→ `docker compose -p promptsystem --env-file … up -d <受影响服务>` → 验证。生产 users=0 阶段 JWT 轮换无用户影响；正式运营后应安排在低峰并预告。
+
+| 凭据 | 轮换动作 | 验证 |
+|---|---|---|
+| REDIS_PASSWORD | app.env 更新后 `up -d redis backend` | 旧密码 `NOAUTH`、新密码 `PONG`、ready 200 |
+| JWT_SECRET | app.env 更新后 `up -d backend` | ready 200、登录/登出闭环、旧 token 失效 |
+| MYSQL_PASSWORD / MYSQL_MIGRATION_PASSWORD | 容器内 `ALTER USER` → app.env 更新 → `up -d backend` | ready 200、`degraded=false`、迁移 dry 跑 |
+| SMTP（阿里云邮件推送） | 控制台生成新 SMTP 密码 → 更新 app.env `PROMPTOS_SMTP_PASSWORD` → `up -d backend` | `go test -tags=smtp_live` 或线上验证码发送 200 |
+| GitHub OAuth | GitHub 后端 regenerate client secret → 更新 app.env 对应键 → `up -d backend` | OAuth 回调闭环 |
+| RustFS 凭据 | 平板 RustFS 侧生成 → 更新 `/opt/secrets/promptsystem/` 对应键 → 重启依赖服务 | 上传/读取闭环（待 D-12 接入后可用） |
+
+2026-09-05 已实机执行 REDIS_PASSWORD、JWT_SECRET、MYSQL_PASSWORD/MIGRATION_PASSWORD 四项轮换并验证（旧 Redis 密码 NOAUTH、新密码 PONG；ready 200；degraded=false）。
