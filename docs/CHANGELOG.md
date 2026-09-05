@@ -37,6 +37,11 @@
 
 ## [Unreleased]
 
+### Added
+- 服务条款与隐私政策页面及页脚入口；补齐开发、测试、提交与推送的项目规范
+
+## [Unreleased]
+
 ### Changed
 - 验证码邮件本地化为中文：主题"PromptOS 邮箱验证码"（MIME 编码）、正文中文文案，发件人显示名 PromptOS
 
