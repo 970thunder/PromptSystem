@@ -65,7 +65,7 @@ func (s *smtpEmailSender) Send(ctx context.Context, recipient, subject, body str
 	if err != nil {
 		return fmt.Errorf("open SMTP message: %w", err)
 	}
-	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n", s.from, recipient, subject, body)
+	message := fmt.Sprintf("From: PromptOS <%s>\r\nTo: <%s>\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n", s.from, recipient, subject, body)
 	if _, err := io.WriteString(writer, message); err != nil {
 		_ = writer.Close()
 		return fmt.Errorf("write SMTP message: %w", err)

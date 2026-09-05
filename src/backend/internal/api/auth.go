@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -128,7 +129,7 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusServiceUnavailable, apiResponse[any]{Code: 503, Message: "Email service is not configured", ErrorCode: "EMAIL_NOT_CONFIGURED"})
 			return
 		}
-		if err := s.emailSender.Send(r.Context(), strings.TrimSpace(payload.Email), "PromptOS verification code", fmt.Sprintf("Your PromptOS verification code is %s. It expires in 10 minutes.", code)); err != nil {
+		if err := s.emailSender.Send(r.Context(), strings.TrimSpace(payload.Email), mime.QEncoding.Encode("utf-8", "PromptOS 邮箱验证码"), fmt.Sprintf("你的 PromptOS 验证码是 %s，10 分钟内有效。如非本人操作，请忽略本邮件。", code)); err != nil {
 			s.discardRedisCaptcha(r.Context(), payload.Email)
 			writeJSON(w, http.StatusBadGateway, apiResponse[any]{Code: 502, Message: "Failed to send captcha email", ErrorCode: "EMAIL_SEND_FAILED"})
 			return

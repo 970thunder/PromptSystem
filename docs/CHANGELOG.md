@@ -37,6 +37,11 @@
 
 ## [Unreleased]
 
+### Changed
+- 验证码邮件本地化为中文：主题"PromptOS 邮箱验证码"（MIME 编码）、正文中文文案，发件人显示名 PromptOS
+
+## [Unreleased]
+
 ### Fixed
 - 安全 CI 的 `npm audit` 对 npm registry 的临时 `503`/网络超时执行有限重试，真实高危漏洞仍立即失败
 - 修复 hardened frontend 容器中 nginx 缓存及 worker 降权所需 capability 缺失导致的启动循环，补充 `CHOWN`/`SETGID`/`SETUID`，并保留只读根文件系统和其他 capability 限制
