@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, type ReportStatusFilter } from '@/api/adminApi'
+import { promptApi } from '@/api/promptApi'
 import PageError from '@/components/feedback/PageError.vue'
 import PageLoading from '@/components/feedback/PageLoading.vue'
 import type { AuditEvent, Report } from '@/types'
@@ -31,6 +32,9 @@ const forbidden = ref(false)
 const loadFailed = ref(false)
 const busyReportId = ref<number | null>(null)
 const noteDrafts = reactive<Record<number, string>>({})
+// 已下架提示词的恢复状态：targetId -> 是否处于下架（公开不可见）
+const promptDown = reactive<Record<number, boolean>>({})
+const restoringPromptId = ref<number | null>(null)
 
 const auditEvents = ref<AuditEvent[]>([])
 const auditTotal = ref(0)
@@ -86,6 +90,37 @@ const loadReports = async (tab = activeTab.value, targetPage = page.value) => {
     }
   } finally {
     loading.value = false
+  }
+  // 无论当前页签，都探测"已办结且目标是提示词"的举报：下架中的内容给出恢复入口
+  if (!forbidden.value) {
+    await probePromptVisibility()
+  }
+}
+
+// 已办结的提示词举报若执行过下架，公开端会 404。据此探测并给出"恢复内容"入口，
+// 让处置可逆，形成完整闭环。
+const probePromptVisibility = async () => {
+  const targets = reports.value.filter((r) => r.targetType === 'prompt' && r.status === 'reviewed')
+  await Promise.all(targets.map(async (report) => {
+    try {
+      await promptApi.getPromptDetail(report.targetId)
+      promptDown[report.targetId] = false
+    } catch {
+      promptDown[report.targetId] = true
+    }
+  }))
+}
+
+const restorePrompt = async (report: Report) => {
+  if (restoringPromptId.value !== null) {
+    return
+  }
+  restoringPromptId.value = report.targetId
+  try {
+    await adminApi.setPromptStatus(report.targetId, { status: 1, reason: '管理员恢复内容' })
+    promptDown[report.targetId] = false
+  } finally {
+    restoringPromptId.value = null
   }
 }
 
@@ -241,6 +276,22 @@ onMounted(() => {
               >
                 处理人 #{{ report.reviewedBy }} · {{ report.reviewNote || '（无备注）' }}
               </p>
+
+              <template v-if="report.status === 'reviewed' && report.targetType === 'prompt' && promptDown[report.targetId]">
+                <p class="admin-report__down">
+                  该内容当前处于下架状态，公开端不可见。
+                </p>
+                <div class="admin-report__actions">
+                  <button
+                    type="button"
+                    class="admin-btn"
+                    :disabled="restoringPromptId === report.targetId"
+                    @click="restorePrompt(report)"
+                  >
+                    {{ restoringPromptId === report.targetId ? '恢复中…' : '恢复内容' }}
+                  </button>
+                </div>
+              </template>
 
               <div
                 v-if="report.status === 'pending'"
@@ -462,6 +513,10 @@ onMounted(() => {
 
 .admin-report__reviewed {
   @apply mt-2 text-sm text-[var(--prompt-text-faint)];
+}
+
+.admin-report__down {
+  @apply mt-2 text-sm text-[var(--prompt-warning)];
 }
 
 .admin-report__actions {

@@ -269,4 +269,63 @@ test.describe('PromptOS F-10 flows', () => {
     await workflowLink.click()
     await expect(page).toHaveURL(/\/search\?tag=%E6%B5%81%E7%A8%8B|\/search\?tag=流程/)
   })
+
+  test('forgot password resets via email captcha and returns to login', async ({ page }) => {
+    await mockAnonymous(page)
+    let resetPayload: Record<string, unknown> | null = null
+    await page.route('**/api/v1/user/captcha', (route) => route.fulfill(ok({ expiresInSeconds: 600, devCode: '123456' })))
+    await page.route('**/api/v1/user/password/reset', (route) => {
+      resetPayload = route.request().postDataJSON()
+      return route.fulfill(ok(null))
+    })
+
+    await page.goto('/forgot-password')
+    await page.getByPlaceholder('you@example.com').fill('e2e@example.com')
+    await page.getByRole('button', { name: '获取验证码' }).click()
+    await page.getByPlaceholder('输入 6 位验证码').fill('123456')
+    await page.getByPlaceholder('至少 8 个字符').fill('new-password-123')
+    await page.getByPlaceholder('再次输入新密码').fill('new-password-123')
+    await page.locator('button[type="submit"]').click()
+
+    await expect(page).toHaveURL(/\/login/, { timeout: 10_000 })
+    expect(resetPayload).toMatchObject({ email: 'e2e@example.com', captcha: '123456' })
+  })
+
+  test('edit flow loads a published prompt and saves updates', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'edit wizard exercised on desktop')
+    await mockSignedIn(page)
+
+    let putPayload: Record<string, unknown> | null = null
+    await page.route('**/api/v1/user/prompts/101', (route) => route.fulfill(ok(basePrompt)))
+    await page.route('**/api/v1/prompts/101', async (route) => {
+      if (route.request().method() === 'PUT') {
+        putPayload = route.request().postDataJSON()
+        return route.fulfill(ok({ ...basePrompt, title: (putPayload as { title?: string } | null)?.title }))
+      }
+      return route.continue()
+    })
+    await page.route('**/api/v1/prompts?*', (route) => route.fulfill(ok({
+      list: [basePrompt], total: 1, page: 1, pageSize: 24
+    })))
+
+    await page.goto('/profile')
+    await page.getByRole('button', { name: '编辑' }).first().click()
+    await expect(page).toHaveURL(/\/publish\?edit=101/)
+    await expect(page.getByPlaceholder('例如：电影感产品海报生成器')).toHaveValue('Brand Poster Prompt Builder', { timeout: 10_000 })
+
+    // 编辑模式从封面步开始：已带封面，直接进入基本信息步
+    await page.getByRole('button', { name: '下一步' }).click()
+    await expect(page.getByRole('heading', { name: '基本信息', exact: true })).toBeVisible()
+    await page.getByPlaceholder('例如：电影感产品海报生成器').fill('Brand Poster Prompt Builder v2')
+    await page.getByRole('button', { name: '下一步' }).click()
+    await expect(page.getByRole('heading', { name: '提示词正文', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '下一步' }).click()
+    await expect(page.getByRole('heading', { name: '参数与标签', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '下一步' }).click()
+    await expect(page.getByRole('heading', { name: '确认发布', exact: true })).toBeVisible()
+
+    await page.getByRole('button', { name: '保存修改' }).click()
+    await expect(page.getByText('提示词已发布/更新')).toBeVisible({ timeout: 10_000 })
+    expect(putPayload).toMatchObject({ title: 'Brand Poster Prompt Builder v2' })
+  })
 })

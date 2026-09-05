@@ -58,6 +58,7 @@ test.describe('PromptOS admin console', () => {
     await mockSignedIn(page)
 
     let reviewPayload: Record<string, unknown> | null = null
+    let restorePayload: Record<string, unknown> | null = null
     let pending = true
     await page.route('**/api/v1/admin/reports**', async (route) => {
       if (route.request().method() === 'PATCH') {
@@ -71,6 +72,25 @@ test.describe('PromptOS admin console', () => {
         page: 1,
         pageSize: 20
       }))
+    })
+    // 下架内容恢复：GET 详情 404 表示内容公开不可见；PATCH status=1 表示恢复
+    let restoreDone = false
+    await page.route('**/api/v1/admin/prompts/105', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        restorePayload = route.request().postDataJSON()
+        restoreDone = true
+        return route.fulfill(ok({ updated: true }))
+      }
+      return route.continue()
+    })
+    await page.route('**/api/v1/prompts/105', (route) => {
+      return route.fulfill({
+        status: restoreDone ? 200 : 404,
+        contentType: 'application/json',
+        body: JSON.stringify(restoreDone
+          ? { code: 200, message: 'Success', data: { id: 105 } }
+          : { code: 404, message: 'Not found', errorCode: 'NOT_FOUND', data: null })
+      })
     })
     await page.route('**/api/v1/admin/audit**', (route) => route.fulfill(ok({
       list: [{
@@ -104,6 +124,13 @@ test.describe('PromptOS admin console', () => {
       action: 'remove',
       note: 'E2E 审核备注'
     })
+
+    // 处置可逆：已下架内容出现"恢复内容"入口，点击后发出 status=1 的恢复请求
+    await expect(page.getByText('该内容当前处于下架状态，公开端不可见。')).toBeVisible()
+    await page.getByRole('button', { name: '恢复内容' }).click()
+    await expect(page.getByText('该内容当前处于下架状态，公开端不可见。')).not.toBeVisible({ timeout: 10_000 })
+    expect(restoreDone).toBe(true)
+    expect(restorePayload).toMatchObject({ status: 1 })
 
     await page.getByRole('button', { name: '查看审计链' }).click()
     await expect(page.getByText('report.review')).toBeVisible()
