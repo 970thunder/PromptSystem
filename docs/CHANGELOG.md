@@ -16,6 +16,15 @@
 - 密钥轮换手册落盘；实机完成 REDIS_PASSWORD、JWT_SECRET、MySQL 应用/迁移账号密码轮换并验证
 - 完成 nginx 管理规范记录、证书续期 dry-run + reload + HTTPS 探测验收、首次每日备份恢复演练（独立临时 MySQL 容器）
 
+## [v0.3.2] - 2026-09-05
+
+### Added
+- 管理审核控制台 `/admin`：举报列表（状态筛选/分页）、一键"下架内容并办结"、处理备注、审计链哈希展示；非管理员访问返回明确权限提示（工作台侧栏入口）
+- 新增 NotFoundView + SPA catch-all 路由，未知路径不再空白
+
+### Fixed
+- 注册页与找回密码页验证码 429 冷却读取 Retry-After 启动同长倒计时，避免用户反复点击撞限流；EMAIL_NOT_CONFIGURED / EMAIL_SEND_FAILED 错误分支给出明确中文提示
+
 ## [Unreleased]
 
 ### Fixed
