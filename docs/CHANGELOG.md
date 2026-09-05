@@ -18,6 +18,8 @@
 
 ## [v0.3.2] - 2026-09-05
 
+镜像：`promptsystem-backend:v0.3.2` sha256=`c99c006a6e3529411c9f98eec7e06046b72da93604fee95f5a1cb2ff3e50acfe`，`promptsystem-frontend:v0.3.2` sha256=`d3d75efbc615dfb76df1a89d0ce29c5087a4070687cb704be19b09e05d4b6459`；CI 构建 commit `d082d0a`，归档 SHA-256=`2f942f69e362f86ad0aa84d4385f9c147ca6195b8f8be19151b73437510ce47b`。
+
 ### Added
 - 管理审核控制台 `/admin`：举报列表（状态筛选/分页）、一键"下架内容并办结"、处理备注、审计链哈希展示；非管理员访问返回明确权限提示（工作台侧栏入口）
 - 新增 NotFoundView + SPA catch-all 路由，未知路径不再空白
