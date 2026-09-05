@@ -126,8 +126,18 @@ const handleSubmit = async () => {
       captcha: formValue.captcha.trim()
     })
     await router.push('/')
-  } catch {
-    message.error('注册失败，请检查验证码或稍后重试')
+  } catch (error) {
+    // 后端错误码映射：把常见注册失败翻译成可行动的中文提示。
+    const errorCode = (error as { response?: { data?: { errorCode?: string } } }).response?.data?.errorCode
+    if (errorCode === 'USER_EXISTS') {
+      message.error('该邮箱已注册，请直接登录或更换邮箱')
+    } else if (errorCode === 'INVALID_CAPTCHA') {
+      message.error('验证码错误或已过期，请重新获取验证码后再试')
+    } else if (errorCode === 'WEAK_PASSWORD') {
+      message.error('密码至少需要 8 个字符')
+    } else {
+      message.error('注册失败，请检查验证码或稍后重试')
+    }
   }
 }
 

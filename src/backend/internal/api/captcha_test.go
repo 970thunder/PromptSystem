@@ -28,6 +28,33 @@ func TestRedisCaptchaIsHashedAndSingleUse(t *testing.T) {
 	}
 }
 
+// TestRedisCaptchaWrongAttemptPreservesCode is a regression test for the S-14
+// era production incident: a wrong code used to delete the stored captcha, so
+// a typo (or a code from an older email) locked the user out until they
+// requested another one.
+func TestRedisCaptchaWrongAttemptPreservesCode(t *testing.T) {
+	s, fc := newTestServer(t)
+	code, _, _, err := s.issueRedisCaptcha(context.Background(), "USER@example.com")
+	if err != nil {
+		t.Fatalf("issueRedisCaptcha() error = %v", err)
+	}
+
+	wrongCode := "000000"
+	if wrongCode == code {
+		wrongCode = "000001"
+	}
+	if s.verifyRedisCaptcha(context.Background(), "user@example.com", wrongCode) {
+		t.Fatal("expected wrong code to be rejected")
+	}
+	if fc.store["promptos:captcha:email:user@example.com"] == "" {
+		t.Fatal("wrong attempt must not destroy the stored captcha")
+	}
+
+	if !s.verifyRedisCaptcha(context.Background(), "user@example.com", code) {
+		t.Fatal("expected the correct code to still verify after a wrong attempt")
+	}
+}
+
 func TestCaptchaManagerIssueAndVerify(t *testing.T) {
 	base := time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
 	manager := newCaptchaManager()

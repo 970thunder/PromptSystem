@@ -139,7 +139,11 @@ func (s *server) issueRedisCaptcha(ctx context.Context, email string) (string, t
 	return code, expiresAt, 0, nil
 }
 
-// verifyRedisCaptcha checks a Redis-stored captcha and deletes it on success.
+// verifyRedisCaptcha checks a Redis-stored captcha and deletes it only when the
+// code matches. A wrong attempt must NOT destroy the stored code: users often
+// try a code from an older email, and destroying the newest valid code on a
+// mismatch would lock them out until they request another one. Brute force is
+// bounded by the register rate limit (3/hour per email bucket).
 func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) bool {
 	normalized, ok := normalizeCaptchaEmail(email)
 	if !ok || strings.TrimSpace(code) == "" {
@@ -150,12 +154,20 @@ func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) boo
 	}
 
 	key := "promptos:captcha:email:" + normalized
-	stored, err := s.cache.GetAndDelete(ctx, key)
+	expected := captchaDigest(s.config.JWTSecret, normalized, strings.TrimSpace(code))
+	stored, err := s.cache.Get(ctx, key)
+	if err != nil || stored == "" {
+		return false
+	}
+	if !hmac.Equal([]byte(stored), []byte(expected)) {
+		return false
+	}
+	// 匹配成功：原子消费，防止同一验证码被并发重放。
+	deleted, err := s.cache.GetAndDelete(ctx, key)
 	if err != nil {
 		return false
 	}
-	expected := captchaDigest(s.config.JWTSecret, normalized, strings.TrimSpace(code))
-	return hmac.Equal([]byte(stored), []byte(expected))
+	return hmac.Equal([]byte(deleted), []byte(expected))
 }
 
 func (s *server) discardRedisCaptcha(ctx context.Context, email string) {
