@@ -37,6 +37,8 @@
 
 ## [v0.3.4] - 2026-09-05
 
+镜像：`promptsystem-backend:v0.3.4` / `promptsystem-frontend:v0.3.4`（CI run `33977255217`，commit `2e79994`）；归档 SHA-256=`97808839f0588e171c7425fa54b596377b3537efb0f5b37ba2c7dbfc1b0e2008`。
+
 ### Changed
 - 验证码邮件本地化为中文：主题"PromptOS 邮箱验证码"（MIME 编码）、正文中文文案并注明 10 分钟有效期；发件人显示名 PromptOS
 
