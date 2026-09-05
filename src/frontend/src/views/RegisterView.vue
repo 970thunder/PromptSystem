@@ -74,8 +74,21 @@ const handleSendCaptcha = async () => {
       message.success('验证码已发送，请查收邮箱')
     }
     startCaptchaCountdown(60)
-  } catch {
-    message.error('验证码发送失败，请稍后重试')
+  } catch (error) {
+    // 服务端对同一邮箱有 60s 冷却（429 + Retry-After）。此时验证码其实已经
+    // 发出过，前端读取 Retry-After 启动同长倒计时，避免用户反复点击撞 429。
+    const response = (error as { response?: { status?: number; headers?: Record<string, unknown>; data?: { errorCode?: string } } }).response
+    if (response?.status === 429) {
+      const retryAfter = Number(response.headers?.['retry-after'] ?? NaN)
+      startCaptchaCountdown(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60)
+      message.info('验证码刚刚已发送过，请先查收邮箱（含垃圾箱）；冷却结束后可重新发送')
+    } else if (response?.data?.errorCode === 'EMAIL_NOT_CONFIGURED') {
+      message.error('邮件服务暂未开启，请联系站点管理员')
+    } else if (response?.data?.errorCode === 'EMAIL_SEND_FAILED') {
+      message.error('验证码邮件发送失败，请稍后重试')
+    } else {
+      message.error('验证码发送失败，请稍后重试')
+    }
   } finally {
     captchaLoading.value = false
   }
