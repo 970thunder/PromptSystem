@@ -9,12 +9,6 @@ const ok = (data: unknown) => ({
   body: JSON.stringify({ code: 200, message: 'Success', data })
 })
 
-const unauthorized = {
-  status: 401,
-  contentType: 'application/json',
-  body: JSON.stringify({ code: 401, message: 'Unauthorized', errorCode: 'AUTH_TOKEN_MISSING', data: null })
-}
-
 const adminUser = {
   id: 8,
   username: 'PromptOS Admin',
@@ -48,6 +42,7 @@ const reviewedReport = {
 
 async function mockSignedIn(page: Page) {
   await page.route('**/api/v1/user/info', (route) => route.fulfill(ok(adminUser)))
+  await page.route('**/api/v1/prompts**', (route) => route.fulfill(ok({ list: [], total: 0, page: 1, pageSize: 24 })))
   await page.route('**/api/v1/user/history*', (route) => route.fulfill(ok({ list: [], total: 0, page: 1, pageSize: 24 })))
   await page.route('**/api/v1/user/favorites', (route) => route.fulfill(ok([])))
   await page.route('**/api/v1/user/likes', (route) => route.fulfill(ok([])))

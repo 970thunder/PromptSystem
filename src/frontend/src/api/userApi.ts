@@ -28,7 +28,7 @@ export const userApi = {
   },
 
   getUserInfo(): Promise<ApiResponse<User>> {
-    return request.get('/user/info')
+    return request.get('/user/info', { promptosSilent: true })
   },
 
   exportData(): Promise<ApiResponse<UserDataExport>> {

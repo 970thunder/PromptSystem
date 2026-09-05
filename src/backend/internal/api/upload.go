@@ -334,17 +334,23 @@ func (s *server) reserveUploadQuota(ctx context.Context, userID int, size int64)
 	}
 	dailyBytes := int64(dailyLimit) * 1024 * 1024
 	dayKey := fmt.Sprintf("%d:%s", userID, time.Now().UTC().Format("2006-01-02"))
+	useLocalDailyCounter := true
 	if counter, ok := s.cache.(uploadQuotaCounter); ok {
 		used, _, err := counter.IncrementBy(ctx, "promptos:quota:upload:daily:"+dayKey, size, 25*time.Hour)
 		if err != nil {
-			release()
-			return nil, errUploadQuotaUnavailable
+			if s.config.IsProduction() {
+				release()
+				return nil, errUploadQuotaUnavailable
+			}
+		} else {
+			useLocalDailyCounter = false
+			if used > dailyBytes {
+				release()
+				return nil, errUploadDailyQuota
+			}
 		}
-		if used > dailyBytes {
-			release()
-			return nil, errUploadDailyQuota
-		}
-	} else {
+	}
+	if useLocalDailyCounter {
 		s.uploadQuotaMu.Lock()
 		if s.uploadDailyUsage == nil {
 			s.uploadDailyUsage = make(map[string]int64)

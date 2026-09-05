@@ -4,10 +4,10 @@
     container_name: promptos-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:-promptos-dev-root-change-me}
+      MYSQL_ROOT_PASSWORD: ${PROMPTOS_MYSQL_ROOT_PASSWORD:?PROMPTOS_MYSQL_ROOT_PASSWORD must be set}
       MYSQL_DATABASE: promptos
       MYSQL_USER: ${PROMPTOS_MYSQL_USER:-promptos_app}
-      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:-promptos-local-password}
+      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:?PROMPTOS_MYSQL_PASSWORD must be set}
     ports:
       - "${PROMPTOS_MYSQL_PORT:-3306}:3306"
     volumes:
@@ -41,9 +41,9 @@
     container_name: promptos-backend
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${PROMPTOS_APP_ENV:-development}
       PORT: 8080
-      JWT_SECRET: ${PROMPTOS_JWT_SECRET:-promptos-dev-jwt-change-me}
+      JWT_SECRET: ${PROMPTOS_JWT_SECRET:?PROMPTOS_JWT_SECRET must be set}
       JWT_EXPIRE_HOURS: ${PROMPTOS_JWT_EXPIRE_HOURS:-72}
       AUTH_COOKIE_ENABLED: ${AUTH_COOKIE_ENABLED:-true}
       EMAIL_AUTH_ENABLED: ${EMAIL_AUTH_ENABLED:-true}
@@ -65,14 +65,20 @@
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_USER: ${PROMPTOS_MYSQL_USER:-promptos_app}
-      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:-promptos-local-password}
+      MYSQL_PASSWORD: ${PROMPTOS_MYSQL_PASSWORD:?PROMPTOS_MYSQL_PASSWORD must be set}
       MYSQL_DATABASE: promptos
+      MYSQL_MIGRATION_USER: ${MYSQL_MIGRATION_USER:-}
+      MYSQL_MIGRATION_PASSWORD: ${MYSQL_MIGRATION_PASSWORD:-}
+      DB_MAX_OPEN_CONNS: ${PROMPTOS_DB_MAX_OPEN_CONNS:-10}
+      DB_MAX_IDLE_CONNS: ${PROMPTOS_DB_MAX_IDLE_CONNS:-5}
+      DB_CONN_MAX_LIFETIME_MINUTES: ${PROMPTOS_DB_CONN_MAX_LIFETIME_MINUTES:-30}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${PROMPTOS_REDIS_PASSWORD:-}
       ALLOWED_ORIGIN: http://localhost:3000
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_OAUTH_ENABLED: ${GITHUB_OAUTH_ENABLED:-false}
       GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:8080/api/v1/auth/github/callback}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SMTP_HOST: ${PROMPTOS_SMTP_HOST:-}

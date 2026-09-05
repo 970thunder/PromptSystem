@@ -5,6 +5,13 @@ import router from '@/router'
 
 const { message: messageApi } = createDiscreteApi(['message'])
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Suppress global feedback for expected session or capability probes. */
+    promptosSilent?: boolean
+  }
+}
+
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
@@ -45,11 +52,15 @@ request.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
     if (res.code !== 200) {
-      messageApi.error(res.message || '请求失败')
+      if (!response.config.promptosSilent) {
+        messageApi.error(res.message || '请求失败')
+      }
       if (res.code === 401) {
         const userStore = useUserStore()
         userStore.logout()
-        router.push('/login')
+        if (!response.config.promptosSilent) {
+          router.push('/login')
+        }
       }
       return Promise.reject(new Error(res.message || 'Error'))
     }
@@ -59,8 +70,10 @@ request.interceptors.response.use(
     if (isCancel(error)) {
       return Promise.reject(error)
     }
-    const errorMessage = error.response?.data?.message || error.message || '网络错误'
-    messageApi.error(errorMessage)
+    if (!error.config?.promptosSilent) {
+      const errorMessage = error.response?.data?.message || error.message || '网络错误'
+      messageApi.error(errorMessage)
+    }
     return Promise.reject(error)
   }
 )

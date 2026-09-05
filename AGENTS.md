@@ -48,3 +48,13 @@ conventional commits（近期历史均为 feat/fix/chore，保持一致）。
 ## 发布
 
 生产为 docker compose 部署。发布前逐项勾选 `docs\RELEASE-CHECKLIST.md`（待补，模板在 `E:\Web\templates\`）。
+
+## 开发与交付节奏
+
+详细流程见 [`docs/DEVELOPMENT-WORKFLOW.md`](docs/DEVELOPMENT-WORKFLOW.md)。以下规则是强制门禁：
+
+- 每个可独立交付的功能都必须同时完成代码、测试和必要文档；前端页面/交互至少补测试，后端安全、上传、权限和数据变更至少补失败路径测试。
+- 修改完成后先运行对应的 lint、单元/集成测试、构建和契约检查；涉及页面或联调时追加 Playwright 与真实依赖验证。
+- 测试全部通过后立即使用 Conventional Commits 提交，并马上推送当前分支；不得把已验证改动长期留在本地。
+- 测试失败、依赖不可用或验收范围不完整时，不得报告为完成；允许提交的部分必须在提交说明和交付记录中写明限制。
+- 每次提交后确认 `git status --short --branch` 和 `git log -1 --oneline`，并在交付说明中记录提交号、推送分支和测试结果。

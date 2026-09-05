@@ -24,6 +24,7 @@ type fakeCache struct {
 	mu       sync.Mutex
 	counters map[string]int64
 	store    map[string]string
+	err      error
 }
 
 type fakeEmailSender struct {
@@ -64,6 +65,9 @@ func (f *fakeCache) Get(_ context.Context, key string) (string, error) {
 func (f *fakeCache) Exists(_ context.Context, key string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.err != nil {
+		return false, f.err
+	}
 	_, ok := f.store[key]
 	return ok, nil
 }
@@ -71,6 +75,9 @@ func (f *fakeCache) Exists(_ context.Context, key string) (bool, error) {
 func (f *fakeCache) GetAndDelete(_ context.Context, key string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.err != nil {
+		return "", f.err
+	}
 	value, ok := f.store[key]
 	if ok {
 		delete(f.store, key)

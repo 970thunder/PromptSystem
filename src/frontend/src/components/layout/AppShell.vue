@@ -42,6 +42,18 @@ import SiteHeader from '@/components/navigation/SiteHeader.vue'
           >
             发布
           </RouterLink>
+          <RouterLink
+            to="/terms"
+            class="app-footer__link"
+          >
+            服务条款
+          </RouterLink>
+          <RouterLink
+            to="/privacy"
+            class="app-footer__link"
+          >
+            隐私政策
+          </RouterLink>
         </nav>
         <p class="app-footer__copy">
           © 2026 PromptOS

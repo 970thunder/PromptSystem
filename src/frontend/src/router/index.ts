@@ -70,6 +70,20 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '社区' }
   },
   {
+    path: '/terms',
+    name: 'Terms',
+    component: () => import('@/views/LegalView.vue'),
+    props: { document: 'terms' },
+    meta: { title: '服务条款' }
+  },
+  {
+    path: '/privacy',
+    name: 'Privacy',
+    component: () => import('@/views/LegalView.vue'),
+    props: { document: 'privacy' },
+    meta: { title: '隐私政策' }
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('@/views/AdminView.vue'),

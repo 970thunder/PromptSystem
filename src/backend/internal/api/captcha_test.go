@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -112,6 +113,23 @@ func TestCaptchaManagerExpires(t *testing.T) {
 	now = now.Add(captchaTTL + time.Second)
 	if manager.verify("user@example.com", code) {
 		t.Fatal("expected expired captcha to fail")
+	}
+}
+
+func TestCaptchaFallsBackToMemoryWhenDevelopmentRedisIsUnavailable(t *testing.T) {
+	s, fc := newTestServer(t)
+	s.config.AppEnv = "development"
+	fc.err = errors.New("redis unavailable")
+
+	code, _, _, err := s.issueRedisCaptcha(context.Background(), "user@example.com")
+	if err != nil {
+		t.Fatalf("issueRedisCaptcha() error = %v", err)
+	}
+	if code == "" {
+		t.Fatal("expected development fallback code")
+	}
+	if !s.verifyRedisCaptcha(context.Background(), "user@example.com", code) {
+		t.Fatal("expected development fallback code to verify")
 	}
 }
 

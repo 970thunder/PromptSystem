@@ -76,9 +76,14 @@ async function mockSignedIn(page: Page) {
   await page.route('**/api/v1/user/drafts', (route) => route.fulfill(ok([])))
   await page.route('**/api/v1/user/following', (route) => route.fulfill(ok([])))
   await page.route('**/api/v1/user/followers', (route) => route.fulfill(ok([])))
+  await page.route('**/api/v1/prompts**', (route) => route.fulfill(ok({ list: [], total: 0, page: 1, pageSize: 24 })))
+  await page.route('**/api/v1/prompts/*/view', (route) => route.fulfill(ok({ prompt: null, applied: true })))
+  await page.route('**/api/v1/users/*/follow-status', (route) => route.fulfill(ok({ userId: 1, following: false, followerCount: 0, followingCount: 0 })))
+  await page.route('**/uploads/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: coverPng }))
 }
 
 async function mockAuthGuardedLibrary(page: Page) {
+  await page.route('**/api/v1/prompts**', (route) => route.fulfill(ok({ list: [], total: 0, page: 1, pageSize: 24 })))
   await page.route('**/api/v1/user/history*', (route) => route.fulfill(ok({ list: [], total: 0, page: 1, pageSize: 24 })))
   await page.route('**/api/v1/user/favorites', (route) => route.fulfill(ok([basePrompt])))
   await page.route('**/api/v1/user/likes', (route) => route.fulfill(ok([])))

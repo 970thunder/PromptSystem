@@ -121,6 +121,9 @@ func (s *server) issueRedisCaptcha(ctx context.Context, email string) (string, t
 	key := "promptos:captcha:email:" + normalized
 	exists, err := s.cache.Exists(ctx, key)
 	if err != nil {
+		if !s.config.IsProduction() {
+			return s.captcha.issue(email)
+		}
 		return "", time.Time{}, 0, err
 	}
 	if exists {
@@ -165,6 +168,9 @@ func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) boo
 	// 匹配成功：原子消费，防止同一验证码被并发重放。
 	deleted, err := s.cache.GetAndDelete(ctx, key)
 	if err != nil {
+		if !s.config.IsProduction() {
+			return s.captcha.verify(email, code)
+		}
 		return false
 	}
 	return hmac.Equal([]byte(deleted), []byte(expected))
@@ -179,7 +185,9 @@ func (s *server) discardRedisCaptcha(ctx context.Context, email string) {
 		s.captcha.discard(email)
 		return
 	}
-	_ = s.cache.Delete(ctx, "promptos:captcha:email:"+normalized)
+	if err := s.cache.Delete(ctx, "promptos:captcha:email:"+normalized); err != nil && !s.config.IsProduction() {
+		s.captcha.discard(email)
+	}
 }
 
 func captchaDigest(secret, email, code string) string {
