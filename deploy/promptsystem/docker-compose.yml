@@ -153,6 +153,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=16m
       - /var/cache/nginx:rw,nosuid,size=16m,mode=1777
       - /var/run:rw,nosuid,size=1m
+      - /var/run/openresty:rw,nosuid,size=4m
     pids_limit: 64
     mem_limit: 256m
     logging:
