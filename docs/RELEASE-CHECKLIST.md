@@ -1,4 +1,4 @@
-# 发布检查清单 — PromptOS（生产域名：promptsystem.isoumao.top）
+# 发布检查清单 — PromptOS（生产域名：promptos.hyper99.top）
 
 逐项勾选，全部通过才允许部署。
 
@@ -25,8 +25,8 @@
 ## 部署
 
 - [ ] 服务器当前版本已备份（数据库 dump + uploads，脚本输出位置和 SHA-256 已记录，保留 3 版）
-- [ ] 发布脚本执行成功（`pwsh -File scripts/release.ps1 -Version <version>`；SSH `root@103.42.182.205:2680`）
-- [ ] 健康检查通过：`https://promptsystem.isoumao.top/` 与 `https://promptsystem.isoumao.top/api/v1/health/ready`；后端 `127.0.0.1:5092`、前端 `127.0.0.1:3092`
+- [ ] 发布脚本执行成功（`pwsh -File scripts/release.ps1 -Version <version>`；SSH `root@166.1.232.84:22`）
+- [ ] 健康检查通过：`https://promptos.hyper99.top/` 与 `https://promptos.hyper99.top/api/v1/health/ready`；后端 `127.0.0.1:5092`、前端 `127.0.0.1:3092`
 - [ ] 人工验证：首页 / 登录 / 发布 / 详情页
 - [ ] 回滚步骤确认可用：在 `/srv/releases/promptsystem/<previous-version>` 使用 Compose 项目名 `promptsystem` 执行 `docker compose -p promptsystem -f docker-compose.yml up -d`；必要时从 `/srv/backups/promptsystem/<version>/` 恢复 MySQL 与 uploads，禁止 `down -v`
 

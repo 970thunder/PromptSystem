@@ -159,7 +159,16 @@ func (s *server) verifyRedisCaptcha(ctx context.Context, email, code string) boo
 	key := "promptos:captcha:email:" + normalized
 	expected := captchaDigest(s.config.JWTSecret, normalized, strings.TrimSpace(code))
 	stored, err := s.cache.Get(ctx, key)
-	if err != nil || stored == "" {
+	if err != nil {
+		if !s.config.IsProduction() {
+			return s.captcha.verify(email, code)
+		}
+		return false
+	}
+	if stored == "" {
+		if !s.config.IsProduction() {
+			return s.captcha.verify(email, code)
+		}
 		return false
 	}
 	if !hmac.Equal([]byte(stored), []byte(expected)) {

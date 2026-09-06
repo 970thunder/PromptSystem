@@ -3,11 +3,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [string]$Domain = 'promptsystem.isoumao.top',
-    [string]$ServerHost = '103.42.182.205',
+    [string]$Domain = 'promptos.hyper99.top',
+    [string]$ServerHost = '166.1.232.84',
     [string]$ServerUser = 'root',
-    [int]$SshPort = 2680,
-    [string]$SshKey = 'E:\Web\服务器密钥\foxi_103.42.182.205',
+    [int]$SshPort = 22,
+    [string]$SshKey = '',
     [string]$ProjectName = 'promptsystem',
     [bool]$EmailAuthEnabled = $true,
     [string]$ImageArchivePath = '',

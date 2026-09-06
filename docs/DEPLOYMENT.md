@@ -6,7 +6,7 @@
 
 | 环境 | 位置 | 地址 | 说明 |
 |---|---|---|---|
-| 生产 | `103.42.182.205`（SSH `2680`） | https://promptsystem.isoumao.top | PromptSystem 独立 Compose 项目 |
+| 生产 | `166.1.232.84`（SSH `22`） | https://promptos.hyper99.top | PromptOS 独立 Compose 项目 |
 | 本地 | 开发机 `E:\Web\PromptSystem` | http://localhost:28301–28304 | `start-dev.bat`，端口占用即拒绝启动 |
 
 ## 服务拓扑（docker-compose.yml）
