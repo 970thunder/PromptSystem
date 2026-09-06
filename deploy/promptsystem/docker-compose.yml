@@ -21,6 +21,29 @@ services:
       timeout: 5s
       retries: 12
 
+  mysql-migrator:
+    image: mysql:8.4
+    container_name: promptsystem-mysql-migrator
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-promptos}
+      MYSQL_MIGRATION_USER: ${MYSQL_MIGRATION_USER:?MYSQL_MIGRATION_USER must be set}
+      MYSQL_MIGRATION_PASSWORD: ${MYSQL_MIGRATION_PASSWORD:?MYSQL_MIGRATION_PASSWORD must be set}
+    command:
+      - sh
+      - -c
+      - >-
+        mysql --protocol=tcp -hmysql -uroot -p"$${MYSQL_ROOT_PASSWORD}"
+        "$${MYSQL_DATABASE}" -e
+        "CREATE USER IF NOT EXISTS '$${MYSQL_MIGRATION_USER}'@'%' IDENTIFIED BY '$${MYSQL_MIGRATION_PASSWORD}';
+        ALTER USER '$${MYSQL_MIGRATION_USER}'@'%' IDENTIFIED BY '$${MYSQL_MIGRATION_PASSWORD}';
+        GRANT ALL PRIVILEGES ON $${MYSQL_DATABASE}.* TO '$${MYSQL_MIGRATION_USER}'@'%';
+        FLUSH PRIVILEGES;"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     container_name: promptsystem-redis
@@ -104,6 +127,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      mysql-migrator:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
