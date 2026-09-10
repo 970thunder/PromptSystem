@@ -47,15 +47,15 @@
 
 ## 当前生产发布
 
-- 版本：`v0.3.0`（CI 制品对应提交 `c9b5147`）
+- 版本：`v0.3.4`（CI 制品对应提交 `2e79994`）
 - Compose 项目：`promptsystem`
-- 发布目录：`/srv/releases/promptsystem/v0.3.0`；上一回滚目录：`/srv/releases/promptsystem/20260830-b584585`
+- 发布目录：`/srv/releases/promptsystem/v0.3.4`；上一回滚目录以服务器实际容器标签和 `/srv/releases/promptsystem` 目录核对
 - 入口端口：前端 `127.0.0.1:3092`，后端 `127.0.0.1:5092`
 - 数据卷：`promptsystem_promptsystem_mysql_data`、`promptsystem_promptsystem_redis_data`、`promptsystem_promptsystem_uploads`
-- 上传存储：当前使用独立 Docker 本地卷；未复用其他站点的 RustFS 凭据
-- 健康检查：`/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`
+- 上传存储：生产使用平板唯一 RustFS `promptsystem-prod` bucket；应用通过 `172.22.0.1:13912` 访问，公网对象由 HTTPS `/objects/` 代理提供
+- 健康检查：`/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`upload=true`、`degraded=false`
 
-截至 2026-09-04 的线上核验：`v0.3.0` 运行稳定，内存可用约 `3.4 GiB`、根盘使用率约 `49%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。服务器实际 RustFS bridge 地址以 `ss -lntp` 为准，目前为 `172.21.0.1:13902`；PromptOS 当前尚未接入 RustFS，上传仍在本地卷。邮件认证保持关闭，SMTP、每日备份告警、密钥轮换和管理员账号仍未配置。
+截至 2026-09-10 的线上核验：`v0.3.4` 运行稳定，内存可用约 `3.1 GiB`、根盘使用率约 `52%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。RustFS readiness、带认证 S3 list/put/get/delete、HTTPS `/objects/` 公共读取和每日副本均已验证；实际 PromptOS 链路为 `127.0.0.1:13910`（SSH 反向隧道）→ `172.22.0.1:13912`（PromptOS 网桥转发）。
 
 ## 回滚
 
@@ -99,7 +99,7 @@ load、迁移、恢复演练或其他高内存任务并行。示例（沿用生�
 cd /srv/releases/promptsystem/<current>
 flock -n /run/lock/promptsystem-integrity-audit.lock \
   docker compose -p promptsystem --env-file /opt/secrets/promptsystem/app.env \
-  run --rm --no-deps backend /usr/local/bin/promptos-integrity-audit
+  run --rm --no-deps --entrypoint /usr/local/bin/promptos-integrity-audit backend
 ```
 
 将标准输出和标准错误接入现有 systemd journal；timer 失败时必须触发服务器现有告警接收端，
@@ -111,7 +111,7 @@ flock -n /run/lock/promptsystem-integrity-audit.lock \
 ```bash
 flock -n /run/lock/promptsystem-maintenance.lock \
   docker compose -p promptsystem --env-file /opt/secrets/promptsystem/app.env \
-  run --rm --no-deps backend /usr/local/bin/promptos-maintenance --task=all --older-than=24h
+  run --rm --no-deps --entrypoint /usr/local/bin/promptos-maintenance backend --task=all --older-than=24h
 ```
 
 回收只处理数据库中状态为 `pending` 且超过阈值的上传；对象删除成功后才标记为 `trashed`，失败项
@@ -177,6 +177,6 @@ flock -n /run/lock/promptsystem-maintenance.lock \
 | MYSQL_PASSWORD / MYSQL_MIGRATION_PASSWORD | 容器内 `ALTER USER` → app.env 更新 → `up -d backend` | ready 200、`degraded=false`、迁移 dry 跑 |
 | SMTP（阿里云邮件推送） | 控制台生成新 SMTP 密码 → 更新 app.env `PROMPTOS_SMTP_PASSWORD` → `up -d backend` | `go test -tags=smtp_live` 或线上验证码发送 200 |
 | GitHub OAuth | GitHub 后端 regenerate client secret → 更新 app.env 对应键 → `up -d backend` | OAuth 回调闭环 |
-| RustFS 凭据 | 平板 RustFS 侧生成 → 更新 `/opt/secrets/promptsystem/` 对应键 → 重启依赖服务 | 上传/读取闭环（待 D-12 接入后可用） |
+| RustFS 凭据 | 平板 RustFS 侧生成 → 更新 `/opt/secrets/promptsystem/rustfs.env`（600）→ 重启 backend/副本 timer | 带认证上传/读取/删除和 HTTPS 公共读取闭环；当前仍为服务级 key，低权限用户隔离待 RustFS 管理能力具备后补齐 |
 
 2026-09-05 已实机执行 REDIS_PASSWORD、JWT_SECRET、MYSQL_PASSWORD/MIGRATION_PASSWORD 四项轮换并验证（旧 Redis 密码 NOAUTH、新密码 PONG；ready 200；degraded=false）。

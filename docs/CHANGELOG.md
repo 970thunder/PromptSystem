@@ -58,6 +58,10 @@
 ## [Unreleased]
 
 ### Fixed
+- 修复生产 RustFS 每日副本因 `/opt/secrets/promptsystem/rustfs.env` 被写入字面量 `\\n` 而失败的问题；重写为真实换行并补充权限校验，副本任务恢复成功
+- 修正 PromptOS RustFS 看门狗默认端口：仅检查 `127.0.0.1:13910` SSH 隧道和 `172.22.0.1:13912` 网桥，避免把其他站点的 `13902` 误报为本项目故障
+- 清理两个已确认的 `promptsystem-backend-run-*` 长驻维护容器，正式 Compose 服务和数据卷保持不变
+- 修正完整性审计与维护 systemd 单元的 `docker compose run` 用法，显式覆盖 backend ENTRYPOINT，避免 timer 生成长驻 API 容器
 - 安全 CI 的 `npm audit` 对 npm registry 的临时 `503`/网络超时执行有限重试，真实高危漏洞仍立即失败
 - 修复 hardened frontend 容器中 nginx 缓存及 worker 降权所需 capability 缺失导致的启动循环，补充 `CHOWN`/`SETGID`/`SETUID`，并保留只读根文件系统和其他 capability 限制
 - 修复 Windows 发布脚本向自定义 SSH 端口上传文件时误用 `scp -p` 的问题，统一使用 `scp -P`

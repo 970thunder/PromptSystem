@@ -7,7 +7,9 @@ set -uo pipefail
 
 DOMAIN=${PROMPTOS_DOMAIN:-promptsystem.isoumao.top}
 BACKEND_READY_URL=${PROMPTOS_READY_URL:-http://127.0.0.1:5092/api/v1/health/ready}
-RUSTFS_PORTS=${PROMPTOS_RUSTFS_PORTS:-127.0.0.1:13900 172.21.0.1:13902 127.0.0.1:13910 172.22.0.1:13912}
+# PromptOS uses the shared tablet RustFS through its own reverse tunnel and
+# bridge. Other sites' 13900/13902 ports are outside this project's scope.
+RUSTFS_PORTS=${PROMPTOS_RUSTFS_PORTS:-127.0.0.1:13910 172.22.0.1:13912}
 BACKUP_ROOT=${PROMPTOS_BACKUP_ROOT:-/srv/backups/promptsystem/daily}
 STATE_DIR=/var/lib/promptos-watchdog
 ALERT_SCRIPT=/usr/local/bin/promptos-alert.sh

@@ -1,18 +1,18 @@
 # PromptOS 完整迭代 TODO
 
-更新时间：2026-09-04
+更新时间：2026-09-10
 
-当前进度：78/81 已完成，3 项待完成（2026-09-05；待完成为 S-13 剩余 SMTP/OAuth 控制台侧轮换、O-10 剩余 RustFS/证书/磁盘演练、R-08 终审；D-12/D-13 已完成）。
+当前进度：76/81 已完成，5 项待完成（2026-09-10；待完成为 D-12 低权限凭据、S-13 剩余 SMTP/OAuth/RustFS 轮换、F-11 手册同步、O-10 剩余 RustFS/证书/磁盘演练、R-08 终审）。
 
 本文是 PromptOS 后续开发、生产加固和服务器运维的唯一总清单。执行时遵守 `E:\Web\服务器部署总说明.md`、`AGENTS.md`、`docs/API契约.md` 和 `docs/DEPLOYMENT.md`。只有在代码、测试、服务器状态或恢复演练提供可复核证据后才允许将 `[ ]` 改成 `[x]`。
 
 ## 当前基线
 
 - 生产域名：`https://promptsystem.isoumao.top`
-- Compose 项目：`promptsystem`；当前发布目录：`/srv/releases/promptsystem/v0.3.0`；上一回滚目录：`/srv/releases/promptsystem/20260830-b584585`
-- 服务器：7.7 GiB 内存、无 Swap、58 GiB 根盘（2026-09-04 实测可用内存约 3.3 GiB、剩余约 30 GiB，根盘使用率 48%）
+- Compose 项目：`promptsystem`；当前发布目录：`/srv/releases/promptsystem/v0.3.4`；上一回滚目录以服务器 `docker compose ls` 与实际容器标签为准
+- 服务器：7.7 GiB 内存、无 Swap、58 GiB 根盘（2026-09-10 实测可用内存约 3.1 GiB、剩余约 28 GiB，根盘使用率 52%）
 - 公网只开放 80/443；PromptOS 前端/后端分别绑定 `127.0.0.1:3092/5092`
-- RustFS 转发链路可用，但 PromptOS 尚无独立 bucket/低权限凭据，上传暂存独立 Docker 卷
+- RustFS 转发链路和上传闭环可用；PromptOS 使用 `promptsystem-prod` bucket 和 `/opt/secrets/promptsystem/rustfs.env`，当前仍为服务级 key，低权限用户隔离尚未具备
 - 服务器已有多个 Compose 项目，禁止全局 prune、删除未知卷、改动其他项目或在服务器编译源码
 
 ## 当前功能缺失与风险清单
@@ -24,12 +24,12 @@
 | 产品能力 | Skill 运行器、在线 Playground、创作者学院、提示词交易市场尚未实现 | 导航仅显示不可点击的“即将开放”，不能宣传为可用能力 | `F-06`（开关已完成）/后续产品迭代 | 需求、执行沙箱、计费和内容审核方案明确后再开放开关 |
 
 > 四大功能方案已成文（2026-09-05）：`docs/四大产品功能设计方案.md`——含各功能定位与用户端需求、角色权限矩阵、API 契约草案、数据模型、执行沙箱/计费/审核设计与 M1-M3 路线图及上线门槛核对表。方案评审通过后按里程碑开发；开发完成并通过门槛核对表前，能力开关保持关闭。
-| 认证 | 生产验证码邮件发送尚未接入真实 SMTP | 注册/找回密码在生产不能安全闭环 | `P0-06` | SMTP 凭据、发信域名、退信处理、Redis 原子消费和限流验收 |
-| 治理 | 管理员审核 API、角色表和哈希链审计已在代码中实现，但线上尚未配置管理员角色并完成真实审核验证 | 举报在生产仍不能承诺形成受控处置闭环 | `S-14` | 角色模型、最小权限 API、审计表/留存、管理员 MFA 或等价保护、线上审核记录 |
-| 对象数据 | 上传仍在 Docker 本地卷，未接入 PromptOS 独立 RustFS bucket | 单机卷故障会影响图片可用性，无法证明跨故障域副本 | `D-12/D-13` | 独立 bucket、最小权限凭据、迁移校验和第二故障域副本 |
-| 备份 | 当前有手工/发布备份和首次恢复演练，但没有每日 timer、失败告警和跨故障域复制 | RPO 仍取决于人工发布频率，备份失败可能无人发现 | `D-11/A-10/O-01` | 告警接收端、`flock` 串行任务、保留策略和容量预算 |
+| 认证 | 生产验证码邮件已接入真实 SMTP；供应商凭据仍需按轮换窗口更新 | 轮换前凭据泄露影响面较大 | `S-13` | SMTP 控制台生成新凭据并完成线上发送验证 |
+| 治理 | 管理员审核 API、角色表和哈希链审计已配置并完成线上演练 | 管理员凭据仍需纳入定期轮换和更强登录保护评估 | `S-13` | 管理员凭据轮换、登录保护方案和审计留存复核 |
+| 对象数据 | 已接入 PromptOS 独立 RustFS bucket 并保留服务器跨故障域副本；服务级 key 尚未拆分为低权限凭据 | 凭据权限面仍大于最小权限要求 | `D-12` | RustFS 用户管理可用后创建仅限 `promptsystem-prod` 的应用凭据并轮换 |
+| 备份 | 已配置每日 timer、失败告警和跨故障域 RustFS 副本；对象完整恢复演练仍需补齐 | 恢复证据尚未覆盖数据库与对象的完整联动 | `D-14/O-10` | 独立恢复目标、校验值、RPO/RTO 和清理记录 |
 | 运行时安全 | Cookie/CSP/Redis 密码/容器加固已随 `v0.3.0` 发布并验收 | 生产安全基线已生效；仍需密钥轮换和告警配置 | `S-04/S-05/S-10/S-11/S-13/O-01` | 保留验收证据，后续按轮换窗口和告警门槛维护 |
-| 发布治理 | 浏览器已有首页/详情/搜索/移动端 smoke，完整认证、互动、发布和工作台 E2E 仍未形成自动化证据；密钥轮换和故障演练也未完成 | 变更回归、泄露处置和跨组件恢复依赖人工 | `F-10/S-13/O-10/R-06/R-08` | 测试账号、告警接收端、轮换窗口和可回滚制品 |
+| 发布治理 | 浏览器已覆盖首页、详情、搜索、认证、互动、发布和工作台；前端重设计手册同步、密钥轮换和部分故障演练仍未完成 | 变更回归、泄露处置和跨组件恢复仍有人工环节 | `F-11/S-13/O-10/R-08` | 手册逐项证据、轮换窗口、故障演练记录和可回滚制品 |
 
 ### 架构、数据、安全的排期原则
 
@@ -54,7 +54,7 @@
 - 根盘约 58 GiB；达到 70%/80%/90% 分别触发观察、清理和发布阻断。只清理已确认的悬空镜像/build cache，不执行全局或 volume prune。
 - 生产 Compose 项目固定为 `promptsystem`，应用只监听 `127.0.0.1:3092/5092`，公网仅 80/443；升级不得新建项目名、替换卷名或停止其他项目。
 - 发布目录必须同时保留当前版本 `/srv/releases/promptsystem/<current>` 与上一可回滚版本；服务器不保存源码、node_modules、构建上下文或压缩包。
-- 当前上传仍在独立 Docker 卷；在 `D-12/D-13` 的独立 bucket、凭据和迁移验收完成前，不得宣称已完成 RustFS 迁移或删除原卷。
+- 当前生产上传已使用 RustFS；`promptsystem_promptsystem_uploads` 原卷保留为空的回滚资源，不得在未完成对象恢复演练前删除。
 
 外部前置条件未满足时的处理：真实 SMTP、告警通知接收端、PromptOS 独立 RustFS bucket/凭据、跨故障域备份目标任一缺失，对应项目只能记录为阻塞/待验证，不能用本地 mock、现有他站点凭据或 CI 通过替代生产证据。
 
@@ -101,7 +101,7 @@
 - [x] **D-09 数据字典**：记录全部表、字段、状态值、索引、外键和保留期限。
 - [x] **D-10 个人数据能力**：账号注销、数据导出、浏览历史清除和注销后会话失效。
 - [x] **D-11 MySQL 定时备份**：每日逻辑备份、压缩、校验、保留和失败告警。`2026-09-05` `scripts/ops/promptos-backup.sh`（flock 串行 + mysqldump single-transaction + gzip + SHA-256 + 14 天保留 + 失败告警）部署至服务器 `/usr/local/bin/`，`promptos-backup.timer` 每日 03:30+抖动执行；首次备份 `/srv/backups/promptsystem/daily/2026-09-05/`（5559B，SHA-256 与 gzip 校验通过），告警通道 `promptos-alert.sh`（curl SMTP→客服邮箱）实测发送成功。
-- [x] **D-12 PromptOS 独立 RustFS bucket**：使用独立最小权限凭据，不复用其他站点主凭据。`2026-09-05` 发现平板已运行 PromptOS 专用 RustFS 实例（`:3910`，独立 `~/promptsystem-rustfs/` 数据/密钥目录，与 isoumao 的 `:3900` 实例完全隔离），桶 `promptsystem-prod` 已预建。链路：平板 `start-promptsystem-tunnel`（setsid 常驻）→ 主服务器 `127.0.0.1:13910`（sshd -R）→ `promptsystem-rustfs-forward.service`（`172.22.0.1:13912`，promptsystem 网桥）→ backend 容器；公开读取经 nginx `/objects/` 代理（桶策略仅允许匿名 `s3:GetObject`，`Principal:"*"`）。凭据存放 `/opt/secrets/promptsystem/rustfs.env`（600）与本地镜像，独立于 isoumao/Nebula 主凭据。
+- [ ] **D-12 PromptOS 独立 RustFS bucket/凭据**：`promptsystem-prod` 已创建并已接入平板唯一 RustFS 实例 `:3900`；链路为平板 `start-unified-rustfs-tunnel` 的同一 SSH 进程，同时映射公网 `13900`、`13910`，PromptSystem 经 `172.22.0.1:13912` 访问。当前 RustFS 版本只有服务级 key 文件，PromptSystem 暂与其他站点共用该服务级 key，尚未满足“独立最小权限凭据”，不得把该项描述为已完成。
 - [x] **D-13 上传迁移与双副本**：从 Docker 卷迁移到 RustFS，另保留不同故障域副本。`2026-09-05` 生产 `UPLOAD_PROVIDER=rustfs` 生效（部署 compose 的 `environment:` 覆盖修正为变量注入 `${UPLOAD_PROVIDER:-local}`，仓库 compose 走 `PROMPTOS_UPLOAD_PROVIDER`），端到端实测：管理员 API 上传 PNG 返回 200 与公网 URL，匿名读取该 URL 返回 200 且字节一致；新增 `scripts/ops/promptos-rustfs-replica.sh` + `promptos-rustfs-replica.timer`（05:00）把桶全量镜像到主服务器 `/srv/backups/promptsystem/rustfs-replica/`（首跑 8 对象），构成平板（主）+ 公网服务器（副本）跨故障域双副本。生产原上传卷为空，无存量迁移。
 - [x] **D-14 恢复演练**：每月恢复数据库和对象，使用上一应用版本通过 ready 与关键流程。`2026-09-05` 首次每日备份恢复演练：独立临时 `mysql:8.4` 容器加载 `daily/2026-09-05/mysql-promptos.sql.gz`，15 张表全部重建、`prompts=6` 与生产一致，演练容器即弃（本次覆盖数据库恢复；对象存储恢复待 D-13 迁移后补充为完整双项演练）。
 
@@ -138,13 +138,13 @@
 
 ## O 服务器和运维
 
-- [x] **O-01 资源基线与告警**：磁盘 70/80/90%、内存、容器重启、ready、证书、备份失败告警。`2026-09-05` `scripts/ops/promptos-watchdog.sh` 部署为 `promptos-watchdog.timer`（15 分钟），覆盖磁盘 70/80/90 分级告警（状态去重防刷屏）、可用内存 <500MB、四容器状态、ready 非 200、证书 <14 天、RustFS 13900/13902 端口、每日备份 >26h 新鲜度；通道验收邮件已发送，RustFS 13902 绑定 172.21.0.1 的偏差已修正并在告警一次后恢复。
+- [x] **O-01 资源基线与告警**：磁盘 70/80/90%、内存、容器重启、ready、证书、备份失败告警。`2026-09-05` `scripts/ops/promptos-watchdog.sh` 部署为 `promptos-watchdog.timer`（15 分钟），覆盖磁盘 70/80/90 分级告警（状态去重防刷屏）、可用内存 <500MB、四容器状态、ready 非 200、证书 <14 天、PromptOS RustFS `13910/13912` 端口、每日备份 >26h 新鲜度。
 - [x] **O-02 无 Swap 条件下的发布预算**：本次镜像 load、备份、迁移和重启均串行完成，未并行高内存任务。
 - [x] **O-03 Docker 日志轮转**：单容器限制大小与份数，避免日志无上限增长。
 - [x] **O-04 安全清理流程**：只清理确认的悬空镜像和过期 build cache，禁止全局/卷 prune。`2026-09-05` 实测：`docker image prune -f` 回收悬空镜像 30.33MB（6 个），`docker builder prune --filter until=720h` 回收 0B（无过期缓存）；前后根盘均为 50%，未触碰其他 Compose 项目卷。告警阈值线：70% 观察 / 80% 清理 / 90% 阻断发布。
 - [x] **O-05 nginx 管理规范**：记录 `/www/server/nginx` 实际 master、配置路径、测试/reload；修复 systemd 状态与实际进程不一致。`2026-09-05` 实测：master 为 `/www/server/nginx/sbin/nginx -c /www/server/nginx/conf/nginx.conf`（BT 面板式运行），站点配置 `/etc/nginx/sites-enabled/`（promptsystem vhost 在此）；权威控制命令为 `nginx -t -c … && nginx -s reload -c …`；systemd 的 LSB 单元 `nginx.service` 长期 failed 与实际进程不一致，已 `reset-failed` 消除误导状态并在 DEPLOYMENT.md 记录权威控制路径（systemd 单元仅作开机残留，不用于日常控制）。
 - [x] **O-06 证书续期验收**：Certbot renew 后调用正确 nginx reload 并做 HTTPS 探测。`2026-09-05` `certbot certificates` 确认 `promptsystem.isoumao.top` 由 certbot 管理（83 天余量）；`renew --dry-run --cert-name` 模拟续期成功；deploy 钩子已存在且指向正确 BT nginx（`nginx -t && -s reload -c conf`）；手动执行 reload 成功后 `https://promptsystem.isoumao.top/` 与 `/api/v1/health/ready` 均 `200`。`certbot.timer` 每日两次运行。
-- [x] **O-07 RustFS 链路监控**：监控 13900/13902、forward service、ready 和隧道恢复。`2026-09-05` 纳入 `promptos-watchdog`（15 分钟）：13900（127.0.0.1 sshd 隧道）与 13902（172.21.0.1 forward service python3）端口连通性检查，故障发信、恢复自动清除告警状态；首次运行即纠正如实记录 13902 绑定偏差。
+- [x] **O-07 RustFS 链路监控**：监控 13910/13912、forward service、ready 和隧道恢复。`2026-09-10` 看门狗默认检查 `127.0.0.1:13910`（SSH 反向隧道）与 `172.22.0.1:13912`（PromptOS 网桥转发），RustFS readiness 和副本 timer 均已实测正常。
 - [x] **O-08 端口边界**：公网仅 80/443；应用端口保持 loopback，线上 `ss` 检查通过。
 - [x] **O-09 多项目隔离**：本次仅操作 `promptsystem` 项目，线上 `docker compose ls` 其余项目保持运行。
 - [ ] **O-10 故障演练**：backend/MySQL/Redis/RustFS/nginx/证书/磁盘逐项演练并记录恢复。
@@ -225,10 +225,11 @@
 - `D-11/O-01`（2026-09-05）：告警接收端为客服邮箱 `3038414005@qq.com`，SMTP 凭据复用阿里云邮件推送账号（`/opt/secrets/promptsystem/alert.env`，600）。备份脚本与看门狗均入仓 `scripts/ops/`（`promptos-backup.sh`/`promptos-alert.sh`/`promptos-watchdog.sh`），systemd 单元 `promptos-backup.{service,timer}`（03:30+RandomizedDelay 600s，Persistent）与 `promptos-watchdog.{service,timer}`（`*:00/15`）。看门狗首次运行即发现 RustFS 13902 实际绑定 `172.21.0.1`（docker 网桥）而非 `127.0.0.1`，端口基线已按实测修正。
 - `O-04/O-05/O-06/O-07`（2026-09-05）：nginx 权威控制路径为 `/www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf && … -s reload -c …`；certbot deploy 钩子（reload-isoumao-nginx.sh 等）已验证指向一致，未新增冗余钩子。O-10 故障演练本批完成 backend（stop→ready+容器双告警→start→自动恢复）、Redis（stop→告警→start→恢复）、MySQL（restart→ready 200）、nginx（reload+HTTPS 探测）四项；RustFS/证书/磁盘三项因涉及共享基础设施或高风险注入，保持未勾选并记录原因。
 - `v0.3.1` 生产发布（2026-09-05）：CI `release-artifacts` run `33910511955` 构建镜像（backend sha256=`d8746224…`、frontend sha256=`d1b05298…`、归档 `230addb7…`），`release.ps1 -ImageArchivePath` 串行完成服务器 MySQL/上传卷备份（`sha256sum -c` + `gzip -t` 通过）、镜像加载、Compose 重建、ready/HTTPS 验证，`current` 指向 `/srv/releases/promptsystem/v0.3.1`。线上 ready `200`、`degraded=false`、`storageMode=mysql`；HTTPS 首页 `200`。发布同时随版本上线：P0-06 SMTP 验证码、moderation 双缺陷修复、E2E 流程套件。发布脚本本次修复为 UTF-8 BOM（Windows PowerShell 5.1 可直接解析）。
-- `D-12/D-13`（2026-09-05）：实施要点与坑位记录——①SigV4 匿名策略的 Principal 必须为 `"*"`（`{"AWS":["*"]}` 不生效）；②`rustfs-forward.py` 克隆时 LISTEN/TARGET 都要改（漏改 TARGET 会把流量转去 isoumao 实例并报 `InvalidAccessKeyId`）；③RustFS 桶策略变更存在分钟级传播延迟；④后端容器所在网络网关是 `172.22.0.1`（非 isoumao 的 `172.21.0.1`），跨网桥访问会被 INPUT DROP，转发器监听地址必须用本网络网关；⑤部署 compose 的 `environment:` 优先于 `env_file:`，`UPLOAD_PROVIDER` 需变量化。管理员凭据在演练后已整轮换（`/root/.promptos-admin-credentials`）。
-- `D-12/D-13`（2026-09-05）实施要点与坑位：①SigV4 匿名读策略的 Principal 必须为 `"*"`（`{"AWS":["*"]}` 在 RustFS 上不生效）；②桶策略变更存在分钟级传播延迟，期间匿名读会间歇 403；③`rustfs-forward.py` 克隆时 LISTEN 与 TARGET 都必须改（漏改 TARGET 会把流量转去 isoumao 实例并报 `InvalidAccessKeyId`）；④PromptOS 后端容器网关是 `172.22.0.1`（isoumao 是 `172.21.0.1`），跨网桥访问会被 INPUT 链 DROP，转发器监听地址必须用本网络网关，nginx（宿主机进程）则直连 `127.0.0.1:13910` 隧道口；⑤部署 compose 的 `environment:` 优先于 `env_file:`，`UPLOAD_PROVIDER` 必须变量化。管理员凭据演练后已整轮换（`/root/.promptos-admin-credentials`，600）。
+- `D-12/D-13`（2026-09-07）：PromptSystem 已切换到平板唯一 RustFS `:3900`；同一 SSH 进程映射公网 `13900`、`13910`，PromptSystem 网桥入口为 `172.22.0.1:13912`。`promptsystem-prod` 已完成带认证 put/get/delete 验证。当前仍是 RustFS 服务级 key，共用 key 的低权限隔离待 RustFS 用户管理能力确认后再补；不得把主 key 放入前端或公开代码。
+- `D-12/D-13`（2026-09-07）链路记录：平板只运行 RustFS `:3900`；一个 SSH 隧道进程同时提供公网 `13900`/`13910`，PromptOS 网桥使用 `172.22.0.1:13912`。应用仍采用 path-style/SigV4，生产配置的 `environment:` 必须显式变量化以覆盖 `env_file:`。服务级 RustFS key 当前按 bucket 做逻辑隔离，低权限用户待 RustFS 管理能力具备后补齐。
 - `治理闭环前端`（2026-09-05）：新增管理审核控制台 `/admin`——举报列表（待处理/已办结/已驳回页签）、按举报一键"下架内容并办结"（`action=remove` 对 prompt 目标自动下架）、仅办结与驳回、逐条处理备注、分页；审计链查询展示 `action`/目标/操作人/哈希链（prev←entry）；非管理员访问返回明确的"需要管理员角色"提示空态。入口在工作台侧栏"审核控制台"。`e2e/admin.spec.ts` 覆盖审核动作请求体断言与 403 权限态；同时新增 NotFoundView + SPA catch-all 路由，未知路径不再空白。`npm run lint:check`、`npx vitest run`（8 files/19 tests）、`npm run build`、`npx playwright test`（16 passed / 6 skipped）通过。仅前端与配置变更，未部署服务器。
 - `P0-06` 回归与修复（2026-09-05）：v0.3.1 发布后生产验证码再次返回 `503 EMAIL_NOT_CONFIGURED`（用户注册实测发现）。根因：发布脚本上传的是 `deploy/promptsystem/docker-compose.yml` 服务器模板而非根目录 compose，该模板从未包含 `SMTP_*` 映射且 `UPLOAD_PROVIDER` 硬编码 `local`，导致每次发布都会静默重置 SMTP 与对象存储配置。修复：模板补齐 `SMTP_HOST/PORT/USER/PASSWORD/FROM`（插值自 `PROMPTOS_SMTP_*`）、`UPLOAD_PROVIDER` 变量化（`${UPLOAD_PROVIDER:-local}`）、并补 GitHub OAuth 三项空默认映射；同步修正服务器 v0.3.1 compose 后复验：容器 `SMTP_HOST` 就位、验证码发送 `200`（expiresInSeconds=598）、RustFS 对象公网读取 `200`、首页 `200`。教训：根目录 compose（本地）与 `deploy/promptsystem/`（服务器）是两套模板，新增生产环境变量必须同时改服务器模板。
 - `v0.3.2` 生产发布（2026-09-05）：CI `release-artifacts` run `33946496197` 构建镜像（backend sha256=`c99c006a…`、frontend sha256=`d3d75efb…`、归档 `2f942f69…`），`release.ps1 -SkipTests` 串行完成服务器备份（校验通过）、镜像加载、Compose 重建、ready/HTTPS 验证，`current` 指向 v0.3.2。随版本上线：管理审核控制台 `/admin`、404 兜底页、验证码 429 冷却倒计时体验修复。发布后线上复验：ready `200`、`SMTP_HOST` 映射在位（P0-06 回归修复生效）、`UPLOAD_PROVIDER=rustfs`、验证码发送 `200`、RustFS 对象公网读取 `200`、未知路径渲染 404 页、匿名访问 `/admin` 正确跳转登录。部署 compose 使用修正后的服务器模板（含 SMTP 映射与变量化 UPLOAD_PROVIDER）。
 - `v0.3.3` 生产发布（2026-09-05）：CI run `33952364916` 构建镜像（归档 SHA-256=`50039246…`），`release.ps1 -SkipTests` 串行部署完成（服务器备份校验通过、ready `200`）。上线后生产实测验证码修复：错误验证码尝试（400 INVALID_CAPTCHA）不再销毁存储中的有效验证码，随后正确验证码直接通过并命中 `409 USER_EXISTS`（Email already registered）。同批上线前端注册错误码中文映射。注册限流键已为用户重试清理。
 - `v0.3.4` 生产发布（2026-09-05）：验证码邮件中文化（主题 MIME 编码、正文中文、发件人显示名 PromptOS）+ 服务条款/隐私政策页面随版本上线。`release.ps1 -SkipTests` 串行部署（备份校验通过、ready `200`、验证码发送探针 `200`）。注意：v0.3.4 tag 与 CI 制品对应 commit `2e79994`；同批包含远端合入的法律页面与项目规范提交（`5bc0fe6`）。
+- `D-13/O-07/A-10`（2026-09-10）：排查 RustFS 副本失败，根因为 `/opt/secrets/promptsystem/rustfs.env` 曾被写入字面量 `\\n`，修正为真实换行并保持 `600 root:root`；RustFS readiness、带认证 S3 list/put/get/delete、HTTPS `/objects/` 公共读取和副本 timer 均复验成功。同步修正看门狗默认链路为 `127.0.0.1:13910` → `172.22.0.1:13912`。发现并定向清理两个旧 `promptsystem-backend-run-*` 容器；为防止 timer 再次生成长驻 API 容器，服务器完整性审计与维护单元改为显式 `docker compose run --entrypoint`，两项均可正常退出且无遗留容器。维护审计仍报告 6 条官方 Prompt 的历史 like/favorite 计数漂移，未自动改写业务数据，待单独备份后评估修复。
