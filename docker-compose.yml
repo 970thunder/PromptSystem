@@ -41,7 +41,7 @@
     container_name: promptos-backend
     restart: unless-stopped
     environment:
-      APP_ENV: ${PROMPTOS_APP_ENV:-development}
+      APP_ENV: ${PROMPTOS_APP_ENV:?PROMPTOS_APP_ENV must be set explicitly (development|production)}
       PORT: 8080
       JWT_SECRET: ${PROMPTOS_JWT_SECRET:?PROMPTOS_JWT_SECRET must be set}
       JWT_EXPIRE_HOURS: ${PROMPTOS_JWT_EXPIRE_HOURS:-72}
@@ -80,6 +80,11 @@
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GITHUB_OAUTH_ENABLED: ${GITHUB_OAUTH_ENABLED:-false}
       GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:8080/api/v1/auth/github/callback}
+      OIDC_ENABLED: ${OIDC_ENABLED:-false}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://localhost:8080/api/v1/auth/oidc/callback}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SMTP_HOST: ${PROMPTOS_SMTP_HOST:-}
       SMTP_PORT: ${PROMPTOS_SMTP_PORT:-587}
@@ -105,6 +110,7 @@
         VITE_ENABLE_PROMPT_API: "true"
         VITE_EMAIL_AUTH_ENABLED: ${VITE_EMAIL_AUTH_ENABLED:-true}
         VITE_GITHUB_OAUTH_ENABLED: ${VITE_GITHUB_OAUTH_ENABLED:-false}
+        VITE_OIDC_ENABLED: ${VITE_OIDC_ENABLED:-false}
         VITE_SKILL_ENABLED: ${VITE_SKILL_ENABLED:-false}
         VITE_PLAYGROUND_ENABLED: ${VITE_PLAYGROUND_ENABLED:-false}
         VITE_CREATOR_ACADEMY_ENABLED: ${VITE_CREATOR_ACADEMY_ENABLED:-false}

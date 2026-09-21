@@ -23,15 +23,11 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/register',
-    name: 'Register',
-    component: () => import('@/views/RegisterView.vue'),
-    meta: { title: '注册' }
+    redirect: to => ({ path: '/login', query: to.query })
   },
   {
     path: '/forgot-password',
-    name: 'ForgotPassword',
-    component: () => import('@/views/ForgotPasswordView.vue'),
-    meta: { title: '找回密码' }
+    redirect: to => ({ path: '/login', query: to.query })
   },
   {
     path: '/auth/callback',

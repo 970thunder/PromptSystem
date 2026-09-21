@@ -12,6 +12,7 @@ CREATE TABLE users (
     avatar VARCHAR(500) NULL DEFAULT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     github_id BIGINT NULL COMMENT 'GitHub user id',
+    oidc_subject VARCHAR(255) NULL COMMENT 'Keycloak OIDC subject',
     password VARCHAR(100) NULL DEFAULT NULL,
     bio VARCHAR(500) NULL DEFAULT NULL,
     level INT DEFAULT 1,
@@ -23,6 +24,7 @@ CREATE TABLE users (
     INDEX idx_email (email),
     INDEX idx_username (username),
     UNIQUE INDEX idx_github_id (github_id)
+    ,UNIQUE INDEX idx_oidc_subject (oidc_subject)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Categories table

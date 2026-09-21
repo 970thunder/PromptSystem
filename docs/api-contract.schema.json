@@ -17,7 +17,8 @@
         "experience": {"type": "integer"},
         "status": {"type": "integer"},
         "createdAt": {"type": "string"},
-        "hasGitHubBound": {"type": "boolean"}
+        "hasGitHubBound": {"type": "boolean"},
+        "hasOidcBound": {"type": "boolean"}
       }
     },
     "PromptParams": {

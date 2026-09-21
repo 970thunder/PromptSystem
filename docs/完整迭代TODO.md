@@ -8,7 +8,7 @@
 
 ## 当前基线
 
-- 生产域名：`https://promptsystem.isoumao.top`
+- 生产域名：`https://promptsystem.isoumao.cn`（2026-09-12 已从 `.top` 迁移）
 - Compose 项目：`promptsystem`；当前发布目录：`/srv/releases/promptsystem/v0.3.4`；上一回滚目录以服务器 `docker compose ls` 与实际容器标签为准
 - 服务器：7.7 GiB 内存、无 Swap、58 GiB 根盘（2026-09-10 实测可用内存约 3.1 GiB、剩余约 28 GiB，根盘使用率 52%）
 - 公网只开放 80/443；PromptOS 前端/后端分别绑定 `127.0.0.1:3092/5092`

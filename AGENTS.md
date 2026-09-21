@@ -25,7 +25,7 @@ PromptOS：AI Prompt & Skill 社区平台 MVP（feed、详情、登录注册、�
 ## 已知问题（接到相关任务时优先处理）
 
 - 前端测试已接入本地 Vitest；新增前端功能时必须至少补一条组件/冒烟测试，并在 CI 中执行构建与测试。
-- `docker-compose.yml` 硬编码 `MYSQL_ROOT_PASSWORD: root` 与默认 `JWT_SECRET`——任何触碰 compose 或安全相关的任务必须改为环境变量注入。
+- Compose 的 MySQL/JWT 生产值已改为必填环境变量注入；后续修改不得重新加入默认值、弱密钥或硬编码凭据。
 - `.grok\`、`.workbuddy\` 已加入 .gitignore，勿提交。
 
 ## 完成定义（DoD）
@@ -47,7 +47,7 @@ conventional commits（近期历史均为 feat/fix/chore，保持一致）。
 
 ## 发布
 
-生产为 docker compose 部署。发布前逐项勾选 `docs\RELEASE-CHECKLIST.md`（待补，模板在 `E:\Web\templates\`）。
+生产为 docker compose 部署。发布前逐项勾选现有的 `docs\RELEASE-CHECKLIST.md`；服务器、域名和 SSH 口径以 `E:\Web\服务器部署总说明.md` 为准。
 
 ## 开发与交付节奏
 

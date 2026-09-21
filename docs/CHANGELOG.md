@@ -2,6 +2,17 @@
 
 所有对外可见的变更记录在本文件。版本号：`v主.次.修订`（主=大改/不兼容，次=新功能，修订=修复）。
 
+## [v0.4.2] - 2026-09-22
+
+### Added
+- 统一账号在 `users.oidc_subject` 持久化 OIDC `sub`，新增迁移 `0019_users_oidc_subject.sql`，仅对 `email_verified=true` 的账号按邮箱绑定，冲突时拒绝合并。
+- Prompt 创建、浏览、更新和删除增加用户/IP 维度限流；登录失败补齐等时 bcrypt 校验；内容审核拦截常见 API Key、GitHub/Google/Slack Token 和私钥片段。
+
+### Changed
+- 限流来源 IP 改为只信任同机反向代理追加的最右侧 `X-Forwarded-For` 值，避免伪造左侧首跳绕过限制。
+- 生产配置要求显式设置环境类型，并强制 `JWT_SECRET` 至少 32 字符；OIDC 配置纳入生产启动校验。
+- 生产线已运行镜像 `promptsystem-backend:20260922-2` / `promptsystem-frontend:20260922-2`，OIDC 入口实测 302，数据库 OIDC 列与唯一索引均已生效。
+
 ## [v0.4.1] - 2026-09-22
 
 ### Changed
@@ -9,6 +20,7 @@
 
 ### 性能影响
 - 首屏必须解析的入口 JS 体积减少约 **98%**（gzip 430 KB → 6.7 KB），其余依赖并行加载且跨版本复用。
+
 ## [v0.4.0] - 2026-09-22
 
 ### Changed
@@ -21,6 +33,7 @@
 
 ### Removed
 - 下线 `/user/login`、`/user/captcha`、`/user/register`、`/user/password/reset` 及其处理器、验证码与邮件子系统（约 930 行），并删除对应限流用例；保留登出吊销用例。
+
 ## [v0.3.1] - 2026-09-05
 
 镜像：`promptsystem-backend:v0.3.1` sha256=`d8746224698de967ba275eba774cde0242670877240dac839fec233eb3f20e98`，`promptsystem-frontend:v0.3.1` sha256=`d1b05298492a0e4d2d31aa369ee62a861e63d9ebc0f29752e76d8046e4b1ba44`；CI 构建 commit `339a44d`，归档 SHA-256=`230addb7fcb9a2f551f53c288bc0bcffac874bf39a464a903aa512a6fb4dd74a`。

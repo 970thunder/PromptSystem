@@ -18,6 +18,7 @@ var (
 	ErrPasswordTooLong    = errors.New("password must be 72 bytes or fewer")
 	ErrInvalidEmail       = errors.New("invalid email address")
 	ErrInvalidGitHubUser  = errors.New("invalid github user")
+	ErrInvalidOIDCUser    = errors.New("invalid oidc user")
 	ErrInvalidUser        = errors.New("invalid user")
 	ErrCannotFollowSelf   = errors.New("cannot follow yourself")
 )
@@ -28,12 +29,13 @@ var (
 const maxPasswordBytes = 72
 
 type UserStore struct {
-	mu            sync.RWMutex
-	nextID        int
-	users         map[int]AuthUser
-	emailIndex    map[string]int
-	githubIDIndex map[int64]int
-	follows       map[int]map[int]struct{}
+	mu               sync.RWMutex
+	nextID           int
+	users            map[int]AuthUser
+	emailIndex       map[string]int
+	githubIDIndex    map[int64]int
+	oidcSubjectIndex map[string]int
+	follows          map[int]map[int]struct{}
 }
 
 type AuthUser struct {
@@ -42,6 +44,7 @@ type AuthUser struct {
 	Avatar       string
 	Email        string
 	GitHubID     int64
+	OIDCSubject  string
 	PasswordHash string
 	Bio          string
 	Level        int
@@ -66,6 +69,7 @@ type PrivateUser struct {
 	Email          string `json:"email"`
 	Status         int    `json:"status"`
 	HasGitHubBound bool   `json:"hasGitHubBound"`
+	HasOIDCBound   bool   `json:"hasOidcBound"`
 }
 
 type FollowStatus struct {
@@ -77,11 +81,12 @@ type FollowStatus struct {
 
 func NewUserStore() *UserStore {
 	store := &UserStore{
-		nextID:        7,
-		users:         map[int]AuthUser{},
-		emailIndex:    map[string]int{},
-		githubIDIndex: map[int64]int{},
-		follows:       map[int]map[int]struct{}{},
+		nextID:           7,
+		users:            map[int]AuthUser{},
+		emailIndex:       map[string]int{},
+		githubIDIndex:    map[int64]int{},
+		oidcSubjectIndex: map[string]int{},
+		follows:          map[int]map[int]struct{}{},
 	}
 
 	seedUsers := []AuthUser{
@@ -273,6 +278,9 @@ func (s *UserStore) DeleteAccount(id int) error {
 	if user.GitHubID > 0 {
 		delete(s.githubIDIndex, user.GitHubID)
 	}
+	if user.OIDCSubject != "" {
+		delete(s.oidcSubjectIndex, user.OIDCSubject)
+	}
 	user.Username = fmt.Sprintf("deleted-user-%d", id)
 	user.Avatar = ""
 	user.Email = fmt.Sprintf("deleted+%d@invalid.promptos.local", id)
@@ -369,6 +377,54 @@ func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar str
 	s.githubIDIndex[githubID] = user.ID
 	s.nextID++
 
+	return user, nil
+}
+
+func (s *UserStore) UpsertOIDCUser(subject, username, email, avatar string) (AuthUser, error) {
+	subject = strings.TrimSpace(subject)
+	email = strings.TrimSpace(strings.ToLower(email))
+	avatar = strings.TrimSpace(avatar)
+	if subject == "" || !IsValidEmail(email) {
+		return AuthUser{}, ErrInvalidOIDCUser
+	}
+	if strings.TrimSpace(username) == "" {
+		username = strings.Split(email, "@")[0]
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id, ok := s.oidcSubjectIndex[subject]; ok {
+		user := s.users[id]
+		if avatar != "" {
+			user.Avatar = avatar
+		}
+		if user.Email == "" {
+			user.Email = email
+		}
+		s.users[id] = user
+		return user, nil
+	}
+	if id, ok := s.emailIndex[email]; ok {
+		user := s.users[id]
+		if user.OIDCSubject != "" && user.OIDCSubject != subject {
+			return AuthUser{}, ErrUserExists
+		}
+		user.OIDCSubject = subject
+		if avatar != "" {
+			user.Avatar = avatar
+		}
+		s.users[id] = user
+		s.oidcSubjectIndex[subject] = id
+		return user, nil
+	}
+	resolved, err := s.resolveUsernameLocked(username, 0, 0)
+	if err != nil {
+		return AuthUser{}, err
+	}
+	user := AuthUser{ID: s.nextID, Username: resolved, Avatar: avatar, Email: email, OIDCSubject: subject, PasswordHash: "", Level: 1, Status: 1, CreatedAt: time.Now().UTC().Format("2006-01-02")}
+	s.users[user.ID] = user
+	s.emailIndex[email] = user.ID
+	s.oidcSubjectIndex[subject] = user.ID
+	s.nextID++
 	return user, nil
 }
 
@@ -568,6 +624,7 @@ func ToPrivateUser(user AuthUser) PrivateUser {
 		Email:          user.Email,
 		Status:         user.Status,
 		HasGitHubBound: user.GitHubID > 0,
+		HasOIDCBound:   user.OIDCSubject != "",
 	}
 }
 

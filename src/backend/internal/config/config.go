@@ -54,6 +54,11 @@ type Config struct {
 	SMTPPassword         string
 	SMTPFrom             string
 	EmailAuthEnabled     bool
+	OIDCIssuer           string
+	OIDCClientID         string
+	OIDCClientSecret     string
+	OIDCRedirectURI      string
+	OIDCEnabled          bool
 }
 
 // DefaultAllowedOrigins is the comma-separated origin list used in development.
@@ -108,6 +113,11 @@ func Load() Config {
 		SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:             getEnv("SMTP_FROM", ""),
 		EmailAuthEnabled:     getEnvAsBool("EMAIL_AUTH_ENABLED", true),
+		OIDCIssuer:           getEnv("OIDC_ISSUER", ""),
+		OIDCClientID:         getEnv("OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:     getEnv("OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURI:      getEnv("OIDC_REDIRECT_URI", ""),
+		OIDCEnabled:          getEnvAsBool("OIDC_ENABLED", false),
 	}
 }
 
@@ -147,8 +157,8 @@ func (c Config) Validate() error {
 		return errors.New("DB_MAX_IDLE_CONNS cannot exceed DB_MAX_OPEN_CONNS")
 	}
 
-	if prod && (strings.TrimSpace(c.JWTSecret) == "" || c.JWTSecret == "promptos-dev-secret-change-me") {
-		return errors.New("JWT_SECRET must be set to a strong secret in non-development environments")
+	if prod && (strings.TrimSpace(c.JWTSecret) == "" || c.JWTSecret == "promptos-dev-secret-change-me" || len(c.JWTSecret) < 32) {
+		return errors.New("JWT_SECRET must be set to a strong secret (at least 32 characters) in non-development environments")
 	}
 	if prod && strings.EqualFold(c.MySQLPass, "root") {
 		return errors.New("MYSQL_PASSWORD must not be the default root password in non-development environments")
@@ -181,6 +191,12 @@ func (c Config) Validate() error {
 	}
 	if c.GitHubOAuthEnabled && (strings.TrimSpace(c.GitHubClientID) == "" || strings.TrimSpace(c.GitHubClientSecret) == "") {
 		return errors.New("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured when GitHub OAuth is enabled")
+	}
+	if c.OIDCEnabled && (strings.TrimSpace(c.OIDCIssuer) == "" || strings.TrimSpace(c.OIDCClientID) == "" || strings.TrimSpace(c.OIDCClientSecret) == "" || strings.TrimSpace(c.OIDCRedirectURI) == "") {
+		return errors.New("OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET and OIDC_REDIRECT_URI must be configured in production")
+	}
+	if prod && c.OIDCEnabled && !strings.HasPrefix(strings.TrimRight(c.OIDCIssuer, "/"), "https://") {
+		return errors.New("OIDC_ISSUER must use HTTPS")
 	}
 
 	if strings.Contains(c.AllowedOrigin, "*") && strings.Contains(c.AllowedOrigin, ",") {

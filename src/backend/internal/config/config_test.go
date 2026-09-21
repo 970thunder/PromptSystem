@@ -48,7 +48,7 @@ func TestValidateRejectsDefaultRootPasswordInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret",
+		JWTSecret:          "super-strong-secret-0123456789abcdef",
 		MySQLPass:          "root",
 		AllowedOrigin:      "https://example.com",
 		GitHubClientID:     "id",
@@ -65,7 +65,7 @@ func TestValidateRejectsWildcardOriginInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret",
+		JWTSecret:          "super-strong-secret-0123456789abcdef",
 		MySQLPass:          "strong-password",
 		AllowedOrigin:      "*",
 		GitHubClientID:     "id",
@@ -82,7 +82,7 @@ func TestValidateRejectsMissingOAuthInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret",
+		JWTSecret:          "super-strong-secret-0123456789abcdef",
 		MySQLPass:          "strong-password",
 		AllowedOrigin:      "https://example.com",
 		GitHubClientID:     "",
@@ -100,7 +100,7 @@ func TestValidateAllowsDisabledOAuthInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret",
+		JWTSecret:          "super-strong-secret-0123456789abcdef",
 		MySQLPass:          "strong-password",
 		MySQLUser:          "promptos_app",
 		MySQLMigrationUser: "promptos_migrator",
@@ -122,7 +122,7 @@ func TestValidateRejectsMissingRedisPasswordInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret",
+		JWTSecret:          "super-strong-secret-0123456789abcdef",
 		MySQLPass:          "strong-password",
 		MySQLUser:          "promptos_app",
 		MySQLMigrationUser: "promptos_migrator",

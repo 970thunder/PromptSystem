@@ -4,6 +4,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -25,6 +26,17 @@ var sensitiveRules = []string{
 	"盗号",
 }
 
+// High-signal credential token shapes. Users routinely paste live API keys
+// into prompts; published content is world-readable, so these are blocked
+// before the content reaches the database or any reader.
+var secretTokenPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`sk-[A-Za-z0-9_]{16,}`),
+	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
+	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{30,}`),
+	regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]{10,}`),
+	regexp.MustCompile(`AIza[0-9A-Za-z_-]{30,}`),
+	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),
+}
 var (
 	// ErrInvalidContent is returned for malformed UTF-8 or disallowed control
 	// characters in user-authored content.
@@ -87,6 +99,11 @@ func validateModerationFields(fields []moderationField) error {
 		normalized := strings.ToLower(value)
 		for _, rule := range sensitiveRules {
 			if strings.Contains(normalized, rule) {
+				return fmt.Errorf("%w: %s", ErrUnsafeContent, field.Name)
+			}
+		}
+		for _, pattern := range secretTokenPatterns {
+			if pattern.MatchString(value) {
 				return fmt.Errorf("%w: %s", ErrUnsafeContent, field.Name)
 			}
 		}

@@ -235,6 +235,10 @@ func (s *server) handlePromptCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.enforceRateLimits(r.Context(), w, "prompt_create", rateLimitRule{bucket: rateLimitUser(userID), limit: 20, window: time.Hour}) {
+		return
+	}
+
 	userRecord, found := s.getAuthService().FindByID(userID)
 	if !found {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
@@ -831,6 +835,14 @@ func (s *server) handlePromptView(w http.ResponseWriter, r *http.Request, id int
 	// total views counter. See store.RecordView for the contract.
 	userID, _ := s.optionalUserID(r)
 
+	actorKey := rateLimitIP(r)
+	if userID != 0 {
+		actorKey = rateLimitUser(userID)
+	}
+	if !s.enforceRateLimits(r.Context(), w, "prompt_view", rateLimitRule{bucket: actorKey + ":prompt:" + strconv.Itoa(id), limit: 30, window: time.Hour}) {
+		return
+	}
+
 	prompt, applied, err := s.getPromptService().RecordView(id, userID)
 	if err != nil {
 		writeStoreError(w, err)
@@ -906,6 +918,9 @@ func (s *server) handlePromptUpdate(w http.ResponseWriter, r *http.Request, id i
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
 		return
 	}
+	if !s.enforceRateLimits(r.Context(), w, "prompt_update", rateLimitRule{bucket: rateLimitUser(userID), limit: 60, window: time.Hour}) {
+		return
+	}
 
 	userRecord, found := s.getAuthService().FindByID(userID)
 	if !found {
@@ -968,6 +983,9 @@ func (s *server) handlePromptDelete(w http.ResponseWriter, r *http.Request, id i
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, Message: "Unauthorized"})
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "prompt_delete", rateLimitRule{bucket: rateLimitUser(userID), limit: 30, window: time.Hour}) {
 		return
 	}
 

@@ -38,3 +38,9 @@ Thumbs.db
 coverage.out
 # Temporary files (root-level scratch area)
 temp/
+
+# Codex release/repack scratch
+.codex-*/
+src/backend/.codex-*
+src/backend/Dockerfile.codex-repack
+src/frontend/Dockerfile.codex-repack

@@ -21,6 +21,22 @@ onMounted(async () => {
     return
   }
 
+  if (route.query.oidc === '1') {
+    try {
+      await userStore.fetchUserInfo()
+      if (!userStore.isLoggedIn) throw new Error('session missing')
+      message.success('已通过统一账号登录')
+      const redirect = isSafeInternalPath(route.query.redirect)
+      await router.replace(redirect)
+    } catch {
+      message.error('统一账号登录未完成，请重试')
+      await router.replace('/login')
+    } finally {
+      exchanging.value = false
+    }
+    return
+  }
+
   const code = typeof route.query.code === 'string' ? route.query.code : ''
   if (!code) {
     message.error('缺少登录凭据')

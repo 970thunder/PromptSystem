@@ -1,12 +1,12 @@
 # PromptOS 部署说明
 
-> 环境差异走配置注入（.env / compose 环境变量），不维护第二套源码目录。密钥来源见「配置与密钥」。
+> 环境差异走配置注入（.env / compose 环境变量），不维护第二套源码目录。密钥来源见「配置与密钥」。跨项目服务器事实以 `E:\Web\服务器部署总说明.md` 为准。
 
 ## 环境一览
 
 | 环境 | 位置 | 地址 | 说明 |
 |---|---|---|---|
-| 生产 | `166.1.232.84`（SSH `22`） | https://promptos.hyper99.top | PromptOS 独立 Compose 项目 |
+| 生产 | `103.42.182.205`（SSH `2680`） | https://promptsystem.isoumao.cn | PromptOS 独立 Compose 项目 `promptsystem` |
 | 本地 | 开发机 `E:\Web\PromptSystem` | http://localhost:28301–28304 | `start-dev.bat`，端口占用即拒绝启动 |
 
 ## 服务拓扑（docker-compose.yml）
@@ -28,13 +28,12 @@
 4. 验证：`curl https://<域名>/` + 首页登录/发布冒烟；
 5. 失败回滚：切回上一版镜像/目录 + 恢复数据库备份。
 
-### 服务器发布布局（推荐目标）
+### 服务器发布布局（当前）
 
 ```
-/opt/promptos/
-├── releases/vX.Y.Z/      # 每版一份 compose + 镜像 tag 固定
-├── shared/               # uploads、日志等跨版本数据
-└── current -> releases/vX.Y.Z
+/srv/releases/promptsystem/
+├── vX.Y.Z/               # 每版一份 compose + 固定镜像 tag/digest
+└── current -> vX.Y.Z     # 仅在健康检查通过后更新
 ```
 
 ## 配置与密钥
@@ -45,17 +44,23 @@
 - 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；`v0.3.0` 已切换为强制 `Content-Security-Policy`，不得直接放宽为 `*`。
 - 首次新库不需要人工导入 SQL：backend 检测到当前数据库无表时自动应用 `src/backend/sql/schema.sql` 基线，随后通过 `schema_migrations` 执行全部 `sql/migrations`。已有卷和部分迁移库只执行未记录的迁移，不会覆盖数据；
 
+### 统一账号（OIDC）
+
+PromptOS 使用 `https://id.isoumao.cn/realms/isoumao` 的独立 `promptsystem-web` client。生产必须从 `/opt/secrets/promptsystem/app.env` 注入 `OIDC_ENABLED=true`、`OIDC_ISSUER`、`OIDC_CLIENT_ID`、`OIDC_CLIENT_SECRET` 和精确的 `OIDC_REDIRECT_URI=https://promptsystem.isoumao.cn/api/v1/auth/oidc/callback`。当前线上镜像标签为 `20260922-2`，OIDC 已启用，数据库迁移 `0019_users_oidc_subject.sql` 已应用。回调服务端校验 state、PKCE、nonce、issuer、audience、RS256 签名和 `email_verified`，然后只签发 PromptOS 自己的 HttpOnly cookie。Keycloak token 不进入 URL、localStorage 或业务数据库。管理员账号不走此入口；GitHub OAuth 保留作迁移/回滚入口。
+
+数据库迁移 `0019_users_oidc_subject.sql` 为 `users.oidc_subject` 添加唯一索引。发布前先备份 MySQL，再执行迁移并验证按 `sub` 登录、已验证邮箱绑定、冲突拒绝和回滚。
+
 ## 当前生产发布
 
-- 版本：`v0.3.4`（CI 制品对应提交 `2e79994`）
+- 版本：`v0.4.2`（镜像 `promptsystem-backend:20260922-2` / `promptsystem-frontend:20260922-2`）
 - Compose 项目：`promptsystem`
-- 发布目录：`/srv/releases/promptsystem/v0.3.4`；上一回滚目录以服务器实际容器标签和 `/srv/releases/promptsystem` 目录核对
+- 发布目录：`/srv/releases/promptsystem/20260922-2`；用 Compose 项目名 `promptsystem` 复用现有卷和网络
 - 入口端口：前端 `127.0.0.1:3092`，后端 `127.0.0.1:5092`
 - 数据卷：`promptsystem_promptsystem_mysql_data`、`promptsystem_promptsystem_redis_data`、`promptsystem_promptsystem_uploads`
 - 上传存储：生产使用平板唯一 RustFS `promptsystem-prod` bucket；应用通过 `172.22.0.1:13912` 访问，公网对象由 HTTPS `/objects/` 代理提供
 - 健康检查：`/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`upload=true`、`degraded=false`
 
-截至 2026-09-10 的线上核验：`v0.3.4` 运行稳定，内存可用约 `3.1 GiB`、根盘使用率约 `52%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。RustFS readiness、带认证 S3 list/put/get/delete、HTTPS `/objects/` 公共读取和每日副本均已验证；实际 PromptOS 链路为 `127.0.0.1:13910`（SSH 反向隧道）→ `172.22.0.1:13912`（PromptOS 网桥转发）。
+截至 2026-09-22 的线上核验：`v0.4.2` 运行稳定，内存可用约 `3.1 GiB`、根盘使用率约 `52%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。RustFS readiness、带认证 S3 list/put/get/delete、HTTPS `/objects/` 公共读取和每日副本均已验证；实际 PromptOS 链路为 `127.0.0.1:13910`（SSH 反向隧道）→ `172.22.0.1:13912`（PromptOS 网桥转发）。
 
 ## 回滚
 

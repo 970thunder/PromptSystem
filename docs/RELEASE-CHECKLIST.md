@@ -1,4 +1,4 @@
-# 发布检查清单 — PromptOS（生产域名：promptos.hyper99.top）
+# 发布检查清单 — PromptOS（生产域名：promptsystem.isoumao.cn）
 
 逐项勾选，全部通过才允许部署。
 
@@ -19,14 +19,16 @@
 ## 安全
 
 - [ ] 生产 compose 无硬编码密码：数据库、JWT、Redis、OAuth、SMTP 均从 `/opt/secrets/promptsystem/app.env` 注入
+- [ ] OIDC 配置已注入且 callback 精确为 `https://promptsystem.isoumao.cn/api/v1/auth/oidc/callback`；已验证 state/PKCE/nonce/issuer/audience/email_verified
+- [ ] `0019_users_oidc_subject.sql` 已在数据库备份后执行，旧账号绑定和管理员隔离已冒烟验证
 - [ ] 无真实密钥入库（`git diff` 检查；新配置先进 `.env.docker.example` 占位）
 - [ ] 依赖无高危漏洞（`npm audit --audit-level=high` / `govulncheck`；无法联网时记录原因）
 
 ## 部署
 
 - [ ] 服务器当前版本已备份（数据库 dump + uploads，脚本输出位置和 SHA-256 已记录，保留 3 版）
-- [ ] 发布脚本执行成功（`pwsh -File scripts/release.ps1 -Version <version>`；SSH `root@166.1.232.84:22`）
-- [ ] 健康检查通过：`https://promptos.hyper99.top/` 与 `https://promptos.hyper99.top/api/v1/health/ready`；后端 `127.0.0.1:5092`、前端 `127.0.0.1:3092`
+- [ ] 发布脚本执行成功（`pwsh -File scripts/release.ps1 -Version <version>`；SSH `root@103.42.182.205:2680`，私钥路径见 `E:\Web\服务器部署总说明.md`，不得写入仓库）
+- [ ] 健康检查通过：`https://promptsystem.isoumao.cn/` 与 `https://promptsystem.isoumao.cn/api/v1/health/ready`；后端 `127.0.0.1:5092`、前端 `127.0.0.1:3092`
 - [ ] 人工验证：首页 / 登录 / 发布 / 详情页
 - [ ] 回滚步骤确认可用：在 `/srv/releases/promptsystem/<previous-version>` 使用 Compose 项目名 `promptsystem` 执行 `docker compose -p promptsystem -f docker-compose.yml up -d`；必要时从 `/srv/backups/promptsystem/<version>/` 恢复 MySQL 与 uploads，禁止 `down -v`
 
