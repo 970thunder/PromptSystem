@@ -205,10 +205,9 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	mux.HandleFunc("/api/v1/auth/github", s.handleGitHubAuthStart)
 	mux.HandleFunc("/api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("/api/v1/auth/exchange", s.handleAuthExchange)
-	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
-	mux.HandleFunc("/api/v1/user/captcha", s.handleCaptcha)
-	mux.HandleFunc("/api/v1/user/password/reset", s.handleResetPassword)
-	mux.HandleFunc("/api/v1/user/register", s.handleRegister)
+	mux.HandleFunc("/api/v1/auth/oidc", s.handleOIDCStart)
+	mux.HandleFunc("/api/v1/auth/oidc/callback", s.handleOIDCCallback)
+	// 本站账号密码与验证码登录已下线，统一由 isoumao 统一账号（OIDC）承担。
 	mux.HandleFunc("/api/v1/user/info", s.withAuth(s.handleCurrentUser))
 	mux.HandleFunc("/api/v1/user/data-export", s.withAuth(s.handleUserDataExport))
 	mux.HandleFunc("/api/v1/user/favorites", s.withAuth(s.handleUserFavorites))

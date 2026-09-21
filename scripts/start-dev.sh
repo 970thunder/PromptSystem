@@ -25,6 +25,9 @@ FRONTEND_PORT=28301
 BACKEND_PORT=28302
 MYSQL_PORT=28303
 REDIS_PORT=28304
+# 本地专用 Redis 口令：Redis 无密码时会启用 protected mode，拒绝经 Docker 端口转发进来的连接，
+# 后端只会看到 EOF，导致 OIDC state 与登出吊销静默失效。
+REDIS_PASSWORD="${PROMPTOS_REDIS_PASSWORD:-promptos-local-redis-only}"
 
 # ---- 日志/进程文件 ----
 FRONTEND_LOG="$LOG_DIR/frontend.log"
@@ -72,6 +75,14 @@ check_port() {
     exit 1
   fi
   log_ok "端口 $port（$name）可用"
+}
+
+check_identity_center() {
+  if ! curl --noproxy '*' --fail --silent --show-error --max-time 3 "http://localhost:28310/local-health" >/dev/null; then
+    log_error "本地统一账号中心未启动，请先运行 E:/Web/IdentityCenter/Start-IdentityCenter.ps1"
+    exit 1
+  fi
+  log_ok "本地统一账号中心已就绪（28310）"
 }
 
 container_running() {
@@ -130,7 +141,7 @@ kill_port_listeners() {
 wait_ready() {
   local url="$1" name="$2" max="$3"
   for _ in $(seq 1 "$max"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    if curl --noproxy '*' -fsS "$url" >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -199,6 +210,7 @@ if is_running "$FRONTEND_PID" || is_running "$BACKEND_PID"; then
 fi
 
 # 1) 检查端口占用
+check_identity_center
 check_port "$FRONTEND_PORT" "前端 Vite"
 check_port "$BACKEND_PORT"  "后端 Go API"
 if [[ "$SKIP_DB" == "0" ]]; then
@@ -226,6 +238,7 @@ if [[ "$SKIP_DB" == "0" ]]; then
     cd "$ROOT_DIR"
     PROMPTOS_MYSQL_PORT=$MYSQL_PORT \
     PROMPTOS_REDIS_PORT=$REDIS_PORT \
+    PROMPTOS_REDIS_PASSWORD="$REDIS_PASSWORD" \
       docker compose up -d mysql redis
   )
 fi
@@ -242,10 +255,17 @@ MYSQL_PASSWORD=root \
 MYSQL_DATABASE=promptos \
 REDIS_HOST=127.0.0.1 \
 REDIS_PORT=$REDIS_PORT \
+REDIS_PASSWORD="$REDIS_PASSWORD" \
 UPLOAD_DIR="$UPLOAD_DIR" \
 UPLOAD_BASE_URL="http://localhost:$BACKEND_PORT" \
 JWT_SECRET="${PROMPTOS_JWT_SECRET:-promptos-local-dev-secret-change-me-28302}" \
 ALLOWED_ORIGIN="http://localhost:$FRONTEND_PORT" \
+OIDC_ENABLED=true \
+OIDC_ISSUER="http://localhost:28310/realms/isoumao-local" \
+OIDC_CLIENT_ID="promptsystem-local" \
+OIDC_CLIENT_SECRET="promptsystem-local-development-secret" \
+OIDC_REDIRECT_URI="http://127.0.0.1:$BACKEND_PORT/api/v1/auth/oidc/callback" \
+FRONTEND_URL="http://127.0.0.1:$FRONTEND_PORT" \
   go run ./cmd/api > "$BACKEND_LOG" 2>&1 &
 BACKEND_CHILD_PID=$!
 popd >/dev/null
@@ -257,6 +277,10 @@ log_info "启动前端 dev server (28301)..."
 pushd "$ROOT_DIR/src/frontend" >/dev/null
 PROMPTOS_FRONTEND_PORT=$FRONTEND_PORT \
 PROMPTOS_BACKEND_PORT=$BACKEND_PORT \
+VITE_OIDC_ENABLED=true \
+VITE_IDENTITY_CENTER_BASE="http://localhost:28310" \
+VITE_COMMUNITY_BASE="http://127.0.0.1:32117" \
+VITE_NEBULA_BASE="http://127.0.0.1:28201" \
   npm run dev > "$FRONTEND_LOG" 2>&1 &
 FRONTEND_CHILD_PID=$!
 popd >/dev/null

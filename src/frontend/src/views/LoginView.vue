@@ -1,222 +1,60 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
-import { useUserStore } from '@/stores/user'
-import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { oidcAuthUrl, oidcEnabled } from '@/utils/authUrl'
+import { useIsoumaoLogin } from '@/composables/useIsoumaoLogin'
 import { isSafeInternalPath } from '@/composables/useBackNavigation'
+import { useUserStore } from '@/stores/user'
 import AppShell from '@/components/layout/AppShell.vue'
 
-const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
-const message = useMessage()
+const userStore = useUserStore()
+const { openLoginDialog } = useIsoumaoLogin()
 
-const formValue = reactive({
-  email: '',
-  password: ''
-})
+const returnTo = computed(() => isSafeInternalPath(route.query.redirect))
+const loginUrl = computed(() => `${oidcAuthUrl()}?returnTo=${encodeURIComponent(returnTo.value)}`)
+const errorMessage = ref('')
 
-const handleSubmit = async () => {
+// 统一账号只走弹窗：不再整页跳转。直接访问 /login 时自动弹出一次，失败可手动重试。
+async function openLogin() {
   try {
-    await userStore.login({ email: formValue.email.trim(), password: formValue.password })
-    const redirect = isSafeInternalPath(route.query.redirect)
-    await router.push(redirect)
-  } catch {
-    message.error('登录失败，请检查邮箱和密码后重试')
+    await openLoginDialog({
+      loginUrl: loginUrl.value,
+      description: '使用 isoumao 统一账号登录，登录后即可发布与收藏。',
+      onSuccess: async () => {
+        await userStore.restoreSession()
+        await router.replace(returnTo.value)
+      }
+    })
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '登录组件加载失败'
   }
 }
 
-const handleGitHubLogin = () => {
-  window.location.href = githubAuthUrl()
-}
+onMounted(async () => {
+  await userStore.restoreSession()
+  if (userStore.isLoggedIn) {
+    await router.replace(returnTo.value)
+    return
+  }
+  if (oidcEnabled) await openLogin()
+})
 </script>
 
 <template>
   <AppShell>
-    <div class="auth-page">
-      <div class="auth-layout">
-        <section class="auth-hero panel-card">
-          <div>
-            <div class="auth-hero__badge">
-              安全访问
-            </div>
-            <h1 class="auth-hero__title">
-              登录后即可发布、收藏并管理你的 AI 提示词库
-            </h1>
-            <p class="auth-hero__desc">
-              登录后即可发布、收藏并管理你的 AI 提示词库。
-            </p>
-          </div>
-
-          <div class="auth-hero__features">
-            <div
-              v-for="item in [{ title: 'bcrypt', desc: '密码哈希' }, { title: 'JWT', desc: '会话鉴权' }, { title: 'Guard', desc: '路由守卫' }]"
-              :key="item.title"
-              class="auth-feature"
-            >
-              <div class="auth-feature__title">
-                {{ item.title }}
-              </div>
-              <div class="auth-feature__desc">
-                {{ item.desc }}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="auth-form-wrap">
-          <NCard class="auth-card panel-card">
-            <div class="auth-card__header">
-              <div class="text-muted-sm">
-                欢迎回来
-              </div>
-              <h2 class="auth-card__title">
-                登录
-              </h2>
-            </div>
-
-            <NForm @submit.prevent="handleSubmit">
-              <NFormItem label="邮箱">
-                <NInput
-                  v-model:value="formValue.email"
-                  placeholder="you@example.com"
-                  size="large"
-                />
-              </NFormItem>
-
-              <NFormItem label="密码">
-                <NInput
-                  v-model:value="formValue.password"
-                  type="password"
-                  show-password-on="click"
-                  placeholder="请输入密码"
-                  size="large"
-                />
-              </NFormItem>
-
-              <NButton
-                attr-type="submit"
-                type="primary"
-                size="large"
-                block
-                :loading="userStore.loading"
-              >
-                登录
-              </NButton>
-
-              <NButton
-                v-if="githubOAuthEnabled"
-                class="auth-card__github"
-                size="large"
-                block
-                secondary
-                @click="handleGitHubLogin"
-              >
-                使用 GitHub 继续
-              </NButton>
-            </NForm>
-
-            <div class="auth-card__actions">
-              <RouterLink
-                to="/forgot-password"
-                class="auth-card__link"
-              >
-                忘记密码？
-              </RouterLink>
-            </div>
-
-            <div class="auth-card__footer">
-              还没有账号？
-              <RouterLink
-                to="/register"
-                class="auth-card__link"
-              >
-                立即注册
-              </RouterLink>
-            </div>
-          </NCard>
-        </section>
-      </div>
-    </div>
+    <main class="auth-redirect">
+      <button v-if="oidcEnabled" class="auth-redirect__button" type="button" @click="openLogin">登录 isoumao</button>
+      <p v-else class="auth-redirect__notice" role="status">登录服务暂未开放，请稍后再试。</p>
+      <p v-if="errorMessage" class="auth-redirect__error" role="alert">{{ errorMessage }}</p>
+    </main>
   </AppShell>
 </template>
 
 <style scoped>
-.auth-page {
-  @apply view-page px-4 py-10 sm:px-6;
-}
-
-.auth-layout {
-  @apply view-container--auth grid gap-6 lg:grid-cols-[1.05fr_0.95fr];
-}
-
-.auth-hero {
-  @apply flex min-h-[680px] flex-col justify-between p-8;
-}
-
-.auth-hero__badge {
-  @apply inline-flex rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3 py-1 text-xs text-[var(--prompt-text-muted)];
-}
-
-.auth-hero__title {
-  @apply mt-5 max-w-xl text-4xl font-semibold leading-tight text-[var(--prompt-text)];
-}
-
-.auth-hero__desc {
-  @apply mt-5 max-w-xl text-base leading-7 text-[var(--prompt-text-muted)];
-}
-
-.auth-hero__features {
-  @apply grid gap-4 sm:grid-cols-3;
-}
-
-.auth-feature {
-  @apply rounded-[18px] border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] p-4;
-}
-
-.auth-feature__title {
-  @apply text-lg font-semibold text-[var(--prompt-text)];
-}
-
-.auth-feature__desc {
-  @apply mt-2 text-sm text-[var(--prompt-text-faint)];
-}
-
-.auth-form-wrap {
-  @apply flex items-center;
-}
-
-.auth-card {
-  @apply w-full !rounded-[28px] !border-[var(--prompt-border)] !bg-[var(--prompt-surface)];
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06) !important;
-}
-
-.auth-card__header {
-  @apply mb-6;
-}
-
-.auth-card__title {
-  @apply mt-2 text-2xl font-semibold text-[var(--prompt-text)];
-}
-
-.auth-card__github {
-  @apply !mt-3;
-}
-
-.auth-card__hint {
-  @apply mt-5;
-}
-
-.auth-card__actions {
-  @apply mt-4 text-right text-sm;
-}
-
-.auth-card__footer {
-  @apply mt-6 text-sm text-[var(--prompt-text-muted)];
-}
-
-.auth-card__link {
-  @apply font-medium text-[var(--prompt-text)] underline-offset-2 transition hover:underline;
-}
+.auth-redirect { display: grid; min-height: 55vh; place-items: center; padding: 2rem; gap: .75rem; }
+.auth-redirect__button { border: 0; border-radius: 999px; padding: .75rem 1.4rem; color: white; background: var(--prompt-primary); font-weight: 600; cursor: pointer; }
+.auth-redirect__notice { color: var(--prompt-text-muted, #6b7280); }
+.auth-redirect__error { color: #dc2626; }
 </style>

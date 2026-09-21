@@ -7,6 +7,9 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import MegaMenu from './MegaMenu.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import { useUserStore } from '@/stores/user'
+import { ChevronDown, UserRound } from 'lucide-vue-next'
+import { communityBase, identityCenterBase, nebulaBase, oidcAuthUrl, oidcEnabled } from '@/utils/authUrl'
+import { useIsoumaoLogin } from '@/composables/useIsoumaoLogin'
 
 type NavEntry = 'home' | 'discover' | 'community' | 'workspace'
 
@@ -90,6 +93,20 @@ const currentEntry = computed<NavEntry | null>(() => {
 })
 
 const userInitial = computed(() => userStore.userInfo?.username?.slice(0, 1)?.toUpperCase() ?? 'U')
+const oidcLoginUrl = computed(() => `${oidcAuthUrl()}?returnTo=${encodeURIComponent(route.fullPath)}`)
+const { openLoginDialog } = useIsoumaoLogin()
+// 弹窗式统一登录：不离开当前页面。
+async function openLogin() {
+  try {
+    await openLoginDialog({
+      loginUrl: oidcLoginUrl.value,
+      onSuccess: async () => { await userStore.restoreSession() }
+    })
+  } catch {
+    // 组件不可用（身份中心离线等）时退回整页跳转，保证仍能登录。
+    window.location.href = oidcLoginUrl.value
+  }
+}
 
 const handleLogout = async () => {
   await userStore.logoutServer()
@@ -204,29 +221,8 @@ onBeforeUnmount(() => {
 
       <div class="site-header__right">
         <ThemeToggle />
-        <RouterLink
-          v-if="userStore.isLoggedIn"
-          :to="`/profile/${userStore.userInfo?.id}`"
-          class="header-avatar"
-          :aria-label="`进入 ${userStore.userInfo?.username ?? '个人'} 主页`"
-        >
-          {{ userInitial }}
-        </RouterLink>
-        <button
-          v-if="userStore.isLoggedIn"
-          type="button"
-          class="header-link"
-          @click="handleLogout"
-        >
-          退出
-        </button>
-        <RouterLink
-          v-else
-          to="/login"
-          class="header-link"
-        >
-          登录
-        </RouterLink>
+        <button v-if="!userStore.isLoggedIn && oidcEnabled" class="header-avatar" type="button" aria-label="登录 isoumao" @click="openLogin"><UserRound :size="18" /></button>
+        <details v-else-if="userStore.isLoggedIn" class="identity-menu"><summary class="header-avatar" :aria-label="`打开 ${userStore.userInfo?.username ?? '个人'} 账户菜单`">{{ userInitial }}<ChevronDown :size="12" /></summary><nav><strong>{{ userStore.userInfo?.username }}</strong><a :href="`${identityCenterBase}/profile/`">个人中心</a><RouterLink to="/profile">我的数据</RouterLink><RouterLink to="/community">站内信</RouterLink><hr><a :href="communityBase">社区</a><a :href="nebulaBase">博客</a><button type="button" @click="handleLogout">退出</button></nav></details>
       </div>
     </div>
 
@@ -397,6 +393,15 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+.identity-menu { position: relative; }
+.identity-menu > summary { cursor: pointer; list-style: none; }
+.identity-menu > summary::-webkit-details-marker { display: none; }
+.identity-menu nav { position: absolute; right: 0; top: 2.8rem; z-index: 50; display: grid; width: 12rem; padding: .65rem; border: 1px solid var(--prompt-border); border-radius: .75rem; background: var(--prompt-surface); box-shadow: var(--prompt-shadow-2); }
+.identity-menu nav strong, .identity-menu nav a, .identity-menu nav button { padding: .6rem .7rem; text-align: left; }
+.identity-menu nav a, .identity-menu nav button { border: 0; border-radius: .45rem; color: var(--prompt-text-muted); background: transparent; font: inherit; cursor: pointer; }
+.identity-menu nav a:hover, .identity-menu nav button:hover { color: var(--prompt-text); background: var(--prompt-surface-muted); }
+.identity-menu nav hr { width: 100%; margin: .3rem 0; border: 0; border-top: 1px solid var(--prompt-border); }
 
 @media (min-width: 640px) {
   .site-header__bar {

@@ -99,59 +99,23 @@ func doJSON(t *testing.T, h http.Handler, method, path string, body any, token s
 	return rec, envelope
 }
 
-// registerAndLogin creates a fresh user and returns its bearer token and user
-// ID. The test env returns a devCode from the captcha endpoint, which is then
-// used to register — the same flow the real frontend follows.
-func registerAndLogin(t *testing.T, h http.Handler) (string, int) {
+// registerAndLogin 建立一名会员并签发会话。
+// 本站密码/验证码注册登录已下线，这里直接走 OIDC 用户存储 + 令牌签发，
+// 等价于统一账号首次登录完成后的服务端状态。
+func registerAndLogin(t *testing.T, s *server, h http.Handler) (string, int) {
 	t.Helper()
 
 	username := "ituser" + strconv.FormatInt(time.Now().UnixMilli(), 10)
 	email := username + "@example.com"
-
-	rec, envelope := doJSON(t, h, http.MethodPost, "/api/v1/user/captcha", map[string]any{
-		"email": email,
-	}, "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("captcha status = %d, body = %s", rec.Code, rec.Body.String())
+	user, err := s.userStore.UpsertOIDCUser("test-subject-"+username, username, email, "")
+	if err != nil {
+		t.Fatalf("UpsertOIDCUser() error = %v", err)
 	}
-	data, _ := envelope["data"].(map[string]any)
-	devCode, _ := data["devCode"].(string)
-	if devCode == "" {
-		t.Fatalf("captcha response missing devCode in test env: %s", rec.Body.String())
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
 	}
-
-	rec, _ = doJSON(t, h, http.MethodPost, "/api/v1/user/register", map[string]any{
-		"username": username,
-		"email":    email,
-		"password": "StrongPass123!",
-		"captcha":  devCode,
-	}, "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("register status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	rec, envelope = doJSON(t, h, http.MethodPost, "/api/v1/user/login", map[string]any{
-		"email":    email,
-		"password": "StrongPass123!",
-	}, "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("login status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-
-	data, ok := envelope["data"].(map[string]any)
-	if !ok {
-		t.Fatalf("login response missing data: %s", rec.Body.String())
-	}
-	token, ok := data["token"].(string)
-	if !ok || token == "" {
-		t.Fatalf("login response missing token: %s", rec.Body.String())
-	}
-	userObj, ok := data["user"].(map[string]any)
-	if !ok {
-		t.Fatalf("login response missing user: %s", rec.Body.String())
-	}
-	userID, _ := userObj["id"].(float64)
-	return token, int(userID)
+	return token, user.ID
 }
 
 // seedUpload records a local upload owned by userID so prompt create/update
@@ -270,8 +234,8 @@ func TestAuthRequiredEndpoints(t *testing.T) {
 }
 
 func TestRegisterLoginAndProfile(t *testing.T) {
-	_, h := newIntegrationServer(t)
-	token, _ := registerAndLogin(t, h)
+	s, h := newIntegrationServer(t)
+	token, _ := registerAndLogin(t, s, h)
 
 	rec, envelope := doJSON(t, h, http.MethodGet, "/api/v1/user/info", nil, token)
 	if rec.Code != http.StatusOK {
@@ -293,7 +257,7 @@ func TestRegisterLoginAndProfile(t *testing.T) {
 
 func TestPersonalDataExportHistoryClearAndAccountDeletion(t *testing.T) {
 	s, h := newIntegrationServer(t)
-	token, userID := registerAndLogin(t, h)
+	token, userID := registerAndLogin(t, s, h)
 	promptID := createPrompt(t, s, h, token, userID)
 	path := "/api/v1/prompts/" + strconv.Itoa(promptID)
 
@@ -348,7 +312,7 @@ func TestPersonalDataExportHistoryClearAndAccountDeletion(t *testing.T) {
 
 func TestPromptLifecycleAndInteractions(t *testing.T) {
 	s, h := newIntegrationServer(t)
-	token, userID := registerAndLogin(t, h)
+	token, userID := registerAndLogin(t, s, h)
 
 	promptID := createPrompt(t, s, h, token, userID)
 	path := "/api/v1/prompts/" + strconv.Itoa(promptID)
@@ -407,16 +371,13 @@ func TestPromptLifecycleAndInteractions(t *testing.T) {
 
 func TestStableErrorModel(t *testing.T) {
 	s, h := newIntegrationServer(t)
-	token, userID := registerAndLogin(t, h)
+	token, userID := registerAndLogin(t, s, h)
 
-	// Authentication failures must be stable and must not reveal whether an
-	// account exists.
-	rec, envelope := doJSON(t, h, http.MethodPost, "/api/v1/user/login", map[string]any{
-		"email":    "unknown@example.com",
-		"password": "WrongPass123!",
-	}, "")
-	if rec.Code != http.StatusUnauthorized || envelope["errorCode"] != "AUTH_INVALID_CREDENTIALS" {
-		t.Fatalf("login error = %d/%v, want 401/AUTH_INVALID_CREDENTIALS", rec.Code, envelope["errorCode"])
+	// 本站密码登录已下线：认证失败模型改由受保护接口的未授权响应承载，
+	// 同样要求稳定且不泄露账号是否存在。
+	rec, envelope := doJSON(t, h, http.MethodGet, "/api/v1/user/info", nil, "")
+	if rec.Code != http.StatusUnauthorized || envelope["errorCode"] != "AUTH_TOKEN_MISSING" {
+		t.Fatalf("unauthorized error = %d/%v, want 401/AUTH_TOKEN_MISSING", rec.Code, envelope["errorCode"])
 	}
 
 	// Store sentinels map to client-facing codes without exposing their text.
@@ -431,7 +392,7 @@ func TestStableErrorModel(t *testing.T) {
 	}
 
 	promptID := createPrompt(t, s, h, token, userID)
-	secondToken, _ := registerAndLogin(t, h)
+	secondToken, _ := registerAndLogin(t, s, h)
 	rec, envelope = doJSON(t, h, http.MethodPut, "/api/v1/prompts/"+strconv.Itoa(promptID), map[string]any{
 		"title": "attempted update", "description": "description", "content": "content",
 		"model": "gpt-4o", "categoryId": 1, "cover": "https://example.com/cover.png", "status": 1,
@@ -452,7 +413,7 @@ func TestStableErrorModel(t *testing.T) {
 
 func TestSearchPagination(t *testing.T) {
 	s, h := newIntegrationServer(t)
-	token, userID := registerAndLogin(t, h)
+	token, userID := registerAndLogin(t, s, h)
 
 	for i := 0; i < 5; i++ {
 		createPrompt(t, s, h, token, userID)
@@ -484,7 +445,7 @@ func TestSearchPagination(t *testing.T) {
 
 func TestCommentsLifecycle(t *testing.T) {
 	s, h := newIntegrationServer(t)
-	token, userID := registerAndLogin(t, h)
+	token, userID := registerAndLogin(t, s, h)
 	promptID := createPrompt(t, s, h, token, userID)
 	path := "/api/v1/prompts/" + strconv.Itoa(promptID)
 
@@ -507,8 +468,8 @@ func TestCommentsLifecycle(t *testing.T) {
 }
 
 func TestUploadRejectsMissingFile(t *testing.T) {
-	_, h := newIntegrationServer(t)
-	token, _ := registerAndLogin(t, h)
+	s, h := newIntegrationServer(t)
+	token, _ := registerAndLogin(t, s, h)
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -580,8 +541,8 @@ func tinyPNG(t *testing.T) []byte {
 }
 
 func TestUploadValidPNG(t *testing.T) {
-	_, h := newIntegrationServer(t)
-	token, _ := registerAndLogin(t, h)
+	s, h := newIntegrationServer(t)
+	token, _ := registerAndLogin(t, s, h)
 
 	rec, envelope := uploadImage(t, h, token, "ok.png", "image/png", tinyPNG(t))
 	if rec.Code != http.StatusOK {
@@ -594,8 +555,8 @@ func TestUploadValidPNG(t *testing.T) {
 }
 
 func TestUploadRejectsCorruptAndSpoofedImages(t *testing.T) {
-	_, h := newIntegrationServer(t)
-	token, _ := registerAndLogin(t, h)
+	s, h := newIntegrationServer(t)
+	token, _ := registerAndLogin(t, s, h)
 
 	// Corrupt bytes that claim to be an image.
 	rec, envelope := uploadImage(t, h, token, "corrupt.png", "image/png", []byte("not really a png at all"))
@@ -614,8 +575,8 @@ func TestUploadRejectsCorruptAndSpoofedImages(t *testing.T) {
 }
 
 func TestUploadRejectsOversizedBody(t *testing.T) {
-	_, h := newIntegrationServer(t)
-	token, _ := registerAndLogin(t, h)
+	s, h := newIntegrationServer(t)
+	token, _ := registerAndLogin(t, s, h)
 
 	// A single file over the per-file cap is rejected as IMAGE_TOO_LARGE.
 	big := make([]byte, 3*1024*1024)

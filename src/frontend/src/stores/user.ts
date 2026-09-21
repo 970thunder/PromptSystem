@@ -54,7 +54,11 @@ export const useUserStore = defineStore('user', () => {
   const logoutServer = async () => {
     if (sessionActive.value || token.value) {
       try {
-        await userApi.logout()
+        // 单点登出：后端返回身份中心结束会话地址，跳过去一起结束 IdP 会话。
+        const response = await userApi.logout()
+        const logoutUrl = (response as unknown as { data?: { logoutUrl?: string | null } }).data?.logoutUrl
+        logout()
+        if (logoutUrl) { window.location.href = logoutUrl; return }
       } catch {
         // Always clear local credentials even when the API is unavailable.
       }

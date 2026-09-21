@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -481,8 +483,43 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 单点登出：清本站会话，同时给出身份中心的结束会话地址。
+	logoutURL := s.oidcEndSessionURL(r, idTokenHintFromRequest(r))
+	http.SetCookie(w, &http.Cookie{Name: "promptos_id_token_hint", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.authCookieSecure(), SameSite: http.SameSiteLaxMode})
 	clearSessionCookies(w, s.authCookieSecure())
-	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
+	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success", Data: map[string]any{"logoutUrl": logoutURL}})
+}
+
+// idTokenHintFromRequest 读取登录时保存的 id_token，用于 RP 发起的单点登出。
+func idTokenHintFromRequest(r *http.Request) string {
+	cookie, err := r.Cookie("promptos_id_token_hint")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// oidcEndSessionURL 组装身份中心结束会话地址；未配置或不可达时返回空串，仅结束本站会话。
+func (s *server) oidcEndSessionURL(r *http.Request, idTokenHint string) string {
+	if !s.oidcConfigured() {
+		return ""
+	}
+	disc, err := s.loadOIDCDiscovery(r.Context())
+	if err != nil || disc.EndSessionEndpoint == "" {
+		if err != nil {
+			log.Printf("oidc discovery for logout failed: %v", err)
+		}
+		return ""
+	}
+	params := url.Values{}
+	params.Set("client_id", s.config.OIDCClientID)
+	if idTokenHint != "" {
+		params.Set("id_token_hint", idTokenHint)
+	}
+	if frontend := strings.TrimRight(s.config.FrontendURL, "/"); frontend != "" {
+		params.Set("post_logout_redirect_uri", frontend)
+	}
+	return disc.EndSessionEndpoint + "?" + params.Encode()
 }
 
 func (s *server) handleUserFavorites(w http.ResponseWriter, r *http.Request) {
@@ -764,6 +801,17 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		// Reject tokens issued before the user's last password reset: the
 		// session version is incremented on reset to revoke every old token.
 		if claims.SessionVersion != userRecord.SessionVer {
+			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
+				Code:      401,
+				Message:   "Token has been revoked",
+				ErrorCode: "AUTH_TOKEN_REVOKED",
+			})
+			return
+		}
+
+		// 登出会把 JTI 写入吊销名单；这里必须回源检查，否则登出只清了浏览器
+		// Cookie，被复制的令牌在自然过期前仍然可用。
+		if revoked, err := s.getAuthService().IsTokenRevoked(r.Context(), claims.JTI); err == nil && revoked {
 			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 				Code:      401,
 				Message:   "Token has been revoked",
