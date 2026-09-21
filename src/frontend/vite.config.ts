@@ -21,6 +21,21 @@ export default defineConfig({
       plugins: [tailwindcss, autoprefixer]
     }
   },
+  build: {
+    // 按依赖分组产出 vendor chunk：首屏主包更小，第三方库可长期缓存复用。
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('naive-ui')) return 'vendor-ui'
+          if (id.includes('date-fns')) return 'vendor-date'
+          if (id.includes('lucide-vue-next')) return 'vendor-icons'
+          if (id.includes('vue-router') || id.includes('pinia') || id.includes('/vue/') || id.includes('@vue/')) return 'vendor-vue'
+          return 'vendor'
+        }
+      }
+    }
+  },
   server: {
     port: frontendPort,
     strictPort: true,
