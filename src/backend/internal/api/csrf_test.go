@@ -60,7 +60,6 @@ func TestCookieAuthenticatedUserInfo(t *testing.T) {
 	h := newServerWithDeps(serverDeps{
 		config:       s.config,
 		tokenManager: auth.NewTokenManager(s.config.JWTSecret, time.Duration(s.config.JWTExpireHours)*time.Hour),
-		captcha:      s.captcha,
 		cache:        fc,
 		userStore:    s.userStore,
 		promptStore:  s.promptStore,

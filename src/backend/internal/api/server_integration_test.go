@@ -50,7 +50,6 @@ func newIntegrationServer(t *testing.T) (*server, http.Handler) {
 	s := &server{
 		config:       cfg,
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
-		captcha:      newCaptchaManager(),
 		githubClient: &http.Client{Timeout: 2 * time.Second},
 		cache:        nil,
 		userStore:    store.UserManager(store.NewUserStore()),
@@ -63,7 +62,6 @@ func newIntegrationServer(t *testing.T) (*server, http.Handler) {
 	return s, newServerWithDeps(serverDeps{
 		config:       cfg,
 		tokenManager: s.tokenManager,
-		captcha:      s.captcha,
 		githubClient: s.githubClient,
 		cache:        s.cache,
 		userStore:    s.userStore,

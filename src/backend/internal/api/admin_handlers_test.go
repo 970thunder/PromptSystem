@@ -56,7 +56,6 @@ func newAdminTestHandler(t *testing.T, moderation store.ModerationManager) (*ser
 	s := &server{
 		config:       cfg,
 		tokenManager: auth.NewTokenManager(cfg.JWTSecret, time.Hour),
-		captcha:      newCaptchaManager(),
 		userStore:    users,
 		promptStore:  store.NewMemoryPromptStore(),
 		commentStore: store.NewMemoryCommentStore(),
@@ -64,7 +63,6 @@ func newAdminTestHandler(t *testing.T, moderation store.ModerationManager) (*ser
 	h := newServerWithDeps(serverDeps{
 		config:          cfg,
 		tokenManager:    s.tokenManager,
-		captcha:         s.captcha,
 		userStore:       s.userStore,
 		promptStore:     s.promptStore,
 		commentStore:    s.commentStore,

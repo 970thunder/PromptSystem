@@ -24,7 +24,6 @@ import (
 type server struct {
 	config              config.Config
 	tokenManager        *auth.TokenManager
-	captcha             *captchaManager
 	githubClient        *http.Client
 	cache               cache.Cache
 	userStore           store.UserManager
@@ -33,7 +32,6 @@ type server struct {
 	moderationStore     store.ModerationManager
 	uploadStore         store.UploadManager
 	imageStorage        storage.ImageStorage
-	emailSender         emailSender
 	storageMode         string
 	metrics             *metrics
 	readyCheck          func(context.Context) map[string]bool
@@ -53,7 +51,6 @@ type server struct {
 type serverDeps struct {
 	config          config.Config
 	tokenManager    *auth.TokenManager
-	captcha         *captchaManager
 	githubClient    *http.Client
 	cache           cache.Cache
 	userStore       store.UserManager
@@ -62,7 +59,6 @@ type serverDeps struct {
 	moderationStore store.ModerationManager
 	uploadStore     store.UploadManager
 	imageStorage    storage.ImageStorage
-	emailSender     emailSender
 	storageMode     string
 	readyCheck      func(context.Context) map[string]bool
 }
@@ -137,7 +133,6 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 	return newServerWithDeps(serverDeps{
 		config:          cfg,
 		tokenManager:    auth.NewTokenManager(cfg.JWTSecret, time.Duration(cfg.JWTExpireHours)*time.Hour),
-		captcha:         newCaptchaManager(),
 		githubClient:    newGitHubClient(),
 		cache:           runtimeCache,
 		userStore:       userStore,
@@ -146,7 +141,6 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		moderationStore: moderationStore,
 		uploadStore:     uploadStore,
 		imageStorage:    imageStorage,
-		emailSender:     newSMTPEmailSender(cfg),
 		storageMode:     storageMode,
 		readyCheck:      readyCheck,
 	}), nil
@@ -158,7 +152,6 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	s := &server{
 		config:           deps.config,
 		tokenManager:     deps.tokenManager,
-		captcha:          deps.captcha,
 		githubClient:     deps.githubClient,
 		cache:            deps.cache,
 		userStore:        deps.userStore,
@@ -167,7 +160,6 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		moderationStore:  deps.moderationStore,
 		uploadStore:      deps.uploadStore,
 		imageStorage:     deps.imageStorage,
-		emailSender:      deps.emailSender,
 		storageMode:      deps.storageMode,
 		metrics:          newMetrics(),
 		readyCheck:       deps.readyCheck,
