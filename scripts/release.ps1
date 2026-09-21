@@ -3,13 +3,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [string]$Domain = 'promptos.hyper99.top',
-    [string]$ServerHost = '166.1.232.84',
+    [string]$Domain = 'promptsystem.isoumao.cn',
+    [string]$ServerHost = '103.42.182.205',
     [string]$ServerUser = 'root',
-    [int]$SshPort = 22,
+    [int]$SshPort = 2680,
     [string]$SshKey = '',
     [string]$ProjectName = 'promptsystem',
-    [bool]$EmailAuthEnabled = $true,
     [string]$ImageArchivePath = '',
     [switch]$SkipTests,
     [switch]$SkipDeploy
@@ -64,8 +63,7 @@ Copy-Item deploy\promptsystem\docker-compose.yml (Join-Path $releaseRoot 'docker
 if ([string]::IsNullOrWhiteSpace($ImageArchivePath)) {
     Step '本机构建生产镜像'
     Invoke-Checked docker @('build', '--pull=false', '-t', $backendImage, 'src/backend')
-    $emailArg = if ($EmailAuthEnabled) { 'true' } else { 'false' }
-    Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', 'VITE_OIDC_ENABLED=true', '--build-arg', 'VITE_IDENTITY_CENTER_BASE=https://id.isoumao.cn', '--build-arg', 'VITE_COMMUNITY_BASE=https://community.isoumao.cn', '--build-arg', 'VITE_NEBULA_BASE=https://nebula.isoumao.cn', '--build-arg', "VITE_EMAIL_AUTH_ENABLED=$emailArg", '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
+    Invoke-Checked docker @('build', '--pull=false', '--build-arg', 'VITE_API_BASE_URL=/api/v1', '--build-arg', 'VITE_APP_TITLE=PromptOS', '--build-arg', 'VITE_ENABLE_PROMPT_API=true', '--build-arg', 'VITE_GITHUB_OAUTH_ENABLED=false', '--build-arg', 'VITE_OIDC_ENABLED=true', '--build-arg', 'VITE_IDENTITY_CENTER_BASE=https://id.isoumao.cn', '--build-arg', 'VITE_COMMUNITY_BASE=https://community.isoumao.cn', '--build-arg', 'VITE_NEBULA_BASE=https://nebula.isoumao.cn', '--build-arg', 'VITE_SKILL_ENABLED=false', '--build-arg', 'VITE_PLAYGROUND_ENABLED=false', '--build-arg', 'VITE_CREATOR_ACADEMY_ENABLED=false', '--build-arg', 'VITE_MARKETPLACE_ENABLED=false', '-t', $frontendImage, 'src/frontend')
 
     Invoke-Checked docker @('save', '-o', $imageArchive, $backendImage, $frontendImage)
     Require gzip

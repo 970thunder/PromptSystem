@@ -1,32 +1,16 @@
 import request from '@/utils/request'
 import type {
   ApiResponse,
-  CaptchaResponse,
+  AuthExchangeResponse,
   FollowActionResponse,
   FollowStatus,
-  LoginRequest,
-  LoginResponse,
   PageResponse,
   Prompt,
-  RegisterRequest,
-  ResetPasswordRequest,
   User,
   UserDataExport
 } from '@/types'
 
 export const userApi = {
-  login(data: LoginRequest): Promise<ApiResponse<LoginResponse>> {
-    return request.post('/user/login', data)
-  },
-
-  register(data: RegisterRequest): Promise<ApiResponse<LoginResponse>> {
-    return request.post('/user/register', data)
-  },
-
-  resetPassword(data: ResetPasswordRequest): Promise<ApiResponse<null>> {
-    return request.post('/user/password/reset', data)
-  },
-
   getUserInfo(): Promise<ApiResponse<User>> {
     return request.get('/user/info', { promptosSilent: true })
   },
@@ -83,11 +67,7 @@ export const userApi = {
     return request.post('/user/logout')
   },
 
-  exchangeGithubCode(code: string): Promise<ApiResponse<LoginResponse>> {
+  exchangeGithubCode(code: string): Promise<ApiResponse<AuthExchangeResponse>> {
     return request.post('/auth/exchange', { code })
-  },
-
-  sendCaptcha(email: string): Promise<ApiResponse<CaptchaResponse>> {
-    return request.post('/user/captcha', { email })
   }
 }

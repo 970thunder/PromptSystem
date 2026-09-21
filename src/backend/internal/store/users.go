@@ -201,39 +201,6 @@ func (s *UserStore) Authenticate(email, password string) (AuthUser, error) {
 	return user, nil
 }
 
-func (s *UserStore) ResetPassword(email, password string) error {
-	email = strings.TrimSpace(strings.ToLower(email))
-
-	if !IsValidEmail(email) {
-		return ErrInvalidEmail
-	}
-	if len(password) < 8 {
-		return ErrWeakPassword
-	}
-	if len(password) > maxPasswordBytes {
-		return ErrPasswordTooLong
-	}
-
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	userID, exists := s.emailIndex[email]
-	if !exists {
-		return ErrUserNotFound
-	}
-
-	user := s.users[userID]
-	user.PasswordHash = string(passwordHash)
-	user.SessionVer++
-	s.users[userID] = user
-	return nil
-}
-
 // BumpSessionVersion invalidates every previously issued token for the user by
 // incrementing the per-user session version.
 func (s *UserStore) BumpSessionVersion(email string) error {

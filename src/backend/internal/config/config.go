@@ -48,12 +48,6 @@ type Config struct {
 	GitHubOAuthEnabled   bool
 	GitHubRedirectURI    string
 	FrontendURL          string
-	SMTPHost             string
-	SMTPPort             string
-	SMTPUser             string
-	SMTPPassword         string
-	SMTPFrom             string
-	EmailAuthEnabled     bool
 	OIDCIssuer           string
 	OIDCClientID         string
 	OIDCClientSecret     string
@@ -107,12 +101,6 @@ func Load() Config {
 		GitHubOAuthEnabled:   getEnvAsBool("GITHUB_OAUTH_ENABLED", false),
 		GitHubRedirectURI:    getEnv("GITHUB_REDIRECT_URI", ""),
 		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:3000"),
-		SMTPHost:             getEnv("SMTP_HOST", ""),
-		SMTPPort:             getEnv("SMTP_PORT", "587"),
-		SMTPUser:             getEnv("SMTP_USER", ""),
-		SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
-		SMTPFrom:             getEnv("SMTP_FROM", ""),
-		EmailAuthEnabled:     getEnvAsBool("EMAIL_AUTH_ENABLED", true),
 		OIDCIssuer:           getEnv("OIDC_ISSUER", ""),
 		OIDCClientID:         getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:     getEnv("OIDC_CLIENT_SECRET", ""),
@@ -177,17 +165,6 @@ func (c Config) Validate() error {
 	}
 	if prod && c.AllowedOrigin == "*" {
 		return errors.New("ALLOWED_ORIGIN must be an explicit origin list (not *) in non-development environments")
-	}
-	if prod && c.EmailAuthEnabled {
-		if strings.TrimSpace(c.SMTPHost) == "" || strings.TrimSpace(c.SMTPFrom) == "" {
-			return errors.New("SMTP_HOST and SMTP_FROM must be configured in production")
-		}
-		if err := validatePort(c.SMTPPort); err != nil {
-			return fmt.Errorf("SMTP_PORT: %w", err)
-		}
-		if (strings.TrimSpace(c.SMTPUser) == "") != (strings.TrimSpace(c.SMTPPassword) == "") {
-			return errors.New("SMTP_USER and SMTP_PASSWORD must be configured together")
-		}
 	}
 	if c.GitHubOAuthEnabled && (strings.TrimSpace(c.GitHubClientID) == "" || strings.TrimSpace(c.GitHubClientSecret) == "") {
 		return errors.New("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured when GitHub OAuth is enabled")

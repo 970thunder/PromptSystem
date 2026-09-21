@@ -66,10 +66,6 @@ export const useUserStore = defineStore('user', () => {
     logout()
   }
 
-  const markBindPromptPending = (userID: number) => {
-    localStorage.setItem(bindPromptPendingKey(userID), '1')
-  }
-
   const clearBindPromptPending = (userID: number) => {
     localStorage.removeItem(bindPromptPendingKey(userID))
   }
@@ -122,33 +118,6 @@ export const useUserStore = defineStore('user', () => {
     return sessionActive.value
   }
 
-  const login = async (payload: { email: string; password: string }) => {
-    loading.value = true
-    try {
-      const response = await userApi.login(payload)
-      setUserInfo(response.data.user)
-      setToken(response.data.token || '')
-      return response.data.user
-    } finally {
-      loading.value = false
-    }
-  }
-
-  const register = async (payload: { username: string; email: string; password: string; captcha: string }) => {
-    loading.value = true
-    try {
-      const response = await userApi.register(payload)
-      setUserInfo(response.data.user)
-      setToken(response.data.token || '')
-      if (!response.data.user.hasGitHubBound) {
-        markBindPromptPending(response.data.user.id)
-      }
-      return response.data.user
-    } finally {
-      loading.value = false
-    }
-  }
-
   const updateProfile = async (payload: { username?: string; bio?: string; avatar?: string }) => {
     loading.value = true
     try {
@@ -184,8 +153,6 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     sessionReady,
     restoreSession,
-    login,
-    register,
     updateProfile,
     fetchUserInfo
   }

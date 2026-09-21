@@ -121,17 +121,8 @@ Prompt 详情。不存在返回 `404 PROMPT_NOT_FOUND`。
 
 ## 用户与认证
 
-### `POST /user/register`
-注册。请求体：`{ "username", "email", "password", "captcha" }`。
-
-### `POST /user/captcha`
-发送验证码。请求体：`{ "email" }`。非生产返回 `devCode`；生产不返回，必须配置 SMTP。SMTP 不可用时返回 `502`（`EMAIL_SEND_FAILED`），发送失败不会保留验证码。
-
-### `POST /user/login`
-登录。请求体：`{ "email", "password" }`。失败统一 `401 AUTH_INVALID_CREDENTIALS`（不存在或密码错误不区分）。
-
-### `POST /user/password/reset`
-重置密码。请求体：`{ "email", "captcha", "password" }`。
+### `GET /auth/oidc` / `GET /auth/oidc/callback`
+统一账号登录入口与回调。前端仅通过弹窗调用入口；回调完成后建立 PromptOS 自己的 HttpOnly 会话 Cookie。本站注册、密码登录、验证码和找回密码接口已下线并返回 `404`。
 
 ### `POST /user/logout`（需登录）
 登出：将当前 JWT `jti` 写入 Redis denylist，TTL 等于 token 剩余有效期，并清除会话和 CSRF Cookie。

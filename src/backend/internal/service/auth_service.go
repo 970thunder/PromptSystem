@@ -34,14 +34,6 @@ func (s *AuthService) Authenticate(email, password string) (store.AuthUser, erro
 	return s.users.Authenticate(email, password)
 }
 
-func (s *AuthService) Register(username, email, password string) (store.AuthUser, error) {
-	return s.users.Register(username, email, password)
-}
-
-func (s *AuthService) ResetPassword(email, password string) error {
-	return s.users.ResetPassword(email, password)
-}
-
 func (s *AuthService) FindByID(id int) (store.AuthUser, bool) {
 	return s.users.FindByID(id)
 }

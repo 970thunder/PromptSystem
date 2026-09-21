@@ -2,7 +2,7 @@
 
 ## 验收范围
 
-本轮覆盖当前远端 MVP 已实现页面和接口：首页、发现搜索、社区、Prompt 详情、登录、注册、找回密码、GitHub 回调、发布/草稿、个人主页，以及后端健康检查、分类、Prompt、评论、互动、关注、验证码和图片上传。
+本轮覆盖当前远端 MVP 已实现页面和接口：首页、发现搜索、社区、Prompt 详情、统一账号弹窗登录、GitHub 回调迁移入口、发布/草稿、个人主页，以及后端健康检查、分类、Prompt、评论、互动、关注、OIDC 和图片上传。
 
 ## 自动化结果
 
@@ -22,9 +22,7 @@
 | 搜索筛选 | `/search`、`/api/v1/prompts/search` | 服务可用 | 支持关键词、分类、模型、标签、排序和加载更多；失败不展示假数据 | 通过 |
 | 社区页 | `/community` | 服务可用 | 工作流、智能体标签内容和最新动态独立展示 | 通过 |
 | Prompt 详情 | `/prompt/:id` | 公开 Prompt | 展示图集、模型参数、结构化内容、相关推荐、评论和互动 | 通过 |
-| 登录 | `/login`、`POST /api/v1/user/login` | 已注册账号 | 成功保存 JWT 并回到安全的 redirect；失败提示原因 | 通过 |
-| 注册 | `/register`、`POST /api/v1/user/captcha`、`POST /api/v1/user/register` | 邮件服务或开发环境 | 邮箱验证码、密码确认和自动登录流程可用 | 通过（外部邮件需配置） |
-| 找回密码 | `/forgot-password` | 可接收验证码 | 验证邮箱后重置密码并返回登录 | 通过（外部邮件需配置） |
+| 统一账号登录 | `/login`、`/register`、`/forgot-password`、`GET /api/v1/auth/oidc` | 身份中心可用 | `/register` 与 `/forgot-password` 重定向登录；弹窗完成 OIDC 后建立本站 Cookie 会话并回到安全 redirect | 通过 |
 | 发布与草稿 | `/publish`、`POST/PUT /api/v1/prompts` | 已登录 | 多步骤表单、图片上传、JSON 校验、发布、编辑和保存草稿可用 | 通过 |
 | 个人主页 | `/profile`、`/profile/:userId` | 已登录查看自己的工作台 | 资料、头像、已发布、草稿、收藏、点赞、浏览、关注和粉丝列表可用 | 通过 |
 | 社区互动 | Prompt 详情相关 API | 已登录 | 点赞、收藏、评论、回复、评论点赞、举报、关注均有成功/失败反馈 | 通过 |

@@ -44,8 +44,8 @@ Available MVP APIs:
 - `GET /api/v1/prompts/:id`
 - `POST /api/v1/prompts`
 - `POST /api/v1/uploads/images`
-- `POST /api/v1/user/login`
-- `POST /api/v1/user/register`
+- `GET /api/v1/auth/oidc`
+- `GET /api/v1/auth/oidc/callback`
 - `GET /api/v1/user/info`
 - `PUT /api/v1/user/info`
 

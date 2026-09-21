@@ -2,6 +2,18 @@
 
 所有对外可见的变更记录在本文件。版本号：`v主.次.修订`（主=大改/不兼容，次=新功能，修订=修复）。
 
+## [v0.4.3] - 2026-09-22
+
+### Removed
+- 清理统一账号重构后的死代码：删除前端注册/找回密码页面与测试、旧登录/注册/验证码 API 封装、旧类型与用户 store 方法。
+- 删除后端 `ResetPassword`、旧登录请求结构体和会员 SMTP/`EMAIL_AUTH_ENABLED` 配置；运维告警 SMTP 保持独立，不受影响。
+- Playwright 移除密码注册/登录/找回密码流程，改为断言 `/register` 与 `/forgot-password` 只能重定向到统一账号登录页。
+
+### Changed
+- 发布脚本默认域名、服务器地址和 SSH 端口更新为当前生产事实：`promptsystem.isoumao.cn`、`103.42.182.205:2680`。
+- README、API 契约、验收文档与迭代记录同步标注会员密码/验证码/应用 SMTP 已由 OIDC 取代。
+- 生产已切换 `promptsystem-backend:20260922-3` / `promptsystem-frontend:20260922-3`；`/ready` 200、OIDC 302、四个旧认证接口全部 404，入口 JS 16.58 KB（gzip 6.59 KB）。
+
 ## [v0.4.2] - 2026-09-22
 
 ### Added

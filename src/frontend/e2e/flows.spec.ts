@@ -100,54 +100,16 @@ const coverPng = Buffer.from(
 )
 
 test.describe('PromptOS F-10 flows', () => {
-  test('register with email captcha signs the user in', async ({ page }) => {
+  test('legacy credential routes redirect to unified account login', async ({ page }) => {
     await mockAnonymous(page)
-    let captchaPayload: Record<string, unknown> | null = null
-    let registerPayload: Record<string, unknown> | null = null
-    await page.route('**/api/v1/user/captcha', (route) => {
-      captchaPayload = route.request().postDataJSON()
-      return route.fulfill(ok({ expiresInSeconds: 600, devCode: '123456' }))
-    })
-    await page.route('**/api/v1/user/register', (route) => {
-      registerPayload = route.request().postDataJSON()
-      return route.fulfill(ok({ token: 'e2e-token', user: testUser }))
-    })
 
-    await page.goto('/register')
-    await page.getByPlaceholder('输入你的展示名称').fill('E2E Tester')
-    await page.getByPlaceholder('you@example.com').fill('e2e@example.com')
-    const captchaButton = page.getByRole('button', { name: '获取验证码' })
-    await expect(captchaButton).toBeEnabled()
-    await captchaButton.click()
-    await page.getByPlaceholder('输入 6 位验证码').fill('123456')
-    await page.getByPlaceholder('至少 8 个字符').fill('password-e2e-123')
-    await page.getByPlaceholder('再次输入密码').fill('password-e2e-123')
-    await page.locator('button[type="submit"]').click()
+    await page.goto('/register?redirect=%2Fprofile')
+    await expect(page).toHaveURL(/\/login\?redirect=%2Fprofile/)
+    await expect(page.getByRole('heading', { name: '登录 isoumao' })).toBeVisible()
 
-    await expect(page.locator('.header-avatar')).toBeVisible({ timeout: 10_000 })
-    expect(captchaPayload).toMatchObject({ email: 'e2e@example.com' })
-    expect(registerPayload).toMatchObject({ username: 'E2E Tester', email: 'e2e@example.com', captcha: '123456' })
-  })
-
-  test('login honors redirect and reaches the workspace', async ({ page }) => {
-    // /user/info 必须在登录前返回 401（否则 /login 会因已登录被重定向走），
-    // 登录成功后再返回用户，供工作台页面使用。
-    let signedIn = false
-    await page.route('**/api/v1/user/info', (route) => route.fulfill(signedIn ? ok(testUser) : unauthorized))
-    await page.route('**/api/v1/user/login', (route) => {
-      signedIn = true
-      return route.fulfill(ok({ token: 'e2e-token', user: testUser }))
-    })
-    await mockAuthGuardedLibrary(page)
-
-    await page.goto('/login?redirect=%2Fprofile')
-    await page.getByPlaceholder('you@example.com').fill('e2e@example.com')
-    await page.getByPlaceholder('请输入密码').fill('password-e2e-123')
-    await page.locator('button[type="submit"]').click()
-
-    await expect(page).toHaveURL(/\/profile$/, { timeout: 10_000 })
-    await expect(page.getByText('E2E Tester').first()).toBeVisible()
-    await expect(page.getByRole("button", { name: /收藏/ })).toBeVisible()
+    await page.goto('/forgot-password')
+    await expect(page).toHaveURL(/\/login/)
+    await expect(page.getByRole('heading', { name: '登录 isoumao' })).toBeVisible()
   })
 
   test('prompt detail supports comment and like interactions', async ({ page }, testInfo) => {
@@ -268,27 +230,6 @@ test.describe('PromptOS F-10 flows', () => {
     await expect(workflowLink).toBeVisible()
     await workflowLink.click()
     await expect(page).toHaveURL(/\/search\?tag=%E6%B5%81%E7%A8%8B|\/search\?tag=流程/)
-  })
-
-  test('forgot password resets via email captcha and returns to login', async ({ page }) => {
-    await mockAnonymous(page)
-    let resetPayload: Record<string, unknown> | null = null
-    await page.route('**/api/v1/user/captcha', (route) => route.fulfill(ok({ expiresInSeconds: 600, devCode: '123456' })))
-    await page.route('**/api/v1/user/password/reset', (route) => {
-      resetPayload = route.request().postDataJSON()
-      return route.fulfill(ok(null))
-    })
-
-    await page.goto('/forgot-password')
-    await page.getByPlaceholder('you@example.com').fill('e2e@example.com')
-    await page.getByRole('button', { name: '获取验证码' }).click()
-    await page.getByPlaceholder('输入 6 位验证码').fill('123456')
-    await page.getByPlaceholder('至少 8 个字符').fill('new-password-123')
-    await page.getByPlaceholder('再次输入新密码').fill('new-password-123')
-    await page.locator('button[type="submit"]').click()
-
-    await expect(page).toHaveURL(/\/login/, { timeout: 10_000 })
-    expect(resetPayload).toMatchObject({ email: 'e2e@example.com', captcha: '123456' })
   })
 
   test('edit flow loads a published prompt and saves updates', async ({ page }, testInfo) => {

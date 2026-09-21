@@ -110,50 +110,6 @@ func (s *MySQLUserStore) Authenticate(email, password string) (AuthUser, error) 
 	return user, nil
 }
 
-func (s *MySQLUserStore) ResetPassword(email, password string) error {
-	email = strings.TrimSpace(strings.ToLower(email))
-
-	if !IsValidEmail(email) {
-		return ErrInvalidEmail
-	}
-	if len(password) < 8 {
-		return ErrWeakPassword
-	}
-	if len(password) > maxPasswordBytes {
-		return ErrPasswordTooLong
-	}
-
-	if _, found, err := s.findByEmail(email); err != nil {
-		return err
-	} else if !found {
-		return ErrUserNotFound
-	}
-
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	result, err := s.db.Exec(`
-		UPDATE users
-		SET password = ?, session_version = session_version + 1
-		WHERE email = ?
-	`, string(passwordHash), email)
-	if err != nil {
-		return err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrUserNotFound
-	}
-
-	return nil
-}
-
 // BumpSessionVersion increments the user's session version so all previously
 // issued tokens are rejected after a password reset.
 func (s *MySQLUserStore) BumpSessionVersion(email string) error {

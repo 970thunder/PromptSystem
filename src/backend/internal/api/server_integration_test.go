@@ -13,6 +13,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -103,7 +104,7 @@ func doJSON(t *testing.T, h http.Handler, method, path string, body any, token s
 func registerAndLogin(t *testing.T, s *server, h http.Handler) (string, int) {
 	t.Helper()
 
-	username := "ituser" + strconv.FormatInt(time.Now().UnixMilli(), 10)
+	username := "ituser" + strconv.FormatUint(integrationUserSequence.Add(1), 10)
 	email := username + "@example.com"
 	user, err := s.userStore.UpsertOIDCUser("test-subject-"+username, username, email, "")
 	if err != nil {
@@ -115,6 +116,8 @@ func registerAndLogin(t *testing.T, s *server, h http.Handler) (string, int) {
 	}
 	return token, user.ID
 }
+
+var integrationUserSequence atomic.Uint64
 
 // seedUpload records a local upload owned by userID so prompt create/update
 // ownership validation (B6-02) accepts the cover reference.

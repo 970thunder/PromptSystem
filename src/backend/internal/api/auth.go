@@ -20,43 +20,6 @@ type contextKey string
 
 const userContextKey contextKey = "userID"
 
-// maxPasswordBytes is the maximum password length accepted by the API. bcrypt
-// silently ignores input beyond its first 72 bytes, so we reject longer
-// passwords up front to avoid account enumeration via timing and to keep the
-// rule consistent between the API boundary and the store.
-const maxPasswordBytes = 72
-
-// resetGenericMessage is returned whether or not the target account exists so
-// the password-reset endpoint cannot be used to enumerate registered emails.
-const resetGenericMessage = "If the account exists, the password has been reset"
-
-type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type registerRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Captcha  string `json:"captcha"`
-}
-
-type captchaRequest struct {
-	Email string `json:"email"`
-}
-
-type resetPasswordRequest struct {
-	Email    string `json:"email"`
-	Captcha  string `json:"captcha"`
-	Password string `json:"password"`
-}
-
-type captchaResponse struct {
-	ExpiresInSeconds int    `json:"expiresInSeconds"`
-	DevCode          string `json:"devCode,omitempty"`
-}
-
 type updateUserRequest struct {
 	Username string `json:"username"`
 	Bio      string `json:"bio"`

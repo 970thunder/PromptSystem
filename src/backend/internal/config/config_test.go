@@ -107,9 +107,6 @@ func TestValidateAllowsDisabledOAuthInProduction(t *testing.T) {
 		MySQLMigrationPass: "migration-password",
 		RedisPass:          "redis-password",
 		AllowedOrigin:      "https://example.com",
-		SMTPHost:           "smtp.example.com",
-		SMTPPort:           "587",
-		SMTPFrom:           "noreply@example.com",
 		JWTExpireHours:     72,
 		UploadMaxMB:        10,
 	}
@@ -128,9 +125,6 @@ func TestValidateRejectsMissingRedisPasswordInProduction(t *testing.T) {
 		MySQLMigrationUser: "promptos_migrator",
 		MySQLMigrationPass: "migration-password",
 		AllowedOrigin:      "https://example.com",
-		SMTPHost:           "smtp.example.com",
-		SMTPPort:           "587",
-		SMTPFrom:           "noreply@example.com",
 		JWTExpireHours:     72,
 		UploadMaxMB:        10,
 	}
