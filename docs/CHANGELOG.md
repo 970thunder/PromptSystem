@@ -2,6 +2,18 @@
 
 所有对外可见的变更记录在本文件。版本号：`v主.次.修订`（主=大改/不兼容，次=新功能，修订=修复）。
 
+## [v0.4.0] - 2026-09-22
+
+### Changed
+- 登录切换为「isoumao 统一账号」弹窗式登录；回调改为返回 postMessage 收尾页，主页面不跳转。
+- 登出改为 RP 发起单点登出（返回 `end_session` 地址，含 `id_token_hint`）。
+
+### Fixed
+- `withAuth` 补上 JWT 吊销名单校验：此前登出只写黑名单却从不检查，被复制的令牌在自然过期前（72 小时）仍然可用；现返回 `AUTH_TOKEN_REVOKED`。
+- `scripts/start-dev.sh` 为本地 Redis 设置开发口令：Redis 无密码时启用 protected mode，会拒绝经 Docker 端口转发进来的连接（后端只见 EOF），导致 OIDC state 与登出吊销静默失效。
+
+### Removed
+- 下线 `/user/login`、`/user/captcha`、`/user/register`、`/user/password/reset` 及其处理器、验证码与邮件子系统（约 930 行），并删除对应限流用例；保留登出吊销用例。
 ## [v0.3.1] - 2026-09-05
 
 镜像：`promptsystem-backend:v0.3.1` sha256=`d8746224698de967ba275eba774cde0242670877240dac839fec233eb3f20e98`，`promptsystem-frontend:v0.3.1` sha256=`d1b05298492a0e4d2d31aa369ee62a861e63d9ebc0f29752e76d8046e4b1ba44`；CI 构建 commit `339a44d`，归档 SHA-256=`230addb7fcb9a2f551f53c288bc0bcffac874bf39a464a903aa512a6fb4dd74a`。
