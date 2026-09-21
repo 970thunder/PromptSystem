@@ -45,7 +45,8 @@ onMounted(async () => {
 <template>
   <AppShell>
     <main class="auth-redirect">
-      <button v-if="oidcEnabled" class="auth-redirect__button" type="button" @click="openLogin">登录 isoumao</button>
+      <h1 class="auth-redirect__title">登录 isoumao</h1>
+      <button v-if="oidcEnabled" class="auth-redirect__button" type="button" @click="openLogin">打开登录窗口</button>
       <p v-else class="auth-redirect__notice" role="status">登录服务暂未开放，请稍后再试。</p>
       <p v-if="errorMessage" class="auth-redirect__error" role="alert">{{ errorMessage }}</p>
     </main>
@@ -53,7 +54,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.auth-redirect { display: grid; min-height: 55vh; place-items: center; padding: 2rem; gap: .75rem; }
+.auth-redirect__title { font-size: 1.6rem; font-weight: 700; margin: 0; }.auth-redirect { display: grid; min-height: 55vh; place-items: center; padding: 2rem; gap: .75rem; }
 .auth-redirect__button { border: 0; border-radius: 999px; padding: .75rem 1.4rem; color: white; background: var(--prompt-primary); font-weight: 600; cursor: pointer; }
 .auth-redirect__notice { color: var(--prompt-text-muted, #6b7280); }
 .auth-redirect__error { color: #dc2626; }
