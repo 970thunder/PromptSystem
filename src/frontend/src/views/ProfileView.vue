@@ -516,7 +516,7 @@ watch(() => [route.params.userId, userStore.userInfo?.id], () => {
                 </a>
                 <a
                   class="profile-account-action"
-                  :href="`${identityCenterBase}/profile/`"
+                  :href="`${identityCenterBase}/profile/?from=promptsystem`"
                   target="_blank"
                   rel="noopener noreferrer"
                 >

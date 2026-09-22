@@ -9,6 +9,7 @@
 - `users` 增加 `display_name`、`avatar_url`、`profile_synced_at`（迁移 `0020_users_unified_profile.sql`）；`ToPublicUser` 优先使用统一昵称/头像，站点用户名与业务数据不变。
 - **下线本站资料编辑**：`PUT /api/v1/user/info` 返回 403 `PROFILE_MANAGED_BY_IDENTITY`；个人中心移除「编辑资料」表单与头像上传，改为只读展示统一资料 + 「统一资料与密码」入口。
 - 个人中心直连打开时先等会话恢复再加载资料，避免把本人当成访客（显示「创作者」且内容库为空）。
+- 统一资料入口携带来源参数（`/profile/?from=promptsystem`），身份中心据此显示「返回 PromptOS」。
 
 ### Added
 - `internal/identity/directory_test.go`（缓存与开关）、`internal/store/unified_profile_test.go`（统一资料优先、用户名保留）、集成测试改为断言资料编辑被拒绝。

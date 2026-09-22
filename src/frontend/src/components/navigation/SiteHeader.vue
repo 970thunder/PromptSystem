@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
       <div class="site-header__right">
         <ThemeToggle />
         <button v-if="!userStore.isLoggedIn && oidcEnabled" class="header-avatar" type="button" aria-label="登录 isoumao" @click="openLogin"><UserRound :size="18" /></button>
-        <details v-else-if="userStore.isLoggedIn" class="identity-menu"><summary class="header-avatar" :aria-label="`打开 ${userStore.userInfo?.username ?? '个人'} 账户菜单`">{{ userInitial }}<ChevronDown :size="12" /></summary><nav><strong>{{ userStore.userInfo?.username }}</strong><RouterLink to="/profile">个人中心</RouterLink><RouterLink to="/community">站内信</RouterLink><a :href="`${identityCenterBase}/profile/`" target="_blank" rel="noopener noreferrer">统一资料与密码</a><hr><a :href="communityBase">社区</a><a :href="nebulaBase">博客</a><button type="button" @click="handleLogout">退出</button></nav></details>
+        <details v-else-if="userStore.isLoggedIn" class="identity-menu"><summary class="header-avatar" :aria-label="`打开 ${userStore.userInfo?.username ?? '个人'} 账户菜单`">{{ userInitial }}<ChevronDown :size="12" /></summary><nav><strong>{{ userStore.userInfo?.username }}</strong><RouterLink to="/profile">个人中心</RouterLink><RouterLink to="/community">站内信</RouterLink><a :href="`${identityCenterBase}/profile/?from=promptsystem`" target="_blank" rel="noopener noreferrer">统一资料与密码</a><hr><a :href="communityBase">社区</a><a :href="nebulaBase">博客</a><button type="button" @click="handleLogout">退出</button></nav></details>
       </div>
     </div>
 
