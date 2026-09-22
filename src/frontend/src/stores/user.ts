@@ -118,17 +118,6 @@ export const useUserStore = defineStore('user', () => {
     return sessionActive.value
   }
 
-  const updateProfile = async (payload: { username?: string; bio?: string; avatar?: string }) => {
-    loading.value = true
-    try {
-      const response = await userApi.updateUserInfo(payload)
-      setUserInfo(response.data)
-      return response.data
-    } finally {
-      loading.value = false
-    }
-  }
-
   const fetchUserInfo = async () => {
     try {
       const response = await userApi.getUserInfo()
@@ -153,7 +142,6 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     sessionReady,
     restoreSession,
-    updateProfile,
     fetchUserInfo
   }
 })

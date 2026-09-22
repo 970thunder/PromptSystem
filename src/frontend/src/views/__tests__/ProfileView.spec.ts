@@ -51,6 +51,7 @@ describe('ProfileView', () => {
     setActivePinia(pinia)
     const userStore = useUserStore()
     userStore.userInfo = { id: 7, username: 'e2e-member', email: 'e2e@example.com' } as never
+    vi.spyOn(userStore, 'restoreSession').mockResolvedValue(true)
     vi.spyOn(userStore, 'fetchUserInfo').mockResolvedValue(userStore.userInfo as never)
     const promptStore = usePromptStore()
     promptStore.loadHomeFeed = vi.fn(async () => undefined)

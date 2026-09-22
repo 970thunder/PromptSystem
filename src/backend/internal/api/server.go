@@ -16,6 +16,7 @@ import (
 	"promptos-backend/internal/cache"
 	"promptos-backend/internal/config"
 	"promptos-backend/internal/database"
+	"promptos-backend/internal/identity"
 	"promptos-backend/internal/service"
 	"promptos-backend/internal/storage"
 	"promptos-backend/internal/store"
@@ -43,6 +44,7 @@ type server struct {
 	uploadQuotaMu       sync.Mutex
 	uploadReservedBytes int64
 	uploadDailyUsage    map[string]int64
+	identityDirectory   *identity.Directory
 }
 
 // serverDeps carries the pluggable dependencies of the API server. NewServer
@@ -150,20 +152,21 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 // the single wiring point for both production (NewServer) and tests.
 func newServerWithDeps(deps serverDeps) http.Handler {
 	s := &server{
-		config:           deps.config,
-		tokenManager:     deps.tokenManager,
-		githubClient:     deps.githubClient,
-		cache:            deps.cache,
-		userStore:        deps.userStore,
-		promptStore:      deps.promptStore,
-		commentStore:     deps.commentStore,
-		moderationStore:  deps.moderationStore,
-		uploadStore:      deps.uploadStore,
-		imageStorage:     deps.imageStorage,
-		storageMode:      deps.storageMode,
-		metrics:          newMetrics(),
-		readyCheck:       deps.readyCheck,
-		uploadDailyUsage: make(map[string]int64),
+		config:            deps.config,
+		tokenManager:      deps.tokenManager,
+		githubClient:      deps.githubClient,
+		cache:             deps.cache,
+		userStore:         deps.userStore,
+		promptStore:       deps.promptStore,
+		commentStore:      deps.commentStore,
+		moderationStore:   deps.moderationStore,
+		uploadStore:       deps.uploadStore,
+		imageStorage:      deps.imageStorage,
+		storageMode:       deps.storageMode,
+		metrics:           newMetrics(),
+		readyCheck:        deps.readyCheck,
+		uploadDailyUsage:  make(map[string]int64),
+		identityDirectory: identity.NewDirectory(deps.config.IdentityProfileURL),
 	}
 	s.authService = service.NewAuthService(s.userStore, s.promptStore, s.cache)
 	s.promptService = service.NewPromptService(s.promptStore, s.uploadStore, s.invalidateContentCaches)

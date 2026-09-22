@@ -247,12 +247,16 @@ func TestRegisterLoginAndProfile(t *testing.T) {
 		t.Fatalf("user info missing email: %s", rec.Body.String())
 	}
 
-	rec, _ = doJSON(t, h, http.MethodPut, "/api/v1/user/info", map[string]any{
+	// 资料（昵称、头像）统一由 isoumao 身份中心维护：本站不再接受资料编辑。
+	rec, updateEnvelope := doJSON(t, h, http.MethodPut, "/api/v1/user/info", map[string]any{
 		"username": "updated-name",
 		"bio":      "hello",
 	}, token)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("update profile status = %d, body = %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("update profile status = %d, want 403, body = %s", rec.Code, rec.Body.String())
+	}
+	if updateEnvelope["errorCode"] != "PROFILE_MANAGED_BY_IDENTITY" {
+		t.Fatalf("update profile errorCode = %v, body = %s", updateEnvelope["errorCode"], rec.Body.String())
 	}
 }
 

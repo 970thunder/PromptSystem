@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -19,12 +18,6 @@ import (
 type contextKey string
 
 const userContextKey contextKey = "userID"
-
-type updateUserRequest struct {
-	Username string `json:"username"`
-	Bio      string `json:"bio"`
-	Avatar   string `json:"avatar"`
-}
 
 type authResponse struct {
 	Token string            `json:"token,omitempty"`
@@ -75,6 +68,8 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "User not found"})
 			return
 		}
+		// 昵称与头像由 isoumao 身份中心权威维护：读取时按秒级节流同步展示副本。
+		user = s.syncUnifiedProfile(r.Context(), user)
 
 		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
@@ -82,22 +77,11 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			Data:    store.ToPrivateUser(user),
 		})
 	case http.MethodPut:
-		var payload updateUserRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
-			return
-		}
-
-		user, err := s.getAuthService().UpdateProfile(userID, payload.Username, payload.Bio, payload.Avatar)
-		if err != nil {
-			writeStoreError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
-			Code:    200,
-			Message: "Success",
-			Data:    store.ToPrivateUser(user),
+		// 资料（昵称、头像）已统一到身份中心，本站不再提供任何资料编辑入口。
+		writeJSON(w, http.StatusForbidden, apiResponse[any]{
+			Code:      403,
+			ErrorCode: "PROFILE_MANAGED_BY_IDENTITY",
+			Message:   "昵称与头像由 isoumao 统一账号维护，请在 https://id.isoumao.cn/profile/ 修改。",
 		})
 	default:
 		writeMethodNotAllowed(w)

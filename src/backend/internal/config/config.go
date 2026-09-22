@@ -48,6 +48,7 @@ type Config struct {
 	GitHubOAuthEnabled   bool
 	GitHubRedirectURI    string
 	FrontendURL          string
+	IdentityProfileURL   string
 	OIDCIssuer           string
 	OIDCClientID         string
 	OIDCClientSecret     string
@@ -101,6 +102,7 @@ func Load() Config {
 		GitHubOAuthEnabled:   getEnvAsBool("GITHUB_OAUTH_ENABLED", false),
 		GitHubRedirectURI:    getEnv("GITHUB_REDIRECT_URI", ""),
 		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:3000"),
+		IdentityProfileURL:   getEnv("IDENTITY_PROFILE_BASE_URL", "https://id.isoumao.cn/profile"),
 		OIDCIssuer:           getEnv("OIDC_ISSUER", ""),
 		OIDCClientID:         getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:     getEnv("OIDC_CLIENT_SECRET", ""),

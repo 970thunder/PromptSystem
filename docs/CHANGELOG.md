@@ -2,6 +2,21 @@
 
 所有对外可见的变更记录在本文件。版本号：`v主.次.修订`（主=大改/不兼容，次=新功能，修订=修复）。
 
+## [v0.4.5] - 2026-09-22
+
+### Changed
+- 昵称与头像统一由 isoumao 身份中心维护：新增 `internal/identity` 只读同步客户端（`IDENTITY_PROFILE_BASE_URL`，默认 `https://id.isoumao.cn/profile`，留空即关闭；进程内缓存 5 分钟），OIDC 回调与 `GET /api/v1/user/info`（15 秒节流）都会刷新展示副本。
+- `users` 增加 `display_name`、`avatar_url`、`profile_synced_at`（迁移 `0020_users_unified_profile.sql`）；`ToPublicUser` 优先使用统一昵称/头像，站点用户名与业务数据不变。
+- **下线本站资料编辑**：`PUT /api/v1/user/info` 返回 403 `PROFILE_MANAGED_BY_IDENTITY`；个人中心移除「编辑资料」表单与头像上传，改为只读展示统一资料 + 「统一资料与密码」入口。
+- 个人中心直连打开时先等会话恢复再加载资料，避免把本人当成访客（显示「创作者」且内容库为空）。
+
+### Added
+- `internal/identity/directory_test.go`（缓存与开关）、`internal/store/unified_profile_test.go`（统一资料优先、用户名保留）、集成测试改为断言资料编辑被拒绝。
+
+### Deployment
+- 后端/前端镜像 `20260922-unified`、前端 `20260922-unified2`；启动时自动应用 `0020` 迁移（已确认 `users` 三个新列存在）。备份 `/srv/backups/promptsystem/20260922-unified/mysql.sql.gz`。
+- 生产验收：`GET /api/v1/user/info` 返回 `username=统一昵称3521`、`avatar=https://id.isoumao.cn/profile/avatar/<sub>`；个人中心渲染路径（按生产返回值）显示统一昵称/头像且无本站编辑表单。
+
 ## [v0.4.4] - 2026-09-22
 
 ### Changed

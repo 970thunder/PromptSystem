@@ -41,7 +41,9 @@ type UserStore struct {
 type AuthUser struct {
 	ID           int
 	Username     string
+	DisplayName  string
 	Avatar       string
+	AvatarURL    string
 	Email        string
 	GitHubID     int64
 	OIDCSubject  string
@@ -52,6 +54,8 @@ type AuthUser struct {
 	SessionVer   int
 	Status       int
 	CreatedAt    string
+	// ProfileSyncedAt 是最近一次从身份中心同步昵称/头像的时间，用于节流。
+	ProfileSyncedAt time.Time
 }
 
 type PublicUser struct {
@@ -458,6 +462,25 @@ func (s *UserStore) UpdateProfile(id int, username, bio, avatar string) (AuthUse
 	return user, nil
 }
 
+// ApplyUnifiedProfile 记录身份中心同步下来的昵称与头像（展示副本）；本站用户名与业务数据不变。
+func (s *UserStore) ApplyUnifiedProfile(id int, displayName, avatarURL string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	user, ok := s.users[id]
+	if !ok {
+		return ErrUserNotFound
+	}
+	if trimmed := strings.TrimSpace(displayName); trimmed != "" {
+		user.DisplayName = trimmed
+	}
+	if trimmed := strings.TrimSpace(avatarURL); trimmed != "" {
+		user.AvatarURL = trimmed
+	}
+	s.users[id] = user
+	return nil
+}
+
 func (s *UserStore) Follow(followerID, followingID int) (FollowStatus, bool, error) {
 	if followerID == followingID {
 		return FollowStatus{}, false, ErrCannotFollowSelf
@@ -574,10 +597,20 @@ func (s *UserStore) followStatusLocked(userID, viewerID int) FollowStatus {
 }
 
 func ToPublicUser(user AuthUser) PublicUser {
+	// 昵称与头像统一由 isoumao 身份中心维护：同步到的值优先，本站字段只是兜底。
+	username := user.Username
+	if strings.TrimSpace(user.DisplayName) != "" {
+		username = user.DisplayName
+	}
+	avatar := user.Avatar
+	if strings.TrimSpace(user.AvatarURL) != "" {
+		avatar = user.AvatarURL
+	}
+
 	return PublicUser{
 		ID:         user.ID,
-		Username:   user.Username,
-		Avatar:     user.Avatar,
+		Username:   username,
+		Avatar:     avatar,
 		Bio:        user.Bio,
 		Level:      user.Level,
 		Experience: user.Experience,

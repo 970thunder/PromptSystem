@@ -216,6 +216,8 @@ func (s *server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		s.redirectOAuthError(w, r, "Failed to create user session")
 		return
 	}
+	// 首次登录与每次登录都以资料中心为准：令牌没有昵称时也能拿到用户设置的统一昵称与头像。
+	user = s.syncUnifiedProfile(r.Context(), user)
 	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
 		s.redirectOAuthError(w, r, "Token generation failed")

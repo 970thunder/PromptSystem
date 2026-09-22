@@ -22,12 +22,14 @@ func NewMySQLUserStore(db *sql.DB) *MySQLUserStore {
 }
 
 const userSelectColumns = `
-	id, username, avatar, email, github_id, oidc_subject, password, bio, level, experience, session_version, status, created_at
+	id, username, avatar, email, github_id, oidc_subject, password, bio, level, experience, session_version, status, created_at,
+	display_name, avatar_url, profile_synced_at
 `
 
 const qualifiedUserSelectColumns = `
 	users.id, users.username, users.avatar, users.email, users.github_id, users.oidc_subject, users.password, users.bio,
-	users.level, users.experience, users.session_version, users.status, users.created_at
+	users.level, users.experience, users.session_version, users.status, users.created_at,
+	users.display_name, users.avatar_url, users.profile_synced_at
 `
 
 func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, error) {
@@ -261,6 +263,31 @@ func (s *MySQLUserStore) UpdateProfile(id int, username, bio, avatar string) (Au
 	}
 
 	return updated, nil
+}
+
+// ApplyUnifiedProfile 写入身份中心同步下来的昵称与头像（展示副本）；本站用户名、简介与业务数据不变。
+func (s *MySQLUserStore) ApplyUnifiedProfile(id int, displayName, avatarURL string) error {
+	result, err := s.db.Exec(`
+		UPDATE users
+		SET display_name = CASE WHEN ? = '' THEN display_name ELSE ? END,
+		    avatar_url = CASE WHEN ? = '' THEN avatar_url ELSE ? END,
+		    profile_synced_at = NOW()
+		WHERE id = ?
+	`, strings.TrimSpace(displayName), strings.TrimSpace(displayName),
+		strings.TrimSpace(avatarURL), strings.TrimSpace(avatarURL), id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		if _, found := s.FindByID(id); !found {
+			return ErrUserNotFound
+		}
+	}
+	return nil
 }
 
 func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error) {
@@ -691,6 +718,9 @@ func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) 
 		oidcSubject  sql.NullString
 		passwordHash sql.NullString
 		bio          sql.NullString
+		displayName  sql.NullString
+		avatarURL    sql.NullString
+		syncedAt     sql.NullTime
 		createdAt    time.Time
 	)
 
@@ -708,6 +738,9 @@ func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) 
 		&user.SessionVer,
 		&user.Status,
 		&createdAt,
+		&displayName,
+		&avatarURL,
+		&syncedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AuthUser{}, false, nil
@@ -730,6 +763,15 @@ func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) 
 	}
 	if bio.Valid {
 		user.Bio = bio.String
+	}
+	if displayName.Valid {
+		user.DisplayName = displayName.String
+	}
+	if avatarURL.Valid {
+		user.AvatarURL = avatarURL.String
+	}
+	if syncedAt.Valid {
+		user.ProfileSyncedAt = syncedAt.Time
 	}
 
 	user.CreatedAt = createdAt.UTC().Format("2006-01-02")

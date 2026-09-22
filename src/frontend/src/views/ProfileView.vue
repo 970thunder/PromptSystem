@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import { Download, Eraser, Github, KeyRound, LogOut, Shield, UserRoundX } from 'lucide-vue-next'
@@ -24,8 +24,6 @@ const promptStore = usePromptStore()
 const userStore = useUserStore()
 
 const loading = ref(false)
-const savingProfile = ref(false)
-const uploadingAvatar = ref(false)
 const prompts = ref<Prompt[]>([])
 const draftPrompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
@@ -42,18 +40,12 @@ const followerUsers = ref<User[]>([])
 const followStatus = ref<FollowStatus | null>(null)
 const activeLibraryTab = ref<LibraryTab>('published')
 const profileUser = ref<User | null>(null)
-const avatarInput = ref<HTMLInputElement | null>(null)
-const profileForm = reactive({
-  username: '',
-  bio: '',
-  avatar: ''
-})
-
 const viewedUserId = computed(() => Number(route.params.userId) || userStore.userInfo?.id || 0)
 const isOwnerView = computed(() => Boolean(userStore.userInfo && viewedUserId.value === userStore.userInfo.id))
+// 头像与昵称来自 isoumao 统一账号（身份中心权威），本站只读展示。
 const resolvedAvatar = computed(() => {
-  const avatar = profileForm.avatar || profileUser.value?.avatar || ''
-  return avatar ? resolveMediaUrl(avatar) : ''
+  const avatar = profileUser.value?.avatar || ''
+  return avatar ? (avatar.startsWith('http') ? avatar : resolveMediaUrl(avatar)) : ''
 })
 
 const fallbackCoverMap: Record<number, string> = {
@@ -140,78 +132,6 @@ const resolveCover = (prompt: Prompt, index: number) => {
   return fallbackCoverMap[prompt.id] ?? fallbackCoverMap[101 + (index % Object.keys(fallbackCoverMap).length)]
 }
 
-const syncProfileForm = () => {
-  if (!profileUser.value) {
-    return
-  }
-
-  profileForm.username = profileUser.value.username
-  profileForm.bio = profileUser.value.bio
-  profileForm.avatar = profileUser.value.avatar
-}
-
-const handleSaveProfile = async () => {
-  if (!isOwnerView.value) {
-    return
-  }
-
-  savingProfile.value = true
-  try {
-    const updated = await userStore.updateProfile({
-      username: profileForm.username.trim(),
-      bio: profileForm.bio.trim(),
-      avatar: profileForm.avatar.trim()
-    })
-    profileUser.value = updated
-    syncProfileForm()
-    message.success('资料已更新')
-  } catch {
-    message.error('资料保存失败，请稍后重试')
-  } finally {
-    savingProfile.value = false
-  }
-}
-
-const handleAvatarClick = () => {
-  if (!isOwnerView.value || uploadingAvatar.value) {
-    return
-  }
-
-  avatarInput.value?.click()
-}
-
-const handleAvatarUpload = async (event: Event) => {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-
-  if (!file) {
-    return
-  }
-
-  if (!file.type.startsWith('image/')) {
-    message.error('请选择图片文件')
-    return
-  }
-
-  uploadingAvatar.value = true
-  try {
-    const uploadRes = await promptApi.uploadCover(file)
-    const updated = await userStore.updateProfile({
-      username: profileForm.username.trim(),
-      bio: profileForm.bio.trim(),
-      avatar: uploadRes.data.url
-    })
-    profileUser.value = updated
-    syncProfileForm()
-    message.success('头像已更新')
-  } catch {
-    message.error('头像上传失败，请稍后重试')
-  } finally {
-    uploadingAvatar.value = false
-  }
-}
-
 const formatCount = (value: number) => {
   if (value >= 1000) {
     return `${(value / 1000).toFixed(1)}k`
@@ -287,7 +207,6 @@ const loadProfile = async () => {
     }
     await loadSocialData()
     followStatus.value = null
-    syncProfileForm()
     return
   }
 
@@ -311,7 +230,6 @@ const loadProfile = async () => {
   } else {
     followStatus.value = null
   }
-  syncProfileForm()
 }
 
 const loadMoreHistory = async () => {
@@ -455,8 +373,14 @@ const handlePublishClick = async () => {
   await router.push('/publish')
 }
 
-onMounted(loadProfile)
-watch(() => route.params.userId, loadProfile)
+// 直连打开个人中心时先等会话恢复，否则会把「自己」当成访客，页面的昵称/头像与内容库都会空着。
+onMounted(async () => {
+  await userStore.restoreSession()
+  await loadProfile()
+})
+watch(() => [route.params.userId, userStore.userInfo?.id], () => {
+  void loadProfile()
+})
 </script>
 
 <template>
@@ -492,14 +416,7 @@ watch(() => route.params.userId, loadProfile)
           <aside class="profile-sidebar">
             <section class="profile-card">
               <div class="profile-card__user">
-                <button
-                  class="profile-avatar"
-                  :class="{ 'profile-avatar--clickable': isOwnerView }"
-                  type="button"
-                  aria-label="更换头像"
-                  :disabled="!isOwnerView || uploadingAvatar"
-                  @click="handleAvatarClick"
-                >
+                <div class="profile-avatar">
                   <img
                     v-if="resolvedAvatar"
                     :src="resolvedAvatar"
@@ -507,21 +424,7 @@ watch(() => route.params.userId, loadProfile)
                     class="profile-avatar__image"
                   >
                   <span v-else>{{ profileUser?.username?.slice(0, 1) || '?' }}</span>
-                  <span
-                    v-if="isOwnerView"
-                    class="profile-avatar__hint"
-                  >
-                    {{ uploadingAvatar ? '上传中' : '更换' }}
-                  </span>
-                </button>
-                <input
-                  ref="avatarInput"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  class="profile-avatar-input"
-                  aria-label="选择头像图片"
-                  @change="handleAvatarUpload"
-                >
+                </div>
                 <div class="profile-card__info">
                   <div class="profile-card__name">
                     {{ profileUser?.username || '创作者' }}
@@ -575,51 +478,6 @@ watch(() => route.params.userId, loadProfile)
               >
                 绑定 GitHub
               </button>
-            </section>
-
-            <section
-              v-if="isOwnerView"
-              class="profile-card"
-            >
-              <div class="profile-card__title">
-                编辑资料
-              </div>
-              <div class="profile-form">
-                <label class="profile-field">
-                  展示名称
-                  <input
-                    v-model="profileForm.username"
-                    type="text"
-                    maxlength="20"
-                    class="profile-input"
-                  >
-                </label>
-                <label class="profile-field">
-                  简介
-                  <textarea
-                    v-model="profileForm.bio"
-                    rows="3"
-                    maxlength="500"
-                    class="profile-input"
-                  />
-                </label>
-                <label class="profile-field">
-                  头像地址
-                  <input
-                    v-model="profileForm.avatar"
-                    type="text"
-                    class="profile-input"
-                    placeholder="上传头像后自动填充"
-                  >
-                </label>
-                <button
-                  class="btn-pill-primary profile-save"
-                  :disabled="savingProfile"
-                  @click="handleSaveProfile"
-                >
-                  {{ savingProfile ? '保存中...' : '保存资料' }}
-                </button>
-              </div>
             </section>
 
             <section

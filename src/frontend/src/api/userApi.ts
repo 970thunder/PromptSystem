@@ -27,10 +27,6 @@ export const userApi = {
     return request.delete('/user/account')
   },
 
-  updateUserInfo(data: Partial<User>): Promise<ApiResponse<User>> {
-    return request.put('/user/info', data)
-  },
-
   getFavoritePrompts(): Promise<ApiResponse<Prompt[]>> {
     return request.get('/user/favorites')
   },
