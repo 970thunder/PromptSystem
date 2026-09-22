@@ -22,14 +22,12 @@ func NewMySQLUserStore(db *sql.DB) *MySQLUserStore {
 }
 
 const userSelectColumns = `
-	id, username, avatar, email, github_id, oidc_subject, password, bio, level, experience, session_version, status, created_at,
-	display_name, avatar_url, profile_synced_at
+	id, username, avatar, email, github_id, password, bio, level, experience, session_version, status, created_at
 `
 
 const qualifiedUserSelectColumns = `
-	users.id, users.username, users.avatar, users.email, users.github_id, users.oidc_subject, users.password, users.bio,
-	users.level, users.experience, users.session_version, users.status, users.created_at,
-	users.display_name, users.avatar_url, users.profile_synced_at
+	users.id, users.username, users.avatar, users.email, users.github_id, users.password, users.bio,
+	users.level, users.experience, users.session_version, users.status, users.created_at
 `
 
 func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, error) {
@@ -83,10 +81,6 @@ func (s *MySQLUserStore) Register(username, email, password string) (AuthUser, e
 	return user, nil
 }
 
-// dummyCredentialHash burns an equal bcrypt cost when the email is unknown,
-// keeping the login timing uniform between found and missing accounts.
-var dummyCredentialHash, _ = bcrypt.GenerateFromPassword([]byte("nebula-timing-equalizer"), bcrypt.DefaultCost)
-
 func (s *MySQLUserStore) Authenticate(email, password string) (AuthUser, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 
@@ -95,9 +89,6 @@ func (s *MySQLUserStore) Authenticate(email, password string) (AuthUser, error) 
 		return AuthUser{}, err
 	}
 	if !found {
-		// Burn the same bcrypt cost as a real lookup so response timing cannot
-		// be used to enumerate registered email addresses.
-		_ = bcrypt.CompareHashAndPassword(dummyCredentialHash, []byte(password))
 		return AuthUser{}, ErrInvalidCredentials
 	}
 
@@ -110,6 +101,50 @@ func (s *MySQLUserStore) Authenticate(email, password string) (AuthUser, error) 
 	}
 
 	return user, nil
+}
+
+func (s *MySQLUserStore) ResetPassword(email, password string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	if !IsValidEmail(email) {
+		return ErrInvalidEmail
+	}
+	if len(password) < 8 {
+		return ErrWeakPassword
+	}
+	if len(password) > maxPasswordBytes {
+		return ErrPasswordTooLong
+	}
+
+	if _, found, err := s.findByEmail(email); err != nil {
+		return err
+	} else if !found {
+		return ErrUserNotFound
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	result, err := s.db.Exec(`
+		UPDATE users
+		SET password = ?, session_version = session_version + 1
+		WHERE email = ?
+	`, string(passwordHash), email)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
 }
 
 // BumpSessionVersion increments the user's session version so all previously
@@ -205,7 +240,7 @@ func (s *MySQLUserStore) DeleteAccount(id int) error {
 
 	if _, err := tx.Exec(`
 		UPDATE users
-		SET username = ?, email = ?, github_id = NULL, oidc_subject = NULL, password = NULL,
+		SET username = ?, email = ?, github_id = NULL, password = NULL,
 		    avatar = NULL, bio = NULL, status = 0, session_version = session_version + 1
 		WHERE id = ?
 	`, fmt.Sprintf("deleted-user-%d", id), fmt.Sprintf("deleted+%d@invalid.promptos.local", id), id); err != nil {
@@ -218,7 +253,7 @@ func (s *MySQLUserStore) DeleteAccount(id int) error {
 func (s *MySQLUserStore) FindByID(id int) (AuthUser, bool) {
 	row := s.db.QueryRow(`SELECT`+userSelectColumns+` FROM users WHERE id = ?`, id)
 
-	user, found, err := scanAuthUserWithOIDC(row.Scan)
+	user, found, err := scanAuthUser(row.Scan)
 	if err != nil || !found {
 		return AuthUser{}, false
 	}
@@ -263,31 +298,6 @@ func (s *MySQLUserStore) UpdateProfile(id int, username, bio, avatar string) (Au
 	}
 
 	return updated, nil
-}
-
-// ApplyUnifiedProfile 写入身份中心同步下来的昵称与头像（展示副本）；本站用户名、简介与业务数据不变。
-func (s *MySQLUserStore) ApplyUnifiedProfile(id int, displayName, avatarURL string) error {
-	result, err := s.db.Exec(`
-		UPDATE users
-		SET display_name = CASE WHEN ? = '' THEN display_name ELSE ? END,
-		    avatar_url = CASE WHEN ? = '' THEN avatar_url ELSE ? END,
-		    profile_synced_at = NOW()
-		WHERE id = ?
-	`, strings.TrimSpace(displayName), strings.TrimSpace(displayName),
-		strings.TrimSpace(avatarURL), strings.TrimSpace(avatarURL), id)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		if _, found := s.FindByID(id); !found {
-			return ErrUserNotFound
-		}
-	}
-	return nil
 }
 
 func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error) {
@@ -361,69 +371,6 @@ func (s *MySQLUserStore) UpsertGitHubUser(githubID int64, username, email, avata
 		return AuthUser{}, ErrUserNotFound
 	}
 
-	return user, nil
-}
-
-func (s *MySQLUserStore) UpsertOIDCUser(subject, username, email, avatar string) (AuthUser, error) {
-	subject = strings.TrimSpace(subject)
-	email = strings.TrimSpace(strings.ToLower(email))
-	avatar = strings.TrimSpace(avatar)
-	if subject == "" || !IsValidEmail(email) {
-		return AuthUser{}, ErrInvalidOIDCUser
-	}
-	if strings.TrimSpace(username) == "" {
-		username = strings.Split(email, "@")[0]
-	}
-	if user, found, err := s.findByOIDCSubject(subject); err != nil {
-		return AuthUser{}, err
-	} else if found {
-		if _, err := s.db.Exec(`UPDATE users SET avatar = CASE WHEN ? = '' THEN avatar ELSE ? END WHERE id = ?`, avatar, avatar, user.ID); err != nil {
-			return AuthUser{}, err
-		}
-		updated, ok := s.FindByID(user.ID)
-		if !ok {
-			return AuthUser{}, ErrUserNotFound
-		}
-		return updated, nil
-	} else if user, found, err := s.findByEmail(email); err != nil {
-		return AuthUser{}, err
-	} else if found {
-		if user.OIDCSubject != "" && user.OIDCSubject != subject {
-			return AuthUser{}, ErrUserExists
-		}
-		resolved, err := s.resolveUsername(username, 0, user.ID)
-		if err != nil {
-			return AuthUser{}, err
-		}
-		if _, err := s.db.Exec(`UPDATE users SET oidc_subject = ?, username = ?, avatar = CASE WHEN ? = '' THEN avatar ELSE ? END WHERE id = ?`, subject, resolved, avatar, avatar, user.ID); err != nil {
-			return AuthUser{}, err
-		}
-		updated, ok := s.FindByID(user.ID)
-		if !ok {
-			return AuthUser{}, ErrUserNotFound
-		}
-		return updated, nil
-	}
-	resolved, err := s.resolveUsername(username, 0, 0)
-	if err != nil {
-		return AuthUser{}, err
-	}
-	result, err := s.db.Exec(`INSERT INTO users (username, avatar, email, oidc_subject, password, bio, level, experience, status) VALUES (?, ?, ?, ?, NULL, NULL, 1, 0, 1)`, resolved, nullIfEmpty(avatar), email, subject)
-	if err != nil {
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-			return AuthUser{}, ErrUserExists
-		}
-		return AuthUser{}, err
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return AuthUser{}, err
-	}
-	user, ok := s.FindByID(int(id))
-	if !ok {
-		return AuthUser{}, ErrUserNotFound
-	}
 	return user, nil
 }
 
@@ -679,23 +626,18 @@ func nullIfEmpty(value string) any {
 
 func (s *MySQLUserStore) findByEmail(email string) (AuthUser, bool, error) {
 	row := s.db.QueryRow(`SELECT`+userSelectColumns+` FROM users WHERE email = ?`, email)
-	return scanAuthUserWithOIDC(row.Scan)
+	return scanAuthUser(row.Scan)
 }
 
 func (s *MySQLUserStore) findByGitHubID(githubID int64) (AuthUser, bool, error) {
 	row := s.db.QueryRow(`SELECT`+userSelectColumns+` FROM users WHERE github_id = ?`, githubID)
-	return scanAuthUserWithOIDC(row.Scan)
-}
-
-func (s *MySQLUserStore) findByOIDCSubject(subject string) (AuthUser, bool, error) {
-	row := s.db.QueryRow(`SELECT`+userSelectColumns+` FROM users WHERE oidc_subject = ?`, subject)
-	return scanAuthUserWithOIDC(row.Scan)
+	return scanAuthUser(row.Scan)
 }
 
 func scanPublicUsers(rows *sql.Rows) ([]PublicUser, error) {
 	list := make([]PublicUser, 0)
 	for rows.Next() {
-		user, found, err := scanAuthUserWithOIDC(rows.Scan)
+		user, found, err := scanAuthUser(rows.Scan)
 		if err != nil {
 			return nil, err
 		}
@@ -710,17 +652,13 @@ func scanPublicUsers(rows *sql.Rows) ([]PublicUser, error) {
 	return list, nil
 }
 
-func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) {
+func scanAuthUser(scan func(dest ...any) error) (AuthUser, bool, error) {
 	var (
 		user         AuthUser
 		avatar       sql.NullString
 		githubID     sql.NullInt64
-		oidcSubject  sql.NullString
 		passwordHash sql.NullString
 		bio          sql.NullString
-		displayName  sql.NullString
-		avatarURL    sql.NullString
-		syncedAt     sql.NullTime
 		createdAt    time.Time
 	)
 
@@ -730,7 +668,6 @@ func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) 
 		&avatar,
 		&user.Email,
 		&githubID,
-		&oidcSubject,
 		&passwordHash,
 		&bio,
 		&user.Level,
@@ -738,9 +675,6 @@ func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) 
 		&user.SessionVer,
 		&user.Status,
 		&createdAt,
-		&displayName,
-		&avatarURL,
-		&syncedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AuthUser{}, false, nil
@@ -755,55 +689,13 @@ func scanAuthUserWithOIDC(scan func(dest ...any) error) (AuthUser, bool, error) 
 	if githubID.Valid {
 		user.GitHubID = githubID.Int64
 	}
-	if oidcSubject.Valid {
-		user.OIDCSubject = oidcSubject.String
-	}
 	if passwordHash.Valid {
 		user.PasswordHash = passwordHash.String
 	}
 	if bio.Valid {
 		user.Bio = bio.String
 	}
-	if displayName.Valid {
-		user.DisplayName = displayName.String
-	}
-	if avatarURL.Valid {
-		user.AvatarURL = avatarURL.String
-	}
-	if syncedAt.Valid {
-		user.ProfileSyncedAt = syncedAt.Time
-	}
 
-	user.CreatedAt = createdAt.UTC().Format("2006-01-02")
-	return user, true, nil
-}
-
-// scanAuthUser retains the legacy twelve-column contract used by unit tests
-// and older callers; production queries use scanAuthUserWithOIDC above.
-func scanAuthUser(scan func(dest ...any) error) (AuthUser, bool, error) {
-	var user AuthUser
-	var avatar, passwordHash, bio sql.NullString
-	var githubID sql.NullInt64
-	var createdAt time.Time
-	err := scan(&user.ID, &user.Username, &avatar, &user.Email, &githubID, &passwordHash, &bio, &user.Level, &user.Experience, &user.SessionVer, &user.Status, &createdAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return AuthUser{}, false, nil
-	}
-	if err != nil {
-		return AuthUser{}, false, err
-	}
-	if avatar.Valid {
-		user.Avatar = avatar.String
-	}
-	if githubID.Valid {
-		user.GitHubID = githubID.Int64
-	}
-	if passwordHash.Valid {
-		user.PasswordHash = passwordHash.String
-	}
-	if bio.Valid {
-		user.Bio = bio.String
-	}
 	user.CreatedAt = createdAt.UTC().Format("2006-01-02")
 	return user, true, nil
 }

@@ -18,7 +18,6 @@ var (
 	ErrPasswordTooLong    = errors.New("password must be 72 bytes or fewer")
 	ErrInvalidEmail       = errors.New("invalid email address")
 	ErrInvalidGitHubUser  = errors.New("invalid github user")
-	ErrInvalidOIDCUser    = errors.New("invalid oidc user")
 	ErrInvalidUser        = errors.New("invalid user")
 	ErrCannotFollowSelf   = errors.New("cannot follow yourself")
 )
@@ -29,24 +28,20 @@ var (
 const maxPasswordBytes = 72
 
 type UserStore struct {
-	mu               sync.RWMutex
-	nextID           int
-	users            map[int]AuthUser
-	emailIndex       map[string]int
-	githubIDIndex    map[int64]int
-	oidcSubjectIndex map[string]int
-	follows          map[int]map[int]struct{}
+	mu            sync.RWMutex
+	nextID        int
+	users         map[int]AuthUser
+	emailIndex    map[string]int
+	githubIDIndex map[int64]int
+	follows       map[int]map[int]struct{}
 }
 
 type AuthUser struct {
 	ID           int
 	Username     string
-	DisplayName  string
 	Avatar       string
-	AvatarURL    string
 	Email        string
 	GitHubID     int64
-	OIDCSubject  string
 	PasswordHash string
 	Bio          string
 	Level        int
@@ -54,8 +49,6 @@ type AuthUser struct {
 	SessionVer   int
 	Status       int
 	CreatedAt    string
-	// ProfileSyncedAt 是最近一次从身份中心同步昵称/头像的时间，用于节流。
-	ProfileSyncedAt time.Time
 }
 
 type PublicUser struct {
@@ -73,7 +66,6 @@ type PrivateUser struct {
 	Email          string `json:"email"`
 	Status         int    `json:"status"`
 	HasGitHubBound bool   `json:"hasGitHubBound"`
-	HasOIDCBound   bool   `json:"hasOidcBound"`
 }
 
 type FollowStatus struct {
@@ -85,12 +77,11 @@ type FollowStatus struct {
 
 func NewUserStore() *UserStore {
 	store := &UserStore{
-		nextID:           7,
-		users:            map[int]AuthUser{},
-		emailIndex:       map[string]int{},
-		githubIDIndex:    map[int64]int{},
-		oidcSubjectIndex: map[string]int{},
-		follows:          map[int]map[int]struct{}{},
+		nextID:        7,
+		users:         map[int]AuthUser{},
+		emailIndex:    map[string]int{},
+		githubIDIndex: map[int64]int{},
+		follows:       map[int]map[int]struct{}{},
 	}
 
 	seedUsers := []AuthUser{
@@ -205,6 +196,39 @@ func (s *UserStore) Authenticate(email, password string) (AuthUser, error) {
 	return user, nil
 }
 
+func (s *UserStore) ResetPassword(email, password string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	if !IsValidEmail(email) {
+		return ErrInvalidEmail
+	}
+	if len(password) < 8 {
+		return ErrWeakPassword
+	}
+	if len(password) > maxPasswordBytes {
+		return ErrPasswordTooLong
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	userID, exists := s.emailIndex[email]
+	if !exists {
+		return ErrUserNotFound
+	}
+
+	user := s.users[userID]
+	user.PasswordHash = string(passwordHash)
+	user.SessionVer++
+	s.users[userID] = user
+	return nil
+}
+
 // BumpSessionVersion invalidates every previously issued token for the user by
 // incrementing the per-user session version.
 func (s *UserStore) BumpSessionVersion(email string) error {
@@ -248,9 +272,6 @@ func (s *UserStore) DeleteAccount(id int) error {
 	}
 	if user.GitHubID > 0 {
 		delete(s.githubIDIndex, user.GitHubID)
-	}
-	if user.OIDCSubject != "" {
-		delete(s.oidcSubjectIndex, user.OIDCSubject)
 	}
 	user.Username = fmt.Sprintf("deleted-user-%d", id)
 	user.Avatar = ""
@@ -351,54 +372,6 @@ func (s *UserStore) UpsertGitHubUser(githubID int64, username, email, avatar str
 	return user, nil
 }
 
-func (s *UserStore) UpsertOIDCUser(subject, username, email, avatar string) (AuthUser, error) {
-	subject = strings.TrimSpace(subject)
-	email = strings.TrimSpace(strings.ToLower(email))
-	avatar = strings.TrimSpace(avatar)
-	if subject == "" || !IsValidEmail(email) {
-		return AuthUser{}, ErrInvalidOIDCUser
-	}
-	if strings.TrimSpace(username) == "" {
-		username = strings.Split(email, "@")[0]
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if id, ok := s.oidcSubjectIndex[subject]; ok {
-		user := s.users[id]
-		if avatar != "" {
-			user.Avatar = avatar
-		}
-		if user.Email == "" {
-			user.Email = email
-		}
-		s.users[id] = user
-		return user, nil
-	}
-	if id, ok := s.emailIndex[email]; ok {
-		user := s.users[id]
-		if user.OIDCSubject != "" && user.OIDCSubject != subject {
-			return AuthUser{}, ErrUserExists
-		}
-		user.OIDCSubject = subject
-		if avatar != "" {
-			user.Avatar = avatar
-		}
-		s.users[id] = user
-		s.oidcSubjectIndex[subject] = id
-		return user, nil
-	}
-	resolved, err := s.resolveUsernameLocked(username, 0, 0)
-	if err != nil {
-		return AuthUser{}, err
-	}
-	user := AuthUser{ID: s.nextID, Username: resolved, Avatar: avatar, Email: email, OIDCSubject: subject, PasswordHash: "", Level: 1, Status: 1, CreatedAt: time.Now().UTC().Format("2006-01-02")}
-	s.users[user.ID] = user
-	s.emailIndex[email] = user.ID
-	s.oidcSubjectIndex[subject] = user.ID
-	s.nextID++
-	return user, nil
-}
-
 func (s *UserStore) resolveUsernameLocked(desired string, githubID int64, excludeUserID int) (string, error) {
 	for _, candidate := range githubUsernameCandidates(desired, githubID) {
 		if s.isUsernameTakenLocked(candidate, excludeUserID) {
@@ -460,25 +433,6 @@ func (s *UserStore) UpdateProfile(id int, username, bio, avatar string) (AuthUse
 
 	s.users[id] = user
 	return user, nil
-}
-
-// ApplyUnifiedProfile 记录身份中心同步下来的昵称与头像（展示副本）；本站用户名与业务数据不变。
-func (s *UserStore) ApplyUnifiedProfile(id int, displayName, avatarURL string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	user, ok := s.users[id]
-	if !ok {
-		return ErrUserNotFound
-	}
-	if trimmed := strings.TrimSpace(displayName); trimmed != "" {
-		user.DisplayName = trimmed
-	}
-	if trimmed := strings.TrimSpace(avatarURL); trimmed != "" {
-		user.AvatarURL = trimmed
-	}
-	s.users[id] = user
-	return nil
 }
 
 func (s *UserStore) Follow(followerID, followingID int) (FollowStatus, bool, error) {
@@ -597,20 +551,10 @@ func (s *UserStore) followStatusLocked(userID, viewerID int) FollowStatus {
 }
 
 func ToPublicUser(user AuthUser) PublicUser {
-	// 昵称与头像统一由 isoumao 身份中心维护：同步到的值优先，本站字段只是兜底。
-	username := user.Username
-	if strings.TrimSpace(user.DisplayName) != "" {
-		username = user.DisplayName
-	}
-	avatar := user.Avatar
-	if strings.TrimSpace(user.AvatarURL) != "" {
-		avatar = user.AvatarURL
-	}
-
 	return PublicUser{
 		ID:         user.ID,
-		Username:   username,
-		Avatar:     avatar,
+		Username:   user.Username,
+		Avatar:     user.Avatar,
 		Bio:        user.Bio,
 		Level:      user.Level,
 		Experience: user.Experience,
@@ -624,7 +568,6 @@ func ToPrivateUser(user AuthUser) PrivateUser {
 		Email:          user.Email,
 		Status:         user.Status,
 		HasGitHubBound: user.GitHubID > 0,
-		HasOIDCBound:   user.OIDCSubject != "",
 	}
 }
 

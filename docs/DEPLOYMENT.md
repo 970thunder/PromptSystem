@@ -1,12 +1,12 @@
 # PromptOS 部署说明
 
-> 环境差异走配置注入（.env / compose 环境变量），不维护第二套源码目录。密钥来源见「配置与密钥」。跨项目服务器事实以 `E:\Web\服务器部署总说明.md` 为准。
+> 环境差异走配置注入（.env / compose 环境变量），不维护第二套源码目录。密钥来源见「配置与密钥」。
 
 ## 环境一览
 
 | 环境 | 位置 | 地址 | 说明 |
 |---|---|---|---|
-| 生产 | `103.42.182.205`（SSH `2680`） | https://promptsystem.isoumao.cn | PromptOS 独立 Compose 项目 `promptsystem` |
+| 生产 | `166.1.232.84`（SSH `22`） | https://promptos.hyper99.top | PromptOS 独立 Compose 项目 |
 | 本地 | 开发机 `E:\Web\PromptSystem` | http://localhost:28301–28304 | `start-dev.bat`，端口占用即拒绝启动 |
 
 ## 服务拓扑（docker-compose.yml）
@@ -28,12 +28,13 @@
 4. 验证：`curl https://<域名>/` + 首页登录/发布冒烟；
 5. 失败回滚：切回上一版镜像/目录 + 恢复数据库备份。
 
-### 服务器发布布局（当前）
+### 服务器发布布局（推荐目标）
 
 ```
-/srv/releases/promptsystem/
-├── vX.Y.Z/               # 每版一份 compose + 固定镜像 tag/digest
-└── current -> vX.Y.Z     # 仅在健康检查通过后更新
+/opt/promptos/
+├── releases/vX.Y.Z/      # 每版一份 compose + 镜像 tag 固定
+├── shared/               # uploads、日志等跨版本数据
+└── current -> releases/vX.Y.Z
 ```
 
 ## 配置与密钥
@@ -44,23 +45,17 @@
 - 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；`v0.3.0` 已切换为强制 `Content-Security-Policy`，不得直接放宽为 `*`。
 - 首次新库不需要人工导入 SQL：backend 检测到当前数据库无表时自动应用 `src/backend/sql/schema.sql` 基线，随后通过 `schema_migrations` 执行全部 `sql/migrations`。已有卷和部分迁移库只执行未记录的迁移，不会覆盖数据；
 
-### 统一账号（OIDC）
-
-PromptOS 使用 `https://id.isoumao.cn/realms/isoumao` 的独立 `promptsystem-web` client。生产必须从 `/opt/secrets/promptsystem/app.env` 注入 `OIDC_ENABLED=true`、`OIDC_ISSUER`、`OIDC_CLIENT_ID`、`OIDC_CLIENT_SECRET` 和精确的 `OIDC_REDIRECT_URI=https://promptsystem.isoumao.cn/api/v1/auth/oidc/callback`。当前线上镜像标签为 `20260922-2`，OIDC 已启用，数据库迁移 `0019_users_oidc_subject.sql` 已应用。回调服务端校验 state、PKCE、nonce、issuer、audience、RS256 签名和 `email_verified`，然后只签发 PromptOS 自己的 HttpOnly cookie。Keycloak token 不进入 URL、localStorage 或业务数据库。管理员账号不走此入口；GitHub OAuth 保留作迁移/回滚入口。
-
-数据库迁移 `0019_users_oidc_subject.sql` 为 `users.oidc_subject` 添加唯一索引。发布前先备份 MySQL，再执行迁移并验证按 `sub` 登录、已验证邮箱绑定、冲突拒绝和回滚。
-
 ## 当前生产发布
 
-- 版本：`v0.4.3`（镜像 `promptsystem-backend:20260922-3` / `promptsystem-frontend:20260922-3`）
+- 版本：`v0.3.4`（CI 制品对应提交 `2e79994`）
 - Compose 项目：`promptsystem`
-- 发布目录：`/srv/releases/promptsystem/20260922-2`（就地更新 compose，镜像按版本 tag 固定）；用 Compose 项目名 `promptsystem` 复用现有卷和网络
+- 发布目录：`/srv/releases/promptsystem/v0.3.4`；上一回滚目录以服务器实际容器标签和 `/srv/releases/promptsystem` 目录核对
 - 入口端口：前端 `127.0.0.1:3092`，后端 `127.0.0.1:5092`
 - 数据卷：`promptsystem_promptsystem_mysql_data`、`promptsystem_promptsystem_redis_data`、`promptsystem_promptsystem_uploads`
 - 上传存储：生产使用平板唯一 RustFS `promptsystem-prod` bucket；应用通过 `172.22.0.1:13912` 访问，公网对象由 HTTPS `/objects/` 代理提供
 - 健康检查：`/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`upload=true`、`degraded=false`
 
-截至 2026-09-22 的线上核验：`v0.4.3` 运行稳定，内存可用约 `3.1 GiB`、根盘使用率约 `52%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。RustFS readiness、带认证 S3 list/put/get/delete、HTTPS `/objects/` 公共读取和每日副本均已验证；实际 PromptOS 链路为 `127.0.0.1:13910`（SSH 反向隧道）→ `172.22.0.1:13912`（PromptOS 网桥转发）。
+截至 2026-09-10 的线上核验：`v0.3.4` 运行稳定，内存可用约 `3.1 GiB`、根盘使用率约 `52%`、无 Swap；公网入口仍仅为 `80/443`，PromptOS 端口仍为 loopback。backend/frontend 已启用只读根文件系统、`cap_drop`、PID/内存上限和最小 capability 例外；CSP、CORS/CSRF、Redis 密码已验收。RustFS readiness、带认证 S3 list/put/get/delete、HTTPS `/objects/` 公共读取和每日副本均已验证；实际 PromptOS 链路为 `127.0.0.1:13910`（SSH 反向隧道）→ `172.22.0.1:13912`（PromptOS 网桥转发）。
 
 ## 回滚
 
@@ -146,7 +141,7 @@ flock -n /run/lock/promptsystem-maintenance.lock \
 - CI `release-artifacts` run `33819216837` 成功构建并上传 backend/frontend 镜像；归档 SHA-256=`8a0da2f001aee1eda60df9890a85b4274f1b8f2593628936d9f40817160b2bba`。
 - `scripts/release.ps1 -ImageArchivePath ... -SkipTests` 在服务器未编译源码，串行完成 MySQL/上传卷备份和 `sha256sum -c`、`gzip -t`、`tar -tzf` 校验，加载镜像、Compose 重建、ready/HTTPS 验证后更新 `current`。
 - 线上 ready `200` 且 `environment=production`、`storageMode=mysql`、`degraded=false`；首页与 `/api/v1/home/summary` 返回 `200`。CSP 强制 Header、正式 Origin 预检 `204`、陌生 Origin `403 ORIGIN_NOT_ALLOWED`、Cookie 写请求缺 CSRF Header `403 CSRF_INVALID`。
-- backend/frontend `ReadonlyRootfs=true`、`cap_drop=ALL`，frontend 仅保留 `CHOWN/NET_BIND_SERVICE/SETGID/SETUID` 例外；PID/内存上限 `128/768 MiB`、`64/256 MiB`，重启计数 0。Redis 未认证访问返回 `NOAUTH`，秘密文件权限 `600`。旧会员验证码/密码认证已移除，仅统一账号 OIDC 登录可用；运维告警邮件使用独立的 `alert.env`。
+- backend/frontend `ReadonlyRootfs=true`、`cap_drop=ALL`，frontend 仅保留 `CHOWN/NET_BIND_SERVICE/SETGID/SETUID` 例外；PID/内存上限 `128/768 MiB`、`64/256 MiB`，重启计数 0。Redis 未认证访问返回 `NOAUTH`，秘密文件权限 `600`，邮件认证关闭。
 - 当前只保留 `/srv/releases/promptsystem/v0.3.0` 和 `/srv/releases/promptsystem/20260830-b584585`，旧 `20260829-a9ba2cf` release 与镜像标签已按清理规则移除；其他 Compose 项目未停止，未执行全局 prune、`down -v` 或删除卷。
 
 ### 生产演示数据处置记录（2026-08-30）
@@ -180,6 +175,7 @@ flock -n /run/lock/promptsystem-maintenance.lock \
 | REDIS_PASSWORD | app.env 更新后 `up -d redis backend` | 旧密码 `NOAUTH`、新密码 `PONG`、ready 200 |
 | JWT_SECRET | app.env 更新后 `up -d backend` | ready 200、登录/登出闭环、旧 token 失效 |
 | MYSQL_PASSWORD / MYSQL_MIGRATION_PASSWORD | 容器内 `ALTER USER` → app.env 更新 → `up -d backend` | ready 200、`degraded=false`、迁移 dry 跑 |
+| SMTP（阿里云邮件推送） | 控制台生成新 SMTP 密码 → 更新 app.env `PROMPTOS_SMTP_PASSWORD` → `up -d backend` | `go test -tags=smtp_live` 或线上验证码发送 200 |
 | GitHub OAuth | GitHub 后端 regenerate client secret → 更新 app.env 对应键 → `up -d backend` | OAuth 回调闭环 |
 | RustFS 凭据 | 平板 RustFS 侧生成 → 更新 `/opt/secrets/promptsystem/rustfs.env`（600）→ 重启 backend/副本 timer | 带认证上传/读取/删除和 HTTPS 公共读取闭环；当前仍为服务级 key，低权限用户隔离待 RustFS 管理能力具备后补齐 |
 

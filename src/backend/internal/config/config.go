@@ -48,12 +48,12 @@ type Config struct {
 	GitHubOAuthEnabled   bool
 	GitHubRedirectURI    string
 	FrontendURL          string
-	IdentityProfileURL   string
-	OIDCIssuer           string
-	OIDCClientID         string
-	OIDCClientSecret     string
-	OIDCRedirectURI      string
-	OIDCEnabled          bool
+	SMTPHost             string
+	SMTPPort             string
+	SMTPUser             string
+	SMTPPassword         string
+	SMTPFrom             string
+	EmailAuthEnabled     bool
 }
 
 // DefaultAllowedOrigins is the comma-separated origin list used in development.
@@ -102,12 +102,12 @@ func Load() Config {
 		GitHubOAuthEnabled:   getEnvAsBool("GITHUB_OAUTH_ENABLED", false),
 		GitHubRedirectURI:    getEnv("GITHUB_REDIRECT_URI", ""),
 		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:3000"),
-		IdentityProfileURL:   getEnv("IDENTITY_PROFILE_BASE_URL", "https://id.isoumao.cn/profile"),
-		OIDCIssuer:           getEnv("OIDC_ISSUER", ""),
-		OIDCClientID:         getEnv("OIDC_CLIENT_ID", ""),
-		OIDCClientSecret:     getEnv("OIDC_CLIENT_SECRET", ""),
-		OIDCRedirectURI:      getEnv("OIDC_REDIRECT_URI", ""),
-		OIDCEnabled:          getEnvAsBool("OIDC_ENABLED", false),
+		SMTPHost:             getEnv("SMTP_HOST", ""),
+		SMTPPort:             getEnv("SMTP_PORT", "587"),
+		SMTPUser:             getEnv("SMTP_USER", ""),
+		SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:             getEnv("SMTP_FROM", ""),
+		EmailAuthEnabled:     getEnvAsBool("EMAIL_AUTH_ENABLED", true),
 	}
 }
 
@@ -147,8 +147,8 @@ func (c Config) Validate() error {
 		return errors.New("DB_MAX_IDLE_CONNS cannot exceed DB_MAX_OPEN_CONNS")
 	}
 
-	if prod && (strings.TrimSpace(c.JWTSecret) == "" || c.JWTSecret == "promptos-dev-secret-change-me" || len(c.JWTSecret) < 32) {
-		return errors.New("JWT_SECRET must be set to a strong secret (at least 32 characters) in non-development environments")
+	if prod && (strings.TrimSpace(c.JWTSecret) == "" || c.JWTSecret == "promptos-dev-secret-change-me") {
+		return errors.New("JWT_SECRET must be set to a strong secret in non-development environments")
 	}
 	if prod && strings.EqualFold(c.MySQLPass, "root") {
 		return errors.New("MYSQL_PASSWORD must not be the default root password in non-development environments")
@@ -168,14 +168,19 @@ func (c Config) Validate() error {
 	if prod && c.AllowedOrigin == "*" {
 		return errors.New("ALLOWED_ORIGIN must be an explicit origin list (not *) in non-development environments")
 	}
+	if prod && c.EmailAuthEnabled {
+		if strings.TrimSpace(c.SMTPHost) == "" || strings.TrimSpace(c.SMTPFrom) == "" {
+			return errors.New("SMTP_HOST and SMTP_FROM must be configured in production")
+		}
+		if err := validatePort(c.SMTPPort); err != nil {
+			return fmt.Errorf("SMTP_PORT: %w", err)
+		}
+		if (strings.TrimSpace(c.SMTPUser) == "") != (strings.TrimSpace(c.SMTPPassword) == "") {
+			return errors.New("SMTP_USER and SMTP_PASSWORD must be configured together")
+		}
+	}
 	if c.GitHubOAuthEnabled && (strings.TrimSpace(c.GitHubClientID) == "" || strings.TrimSpace(c.GitHubClientSecret) == "") {
 		return errors.New("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured when GitHub OAuth is enabled")
-	}
-	if c.OIDCEnabled && (strings.TrimSpace(c.OIDCIssuer) == "" || strings.TrimSpace(c.OIDCClientID) == "" || strings.TrimSpace(c.OIDCClientSecret) == "" || strings.TrimSpace(c.OIDCRedirectURI) == "") {
-		return errors.New("OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET and OIDC_REDIRECT_URI must be configured in production")
-	}
-	if prod && c.OIDCEnabled && !strings.HasPrefix(strings.TrimRight(c.OIDCIssuer, "/"), "https://") {
-		return errors.New("OIDC_ISSUER must use HTTPS")
 	}
 
 	if strings.Contains(c.AllowedOrigin, "*") && strings.Contains(c.AllowedOrigin, ",") {

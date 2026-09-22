@@ -5,12 +5,10 @@ import "time"
 type UserManager interface {
 	Register(username, email, password string) (AuthUser, error)
 	Authenticate(email, password string) (AuthUser, error)
+	ResetPassword(email, password string) error
 	FindByID(id int) (AuthUser, bool)
 	UpdateProfile(id int, username, bio, avatar string) (AuthUser, error)
-	// ApplyUnifiedProfile 写入身份中心同步下来的昵称与头像（展示副本），不改变本站用户名与业务数据。
-	ApplyUnifiedProfile(id int, displayName, avatarURL string) error
 	UpsertGitHubUser(githubID int64, username, email, avatar string) (AuthUser, error)
-	UpsertOIDCUser(subject, username, email, avatar string) (AuthUser, error)
 	Follow(followerID, followingID int) (FollowStatus, bool, error)
 	Unfollow(followerID, followingID int) (FollowStatus, bool, error)
 	FollowStatus(userID, viewerID int) (FollowStatus, error)

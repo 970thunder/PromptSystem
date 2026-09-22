@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
-import { Download, Eraser, Github, KeyRound, LogOut, Shield, UserRoundX } from 'lucide-vue-next'
+import { Download, Eraser, Shield, UserRoundX } from 'lucide-vue-next'
 import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { FollowStatus, Prompt, User } from '@/types'
-import { githubAuthUrl, githubOAuthEnabled, identityCenterBase } from '@/utils/authUrl'
+import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 import BackButton from '@/components/navigation/BackButton.vue'
 import AppShell from '@/components/layout/AppShell.vue'
@@ -24,6 +24,8 @@ const promptStore = usePromptStore()
 const userStore = useUserStore()
 
 const loading = ref(false)
+const savingProfile = ref(false)
+const uploadingAvatar = ref(false)
 const prompts = ref<Prompt[]>([])
 const draftPrompts = ref<Prompt[]>([])
 const favoritePrompts = ref<Prompt[]>([])
@@ -40,12 +42,18 @@ const followerUsers = ref<User[]>([])
 const followStatus = ref<FollowStatus | null>(null)
 const activeLibraryTab = ref<LibraryTab>('published')
 const profileUser = ref<User | null>(null)
+const avatarInput = ref<HTMLInputElement | null>(null)
+const profileForm = reactive({
+  username: '',
+  bio: '',
+  avatar: ''
+})
+
 const viewedUserId = computed(() => Number(route.params.userId) || userStore.userInfo?.id || 0)
 const isOwnerView = computed(() => Boolean(userStore.userInfo && viewedUserId.value === userStore.userInfo.id))
-// 头像与昵称来自 isoumao 统一账号（身份中心权威），本站只读展示。
 const resolvedAvatar = computed(() => {
-  const avatar = profileUser.value?.avatar || ''
-  return avatar ? (avatar.startsWith('http') ? avatar : resolveMediaUrl(avatar)) : ''
+  const avatar = profileForm.avatar || profileUser.value?.avatar || ''
+  return avatar ? resolveMediaUrl(avatar) : ''
 })
 
 const fallbackCoverMap: Record<number, string> = {
@@ -132,6 +140,78 @@ const resolveCover = (prompt: Prompt, index: number) => {
   return fallbackCoverMap[prompt.id] ?? fallbackCoverMap[101 + (index % Object.keys(fallbackCoverMap).length)]
 }
 
+const syncProfileForm = () => {
+  if (!profileUser.value) {
+    return
+  }
+
+  profileForm.username = profileUser.value.username
+  profileForm.bio = profileUser.value.bio
+  profileForm.avatar = profileUser.value.avatar
+}
+
+const handleSaveProfile = async () => {
+  if (!isOwnerView.value) {
+    return
+  }
+
+  savingProfile.value = true
+  try {
+    const updated = await userStore.updateProfile({
+      username: profileForm.username.trim(),
+      bio: profileForm.bio.trim(),
+      avatar: profileForm.avatar.trim()
+    })
+    profileUser.value = updated
+    syncProfileForm()
+    message.success('资料已更新')
+  } catch {
+    message.error('资料保存失败，请稍后重试')
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+const handleAvatarClick = () => {
+  if (!isOwnerView.value || uploadingAvatar.value) {
+    return
+  }
+
+  avatarInput.value?.click()
+}
+
+const handleAvatarUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+
+  if (!file) {
+    return
+  }
+
+  if (!file.type.startsWith('image/')) {
+    message.error('请选择图片文件')
+    return
+  }
+
+  uploadingAvatar.value = true
+  try {
+    const uploadRes = await promptApi.uploadCover(file)
+    const updated = await userStore.updateProfile({
+      username: profileForm.username.trim(),
+      bio: profileForm.bio.trim(),
+      avatar: uploadRes.data.url
+    })
+    profileUser.value = updated
+    syncProfileForm()
+    message.success('头像已更新')
+  } catch {
+    message.error('头像上传失败，请稍后重试')
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
+
 const formatCount = (value: number) => {
   if (value >= 1000) {
     return `${(value / 1000).toFixed(1)}k`
@@ -207,6 +287,7 @@ const loadProfile = async () => {
     }
     await loadSocialData()
     followStatus.value = null
+    syncProfileForm()
     return
   }
 
@@ -230,6 +311,7 @@ const loadProfile = async () => {
   } else {
     followStatus.value = null
   }
+  syncProfileForm()
 }
 
 const loadMoreHistory = async () => {
@@ -307,12 +389,6 @@ const handleExportData = async () => {
   }
 }
 
-// 个人中心退出登录：结束本站会话并回到首页；统一账号的 SSO 会话由身份中心管理。
-const handleLogout = async () => {
-  await userStore.logoutServer()
-  await router.push('/')
-}
-
 const handleClearHistory = () => {
   if (!isOwnerView.value || clearingHistory.value) {
     return
@@ -373,14 +449,8 @@ const handlePublishClick = async () => {
   await router.push('/publish')
 }
 
-// 直连打开个人中心时先等会话恢复，否则会把「自己」当成访客，页面的昵称/头像与内容库都会空着。
-onMounted(async () => {
-  await userStore.restoreSession()
-  await loadProfile()
-})
-watch(() => [route.params.userId, userStore.userInfo?.id], () => {
-  void loadProfile()
-})
+onMounted(loadProfile)
+watch(() => route.params.userId, loadProfile)
 </script>
 
 <template>
@@ -416,7 +486,14 @@ watch(() => [route.params.userId, userStore.userInfo?.id], () => {
           <aside class="profile-sidebar">
             <section class="profile-card">
               <div class="profile-card__user">
-                <div class="profile-avatar">
+                <button
+                  class="profile-avatar"
+                  :class="{ 'profile-avatar--clickable': isOwnerView }"
+                  type="button"
+                  aria-label="更换头像"
+                  :disabled="!isOwnerView || uploadingAvatar"
+                  @click="handleAvatarClick"
+                >
                   <img
                     v-if="resolvedAvatar"
                     :src="resolvedAvatar"
@@ -424,7 +501,21 @@ watch(() => [route.params.userId, userStore.userInfo?.id], () => {
                     class="profile-avatar__image"
                   >
                   <span v-else>{{ profileUser?.username?.slice(0, 1) || '?' }}</span>
-                </div>
+                  <span
+                    v-if="isOwnerView"
+                    class="profile-avatar__hint"
+                  >
+                    {{ uploadingAvatar ? '上传中' : '更换' }}
+                  </span>
+                </button>
+                <input
+                  ref="avatarInput"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="profile-avatar-input"
+                  aria-label="选择头像图片"
+                  @change="handleAvatarUpload"
+                >
                 <div class="profile-card__info">
                   <div class="profile-card__name">
                     {{ profileUser?.username || '创作者' }}
@@ -483,59 +574,44 @@ watch(() => [route.params.userId, userStore.userInfo?.id], () => {
             <section
               v-if="isOwnerView"
               class="profile-card"
-              data-testid="profile-security"
             >
               <div class="profile-card__title">
-                账号与安全
+                编辑资料
               </div>
-              <dl class="profile-security">
-                <div>
-                  <dt>登录方式</dt>
-                  <dd>isoumao 统一账号（本站不保存密码，邮箱验证由身份中心负责）</dd>
-                </div>
-                <div>
-                  <dt>GitHub</dt>
-                  <dd>{{ githubOAuthEnabled ? '用于资料校验与绑定，不作为登录入口' : '未开放' }}</dd>
-                </div>
-                <div>
-                  <dt>本站数据</dt>
-                  <dd>提示词、收藏、点赞、浏览记录与草稿保存在 PromptOS，可在此导出或清理</dd>
-                </div>
-              </dl>
-              <div class="profile-account-actions">
-                <a
-                  v-if="githubOAuthEnabled"
-                  class="profile-account-action"
-                  :href="githubAuthUrl()"
-                >
-                  <Github
-                    :size="16"
-                    aria-hidden="true"
+              <div class="profile-form">
+                <label class="profile-field">
+                  展示名称
+                  <input
+                    v-model="profileForm.username"
+                    type="text"
+                    maxlength="20"
+                    class="profile-input"
+                  >
+                </label>
+                <label class="profile-field">
+                  简介
+                  <textarea
+                    v-model="profileForm.bio"
+                    rows="3"
+                    maxlength="500"
+                    class="profile-input"
                   />
-                  绑定 GitHub
-                </a>
-                <a
-                  class="profile-account-action"
-                  :href="`${identityCenterBase}/profile/?from=promptsystem`"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <KeyRound
-                    :size="16"
-                    aria-hidden="true"
-                  />
-                  统一资料与密码
-                </a>
+                </label>
+                <label class="profile-field">
+                  头像地址
+                  <input
+                    v-model="profileForm.avatar"
+                    type="text"
+                    class="profile-input"
+                    placeholder="上传头像后自动填充"
+                  >
+                </label>
                 <button
-                  type="button"
-                  class="profile-account-action"
-                  @click="handleLogout"
+                  class="btn-pill-primary profile-save"
+                  :disabled="savingProfile"
+                  @click="handleSaveProfile"
                 >
-                  <LogOut
-                    :size="16"
-                    aria-hidden="true"
-                  />
-                  退出登录
+                  {{ savingProfile ? '保存中...' : '保存资料' }}
                 </button>
               </div>
             </section>
@@ -910,28 +986,6 @@ watch(() => [route.params.userId, userStore.userInfo?.id], () => {
 .profile-account-actions {
   display: grid;
   gap: 8px;
-}
-
-.profile-security {
-  display: grid;
-  gap: 10px;
-  margin: 0 0 12px;
-}
-
-.profile-security div {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 10px;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.profile-security dt {
-  color: var(--prompt-text-faint, #6b7280);
-}
-
-.profile-security dd {
-  margin: 0;
 }
 
 .profile-account-action {

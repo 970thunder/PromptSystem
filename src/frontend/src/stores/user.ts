@@ -54,16 +54,16 @@ export const useUserStore = defineStore('user', () => {
   const logoutServer = async () => {
     if (sessionActive.value || token.value) {
       try {
-        // 单点登出：后端返回身份中心结束会话地址，跳过去一起结束 IdP 会话。
-        const response = await userApi.logout()
-        const logoutUrl = (response as unknown as { data?: { logoutUrl?: string | null } }).data?.logoutUrl
-        logout()
-        if (logoutUrl) { window.location.href = logoutUrl; return }
+        await userApi.logout()
       } catch {
         // Always clear local credentials even when the API is unavailable.
       }
     }
     logout()
+  }
+
+  const markBindPromptPending = (userID: number) => {
+    localStorage.setItem(bindPromptPendingKey(userID), '1')
   }
 
   const clearBindPromptPending = (userID: number) => {
@@ -118,6 +118,44 @@ export const useUserStore = defineStore('user', () => {
     return sessionActive.value
   }
 
+  const login = async (payload: { email: string; password: string }) => {
+    loading.value = true
+    try {
+      const response = await userApi.login(payload)
+      setUserInfo(response.data.user)
+      setToken(response.data.token || '')
+      return response.data.user
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const register = async (payload: { username: string; email: string; password: string; captcha: string }) => {
+    loading.value = true
+    try {
+      const response = await userApi.register(payload)
+      setUserInfo(response.data.user)
+      setToken(response.data.token || '')
+      if (!response.data.user.hasGitHubBound) {
+        markBindPromptPending(response.data.user.id)
+      }
+      return response.data.user
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const updateProfile = async (payload: { username?: string; bio?: string; avatar?: string }) => {
+    loading.value = true
+    try {
+      const response = await userApi.updateUserInfo(payload)
+      setUserInfo(response.data)
+      return response.data
+    } finally {
+      loading.value = false
+    }
+  }
+
   const fetchUserInfo = async () => {
     try {
       const response = await userApi.getUserInfo()
@@ -142,6 +180,9 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     sessionReady,
     restoreSession,
+    login,
+    register,
+    updateProfile,
     fetchUserInfo
   }
 })

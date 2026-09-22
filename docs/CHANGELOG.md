@@ -2,55 +2,6 @@
 
 所有对外可见的变更记录在本文件。版本号：`v主.次.修订`（主=大改/不兼容，次=新功能，修订=修复）。
 
-## [v0.4.5] - 2026-09-22
-
-### Changed
-- 昵称与头像统一由 isoumao 身份中心维护：新增 `internal/identity` 只读同步客户端（`IDENTITY_PROFILE_BASE_URL`，默认 `https://id.isoumao.cn/profile`，留空即关闭；进程内缓存 5 分钟），OIDC 回调与 `GET /api/v1/user/info`（15 秒节流）都会刷新展示副本。
-- `users` 增加 `display_name`、`avatar_url`、`profile_synced_at`（迁移 `0020_users_unified_profile.sql`）；`ToPublicUser` 优先使用统一昵称/头像，站点用户名与业务数据不变。
-- **下线本站资料编辑**：`PUT /api/v1/user/info` 返回 403 `PROFILE_MANAGED_BY_IDENTITY`；个人中心移除「编辑资料」表单与头像上传，改为只读展示统一资料 + 「统一资料与密码」入口。
-- 个人中心直连打开时先等会话恢复再加载资料，避免把本人当成访客（显示「创作者」且内容库为空）。
-- 统一资料入口携带来源参数（`/profile/?from=promptsystem`），身份中心据此显示「返回 PromptOS」。
-
-### Added
-- `internal/identity/directory_test.go`（缓存与开关）、`internal/store/unified_profile_test.go`（统一资料优先、用户名保留）、集成测试改为断言资料编辑被拒绝。
-
-### Deployment
-- 后端/前端镜像 `20260922-unified`、前端 `20260922-unified2`；启动时自动应用 `0020` 迁移（已确认 `users` 三个新列存在）。备份 `/srv/backups/promptsystem/20260922-unified/mysql.sql.gz`。
-- 生产验收：`GET /api/v1/user/info` 返回 `username=统一昵称3521`、`avatar=https://id.isoumao.cn/profile/avatar/<sub>`；个人中心渲染路径（按生产返回值）显示统一昵称/头像且无本站编辑表单。
-
-## [v0.4.4] - 2026-09-22
-
-### Changed
-- 统一账号登录改为**页面内模态框**：登录页在站点页面内的 iframe 中完成，不再打开独立浏览器窗口；组件新增「新窗口打开 / 整页登录」出口，组件不可用时前端回退整页登录。
-- 弹窗收尾页改为优先向 `window.parent` 回传结果（`window.opener` 保留兼容），顶层窗口才自行关窗。
-- 个人中心 `/profile` 增加「账号与安全」区块：登录方式（统一账号，本地不保存密码）、GitHub 绑定说明与入口、统一资料与密码外链、退出登录；导航「个人中心」改为本站 `/profile`。
-
-### Added
-- `ProfileView` 冒烟测试：固定「账号与安全」区块存在且指向统一账号。
-
-## [v0.4.3] - 2026-09-22
-
-### Removed
-- 清理统一账号重构后的死代码：删除前端注册/找回密码页面与测试、旧登录/注册/验证码 API 封装、旧类型与用户 store 方法。
-- 删除后端 `ResetPassword`、旧登录请求结构体和会员 SMTP/`EMAIL_AUTH_ENABLED` 配置；运维告警 SMTP 保持独立，不受影响。
-- Playwright 移除密码注册/登录/找回密码流程，改为断言 `/register` 与 `/forgot-password` 只能重定向到统一账号登录页。
-
-### Changed
-- 发布脚本默认域名、服务器地址和 SSH 端口更新为当前生产事实：`promptsystem.isoumao.cn`、`103.42.182.205:2680`。
-- README、API 契约、验收文档与迭代记录同步标注会员密码/验证码/应用 SMTP 已由 OIDC 取代。
-- 生产已切换 `promptsystem-backend:20260922-3` / `promptsystem-frontend:20260922-3`；`/ready` 200、OIDC 302、四个旧认证接口全部 404，入口 JS 16.58 KB（gzip 6.59 KB）。
-
-## [v0.4.2] - 2026-09-22
-
-### Added
-- 统一账号在 `users.oidc_subject` 持久化 OIDC `sub`，新增迁移 `0019_users_oidc_subject.sql`，仅对 `email_verified=true` 的账号按邮箱绑定，冲突时拒绝合并。
-- Prompt 创建、浏览、更新和删除增加用户/IP 维度限流；登录失败补齐等时 bcrypt 校验；内容审核拦截常见 API Key、GitHub/Google/Slack Token 和私钥片段。
-
-### Changed
-- 限流来源 IP 改为只信任同机反向代理追加的最右侧 `X-Forwarded-For` 值，避免伪造左侧首跳绕过限制。
-- 生产配置要求显式设置环境类型，并强制 `JWT_SECRET` 至少 32 字符；OIDC 配置纳入生产启动校验。
-- 生产线已运行镜像 `promptsystem-backend:20260922-2` / `promptsystem-frontend:20260922-2`，OIDC 入口实测 302，数据库 OIDC 列与唯一索引均已生效。
-
 ## [v0.4.1] - 2026-09-22
 
 ### Changed
@@ -59,18 +10,8 @@
 ### 性能影响
 - 首屏必须解析的入口 JS 体积减少约 **98%**（gzip 430 KB → 6.7 KB），其余依赖并行加载且跨版本复用。
 
-## [v0.4.0] - 2026-09-22
-
-### Changed
-- 登录切换为「isoumao 统一账号」弹窗式登录；回调改为返回 postMessage 收尾页，主页面不跳转。
-- 登出改为 RP 发起单点登出（返回 `end_session` 地址，含 `id_token_hint`）。
-
-### Fixed
-- `withAuth` 补上 JWT 吊销名单校验：此前登出只写黑名单却从不检查，被复制的令牌在自然过期前（72 小时）仍然可用；现返回 `AUTH_TOKEN_REVOKED`。
-- `scripts/start-dev.sh` 为本地 Redis 设置开发口令：Redis 无密码时启用 protected mode，会拒绝经 Docker 端口转发进来的连接（后端只见 EOF），导致 OIDC state 与登出吊销静默失效。
-
-### Removed
-- 下线 `/user/login`、`/user/captcha`、`/user/register`、`/user/password/reset` 及其处理器、验证码与邮件子系统（约 930 行），并删除对应限流用例；保留登出吊销用例。
+### 说明
+- 统一账号接入（弹窗登录、OIDC 客户端与回调、统一资料同步、个人中心「账号与安全」）已按 `c7bef49` 回退并冻结：本站恢复邮箱验证码 + 密码 + GitHub 登录。此项性能修复与认证无关，予以保留。
 
 ## [v0.3.1] - 2026-09-05
 

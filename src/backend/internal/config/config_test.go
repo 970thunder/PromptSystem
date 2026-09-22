@@ -48,7 +48,7 @@ func TestValidateRejectsDefaultRootPasswordInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret-0123456789abcdef",
+		JWTSecret:          "super-strong-secret",
 		MySQLPass:          "root",
 		AllowedOrigin:      "https://example.com",
 		GitHubClientID:     "id",
@@ -65,7 +65,7 @@ func TestValidateRejectsWildcardOriginInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret-0123456789abcdef",
+		JWTSecret:          "super-strong-secret",
 		MySQLPass:          "strong-password",
 		AllowedOrigin:      "*",
 		GitHubClientID:     "id",
@@ -82,7 +82,7 @@ func TestValidateRejectsMissingOAuthInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret-0123456789abcdef",
+		JWTSecret:          "super-strong-secret",
 		MySQLPass:          "strong-password",
 		AllowedOrigin:      "https://example.com",
 		GitHubClientID:     "",
@@ -100,13 +100,16 @@ func TestValidateAllowsDisabledOAuthInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret-0123456789abcdef",
+		JWTSecret:          "super-strong-secret",
 		MySQLPass:          "strong-password",
 		MySQLUser:          "promptos_app",
 		MySQLMigrationUser: "promptos_migrator",
 		MySQLMigrationPass: "migration-password",
 		RedisPass:          "redis-password",
 		AllowedOrigin:      "https://example.com",
+		SMTPHost:           "smtp.example.com",
+		SMTPPort:           "587",
+		SMTPFrom:           "noreply@example.com",
 		JWTExpireHours:     72,
 		UploadMaxMB:        10,
 	}
@@ -119,12 +122,15 @@ func TestValidateRejectsMissingRedisPasswordInProduction(t *testing.T) {
 	cfg := Config{
 		AppEnv:             "production",
 		Port:               "8080",
-		JWTSecret:          "super-strong-secret-0123456789abcdef",
+		JWTSecret:          "super-strong-secret",
 		MySQLPass:          "strong-password",
 		MySQLUser:          "promptos_app",
 		MySQLMigrationUser: "promptos_migrator",
 		MySQLMigrationPass: "migration-password",
 		AllowedOrigin:      "https://example.com",
+		SMTPHost:           "smtp.example.com",
+		SMTPPort:           "587",
+		SMTPFrom:           "noreply@example.com",
 		JWTExpireHours:     72,
 		UploadMaxMB:        10,
 	}

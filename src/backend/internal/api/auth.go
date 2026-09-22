@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
+	"mime"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,49 @@ import (
 type contextKey string
 
 const userContextKey contextKey = "userID"
+
+// maxPasswordBytes is the maximum password length accepted by the API. bcrypt
+// silently ignores input beyond its first 72 bytes, so we reject longer
+// passwords up front to avoid account enumeration via timing and to keep the
+// rule consistent between the API boundary and the store.
+const maxPasswordBytes = 72
+
+// resetGenericMessage is returned whether or not the target account exists so
+// the password-reset endpoint cannot be used to enumerate registered emails.
+const resetGenericMessage = "If the account exists, the password has been reset"
+
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type registerRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Captcha  string `json:"captcha"`
+}
+
+type captchaRequest struct {
+	Email string `json:"email"`
+}
+
+type resetPasswordRequest struct {
+	Email    string `json:"email"`
+	Captcha  string `json:"captcha"`
+	Password string `json:"password"`
+}
+
+type captchaResponse struct {
+	ExpiresInSeconds int    `json:"expiresInSeconds"`
+	DevCode          string `json:"devCode,omitempty"`
+}
+
+type updateUserRequest struct {
+	Username string `json:"username"`
+	Bio      string `json:"bio"`
+	Avatar   string `json:"avatar"`
+}
 
 type authResponse struct {
 	Token string            `json:"token,omitempty"`
@@ -45,6 +89,247 @@ type userDataExport struct {
 	History    []store.Prompt    `json:"history"`
 }
 
+func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload captchaRequest
+	if !s.enforceRateLimits(r.Context(), w, "captcha", rateLimitRule{bucket: rateLimitIP(r), limit: 5, window: 10 * time.Minute}) {
+		return
+	}
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if store.IsValidEmail(payload.Email) && !s.enforceRateLimits(r.Context(), w, "captcha", rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 1, window: captchaCooldown}) {
+		return
+	}
+
+	code, expiresAt, retryAfter, err := s.issueRedisCaptcha(r.Context(), payload.Email)
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidEmail) {
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
+			return
+		}
+
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "CAPTCHA_GENERATION_FAILED", Message: "Failed to generate captcha"})
+		return
+	}
+
+	if retryAfter > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+		writeJSON(w, http.StatusTooManyRequests, apiResponse[any]{Code: 429, ErrorCode: "RATE_LIMITED", Message: "Captcha was sent too frequently"})
+		return
+	}
+	if s.config.IsProduction() {
+		if s.emailSender == nil {
+			s.discardRedisCaptcha(r.Context(), payload.Email)
+			writeJSON(w, http.StatusServiceUnavailable, apiResponse[any]{Code: 503, Message: "Email service is not configured", ErrorCode: "EMAIL_NOT_CONFIGURED"})
+			return
+		}
+		if err := s.emailSender.Send(r.Context(), strings.TrimSpace(payload.Email), mime.QEncoding.Encode("utf-8", "PromptOS 邮箱验证码"), fmt.Sprintf("你的 PromptOS 验证码是 %s，10 分钟内有效。如非本人操作，请忽略本邮件。", code)); err != nil {
+			s.discardRedisCaptcha(r.Context(), payload.Email)
+			writeJSON(w, http.StatusBadGateway, apiResponse[any]{Code: 502, Message: "Failed to send captcha email", ErrorCode: "EMAIL_SEND_FAILED"})
+			return
+		}
+	}
+
+	response := captchaResponse{
+		ExpiresInSeconds: int(timeUntil(expiresAt).Seconds()),
+	}
+	if s.config.IsDevelopment() || s.config.IsTest() {
+		response.DevCode = code
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[captchaResponse]{
+		Code:    200,
+		Message: "Success",
+		Data:    response,
+	})
+}
+
+func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload loginRequest
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "login",
+		rateLimitRule{bucket: rateLimitIP(r), limit: 10, window: time.Minute},
+		rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 5, window: 15 * time.Minute}) {
+		return
+	}
+	if len(payload.Password) > maxPasswordBytes {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password is too long", ErrorCode: "INVALID_PASSWORD"})
+		return
+	}
+
+	user, err := s.getAuthService().Authenticate(payload.Email, payload.Password)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_INVALID_CREDENTIALS", Message: "Invalid email or password"})
+		return
+	}
+
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Token generation failed"})
+		return
+	}
+
+	s.setAuthCookie(w, token)
+	writeJSON(w, http.StatusOK, apiResponse[authResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: authResponse{
+			Token: s.authResponseToken(token),
+			User:  store.ToPrivateUser(user),
+		},
+	})
+}
+
+func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload resetPasswordRequest
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "password_reset",
+		rateLimitRule{bucket: rateLimitIP(r), limit: 5, window: 10 * time.Minute},
+		rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 5, window: 15 * time.Minute}) {
+		return
+	}
+	if len(payload.Password) > maxPasswordBytes {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password is too long", ErrorCode: "INVALID_PASSWORD"})
+		return
+	}
+
+	if strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_REQUEST", Message: "Email and password are required"})
+		return
+	}
+
+	if !store.IsValidEmail(payload.Email) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
+		return
+	}
+
+	if !s.verifyRedisCaptcha(r.Context(), payload.Email, payload.Captcha) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_CAPTCHA", Message: "Invalid or expired captcha"})
+		return
+	}
+
+	if err := s.getAuthService().ResetPassword(payload.Email, payload.Password); err != nil {
+		switch {
+		case errors.Is(err, store.ErrUserNotFound):
+			// Deliberately return the same non-revealing success whether the
+			// account exists or not so the endpoint cannot be used to enumerate
+			// registered emails via the reset flow.
+			writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: resetGenericMessage})
+		case errors.Is(err, store.ErrInvalidEmail):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
+		case errors.Is(err, store.ErrWeakPassword):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "WEAK_PASSWORD", Message: "Password must be at least 8 characters"})
+		case errors.Is(err, store.ErrPasswordTooLong):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_PASSWORD", Message: "Password must be 72 bytes or fewer"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Reset password failed"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: resetGenericMessage})
+}
+
+func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	var payload registerRequest
+	if err := decodeJSON(r, &payload); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	if !s.enforceRateLimits(r.Context(), w, "register",
+		rateLimitRule{bucket: rateLimitIP(r), limit: 5, window: 10 * time.Minute},
+		rateLimitRule{bucket: rateLimitEmail(payload.Email), limit: 3, window: time.Hour}) {
+		return
+	}
+	if len(payload.Password) > maxPasswordBytes {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Password is too long", ErrorCode: "INVALID_PASSWORD"})
+		return
+	}
+
+	if strings.TrimSpace(payload.Username) == "" || strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_REQUEST", Message: "Username, email, and password are required"})
+		return
+	}
+
+	if !store.IsValidEmail(payload.Email) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
+		return
+	}
+
+	if !s.verifyRedisCaptcha(r.Context(), payload.Email, payload.Captcha) {
+		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_CAPTCHA", Message: "Invalid or expired captcha"})
+		return
+	}
+
+	user, err := s.getAuthService().Register(payload.Username, payload.Email, payload.Password)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrUserExists):
+			writeJSON(w, http.StatusConflict, apiResponse[any]{Code: 409, ErrorCode: "USER_EXISTS", Message: "Email already registered"})
+		case errors.Is(err, store.ErrInvalidEmail):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_EMAIL", Message: "Invalid email address"})
+		case errors.Is(err, store.ErrWeakPassword):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "WEAK_PASSWORD", Message: "Password must be at least 8 characters"})
+		case errors.Is(err, store.ErrPasswordTooLong):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_PASSWORD", Message: "Password must be 72 bytes or fewer"})
+		case errors.Is(err, store.ErrInvalidUser):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_USER", Message: "Username is invalid"})
+		case errors.Is(err, store.ErrInvalidContent):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_CONTENT", Message: "Profile contains invalid characters"})
+		case errors.Is(err, store.ErrContentTooLong):
+			writeJSON(w, http.StatusRequestEntityTooLarge, apiResponse[any]{Code: http.StatusRequestEntityTooLarge, ErrorCode: "CONTENT_TOO_LONG", Message: "Profile field is too long"})
+		case errors.Is(err, store.ErrUnsafeContent):
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "UNSAFE_CONTENT", Message: "Profile does not meet platform safety rules"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Register failed"})
+		}
+		return
+	}
+
+	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, ErrorCode: "INTERNAL_ERROR", Message: "Token generation failed"})
+		return
+	}
+
+	s.setAuthCookie(w, token)
+	writeJSON(w, http.StatusOK, apiResponse[authResponse]{
+		Code:    200,
+		Message: "Success",
+		Data: authResponse{
+			Token: s.authResponseToken(token),
+			User:  store.ToPrivateUser(user),
+		},
+	})
+}
+
 func timeUntil(target time.Time) time.Duration {
 	remaining := time.Until(target)
 	if remaining < 0 {
@@ -68,8 +353,6 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, apiResponse[any]{Code: 404, Message: "User not found"})
 			return
 		}
-		// 昵称与头像由 isoumao 身份中心权威维护：读取时按秒级节流同步展示副本。
-		user = s.syncUnifiedProfile(r.Context(), user)
 
 		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
@@ -77,11 +360,22 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			Data:    store.ToPrivateUser(user),
 		})
 	case http.MethodPut:
-		// 资料（昵称、头像）已统一到身份中心，本站不再提供任何资料编辑入口。
-		writeJSON(w, http.StatusForbidden, apiResponse[any]{
-			Code:      403,
-			ErrorCode: "PROFILE_MANAGED_BY_IDENTITY",
-			Message:   "昵称与头像由 isoumao 统一账号维护，请在 https://id.isoumao.cn/profile/ 修改。",
+		var payload updateUserRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, Message: "Invalid request body"})
+			return
+		}
+
+		user, err := s.getAuthService().UpdateProfile(userID, payload.Username, payload.Bio, payload.Avatar)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
+			Code:    200,
+			Message: "Success",
+			Data:    store.ToPrivateUser(user),
 		})
 	default:
 		writeMethodNotAllowed(w)
@@ -187,43 +481,8 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 单点登出：清本站会话，同时给出身份中心的结束会话地址。
-	logoutURL := s.oidcEndSessionURL(r, idTokenHintFromRequest(r))
-	http.SetCookie(w, &http.Cookie{Name: "promptos_id_token_hint", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.authCookieSecure(), SameSite: http.SameSiteLaxMode})
 	clearSessionCookies(w, s.authCookieSecure())
-	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success", Data: map[string]any{"logoutUrl": logoutURL}})
-}
-
-// idTokenHintFromRequest 读取登录时保存的 id_token，用于 RP 发起的单点登出。
-func idTokenHintFromRequest(r *http.Request) string {
-	cookie, err := r.Cookie("promptos_id_token_hint")
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
-}
-
-// oidcEndSessionURL 组装身份中心结束会话地址；未配置或不可达时返回空串，仅结束本站会话。
-func (s *server) oidcEndSessionURL(r *http.Request, idTokenHint string) string {
-	if !s.oidcConfigured() {
-		return ""
-	}
-	disc, err := s.loadOIDCDiscovery(r.Context())
-	if err != nil || disc.EndSessionEndpoint == "" {
-		if err != nil {
-			log.Printf("oidc discovery for logout failed: %v", err)
-		}
-		return ""
-	}
-	params := url.Values{}
-	params.Set("client_id", s.config.OIDCClientID)
-	if idTokenHint != "" {
-		params.Set("id_token_hint", idTokenHint)
-	}
-	if frontend := strings.TrimRight(s.config.FrontendURL, "/"); frontend != "" {
-		params.Set("post_logout_redirect_uri", frontend)
-	}
-	return disc.EndSessionEndpoint + "?" + params.Encode()
+	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: "Success"})
 }
 
 func (s *server) handleUserFavorites(w http.ResponseWriter, r *http.Request) {
@@ -505,17 +764,6 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		// Reject tokens issued before the user's last password reset: the
 		// session version is incremented on reset to revoke every old token.
 		if claims.SessionVersion != userRecord.SessionVer {
-			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
-				Code:      401,
-				Message:   "Token has been revoked",
-				ErrorCode: "AUTH_TOKEN_REVOKED",
-			})
-			return
-		}
-
-		// 登出会把 JTI 写入吊销名单；这里必须回源检查，否则登出只清了浏览器
-		// Cookie，被复制的令牌在自然过期前仍然可用。
-		if revoked, err := s.getAuthService().IsTokenRevoked(r.Context(), claims.JTI); err == nil && revoked {
 			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 				Code:      401,
 				Message:   "Token has been revoked",

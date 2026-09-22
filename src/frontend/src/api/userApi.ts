@@ -1,16 +1,32 @@
 import request from '@/utils/request'
 import type {
   ApiResponse,
-  AuthExchangeResponse,
+  CaptchaResponse,
   FollowActionResponse,
   FollowStatus,
+  LoginRequest,
+  LoginResponse,
   PageResponse,
   Prompt,
+  RegisterRequest,
+  ResetPasswordRequest,
   User,
   UserDataExport
 } from '@/types'
 
 export const userApi = {
+  login(data: LoginRequest): Promise<ApiResponse<LoginResponse>> {
+    return request.post('/user/login', data)
+  },
+
+  register(data: RegisterRequest): Promise<ApiResponse<LoginResponse>> {
+    return request.post('/user/register', data)
+  },
+
+  resetPassword(data: ResetPasswordRequest): Promise<ApiResponse<null>> {
+    return request.post('/user/password/reset', data)
+  },
+
   getUserInfo(): Promise<ApiResponse<User>> {
     return request.get('/user/info', { promptosSilent: true })
   },
@@ -25,6 +41,10 @@ export const userApi = {
 
   deleteAccount(): Promise<ApiResponse<{ deleted: boolean }>> {
     return request.delete('/user/account')
+  },
+
+  updateUserInfo(data: Partial<User>): Promise<ApiResponse<User>> {
+    return request.put('/user/info', data)
   },
 
   getFavoritePrompts(): Promise<ApiResponse<Prompt[]>> {
@@ -63,7 +83,11 @@ export const userApi = {
     return request.post('/user/logout')
   },
 
-  exchangeGithubCode(code: string): Promise<ApiResponse<AuthExchangeResponse>> {
+  exchangeGithubCode(code: string): Promise<ApiResponse<LoginResponse>> {
     return request.post('/auth/exchange', { code })
+  },
+
+  sendCaptcha(email: string): Promise<ApiResponse<CaptchaResponse>> {
+    return request.post('/user/captcha', { email })
   }
 }

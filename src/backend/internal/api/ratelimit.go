@@ -114,16 +114,13 @@ func writeRateLimitResult(w http.ResponseWriter, ok bool, retryAfter time.Durati
 	return false
 }
 
-// clientIP extracts the best-effort client IP for rate limiting. The only
-// trusted hop is the same-host nginx reverse proxy, which APPENDS the address
-// it observed to X-Forwarded-For - so the right-most entry is the only one a
-// client cannot forge. Left-most entries are client-controlled and ignored.
+// clientIP extracts the best-effort client IP, preferring X-Forwarded-For when
+// present (single first hop) and falling back to RemoteAddr.
 func clientIP(r *http.Request) string {
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		last := strings.TrimSpace(parts[len(parts)-1])
-		if last != "" {
-			return last
+		first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+		if first != "" {
+			return first
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

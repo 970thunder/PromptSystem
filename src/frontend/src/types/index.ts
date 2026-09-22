@@ -112,10 +112,34 @@ export interface UserDataExport {
   history: Prompt[]
 }
 
-export interface AuthExchangeResponse {
+// Request types
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
+  captcha: string
+}
+
+export interface ResetPasswordRequest {
+  email: string
+  password: string
+  captcha: string
+}
+
+export interface LoginResponse {
   /** Legacy bearer clients may receive a token; browser sessions use a cookie. */
   token?: string
   user: User
+}
+
+export interface CaptchaResponse {
+  expiresInSeconds: number
+  devCode?: string
 }
 
 export interface UploadImageResponse {
