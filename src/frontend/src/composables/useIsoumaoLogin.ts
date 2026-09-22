@@ -5,13 +5,21 @@ import { identityCenterBase } from '@/utils/authUrl'
 const WIDGET_SCRIPT_ID = 'isoumao-login-widget'
 
 interface IsoumaoLoginWidget {
-  open: (options: { loginUrl: string; origin: string; description?: string; onSuccess?: () => void }) => void
+  open: (options: {
+    loginUrl: string
+    origins: string[]
+    fallbackUrl?: string
+    description?: string
+    onSuccess?: () => void
+    onError?: (message: string) => void
+  }) => void
 }
 
 interface OpenLoginOptions {
   loginUrl: string
   onSuccess: () => void | Promise<void>
   description?: string
+  fallbackUrl?: string
 }
 
 function ensureWidgetLoaded(): Promise<IsoumaoLoginWidget> {
@@ -44,11 +52,13 @@ function ensureWidgetLoaded(): Promise<IsoumaoLoginWidget> {
 export function useIsoumaoLogin() {
   async function openLoginDialog(options: OpenLoginOptions) {
     const widget = await ensureWidgetLoaded()
-    // 回调收尾页由本站 API 源返回，postMessage 的消息来源即 API 源。
+    // 回调收尾页由本站 API 源返回；本地开发时页面与 API 不同源，两者都登记。
     const apiOrigin = new URL(options.loginUrl, window.location.origin).origin
+    const origins = Array.from(new Set([apiOrigin, window.location.origin]))
     widget.open({
       loginUrl: options.loginUrl,
-      origin: apiOrigin,
+      origins,
+      fallbackUrl: options.fallbackUrl ?? options.loginUrl,
       description: options.description,
       onSuccess: () => { void options.onSuccess() }
     })

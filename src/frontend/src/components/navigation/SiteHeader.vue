@@ -95,7 +95,7 @@ const currentEntry = computed<NavEntry | null>(() => {
 const userInitial = computed(() => userStore.userInfo?.username?.slice(0, 1)?.toUpperCase() ?? 'U')
 const oidcLoginUrl = computed(() => `${oidcAuthUrl()}?returnTo=${encodeURIComponent(route.fullPath)}`)
 const { openLoginDialog } = useIsoumaoLogin()
-// 弹窗式统一登录：不离开当前页面。
+// 页面内弹窗式统一登录：不离开当前页面；组件不可用时退回整页登录。
 async function openLogin() {
   try {
     await openLoginDialog({
@@ -103,7 +103,6 @@ async function openLogin() {
       onSuccess: async () => { await userStore.restoreSession() }
     })
   } catch {
-    // 组件不可用（身份中心离线等）时退回整页跳转，保证仍能登录。
     window.location.href = oidcLoginUrl.value
   }
 }
@@ -222,7 +221,7 @@ onBeforeUnmount(() => {
       <div class="site-header__right">
         <ThemeToggle />
         <button v-if="!userStore.isLoggedIn && oidcEnabled" class="header-avatar" type="button" aria-label="登录 isoumao" @click="openLogin"><UserRound :size="18" /></button>
-        <details v-else-if="userStore.isLoggedIn" class="identity-menu"><summary class="header-avatar" :aria-label="`打开 ${userStore.userInfo?.username ?? '个人'} 账户菜单`">{{ userInitial }}<ChevronDown :size="12" /></summary><nav><strong>{{ userStore.userInfo?.username }}</strong><a :href="`${identityCenterBase}/profile/`">个人中心</a><RouterLink to="/profile">我的数据</RouterLink><RouterLink to="/community">站内信</RouterLink><hr><a :href="communityBase">社区</a><a :href="nebulaBase">博客</a><button type="button" @click="handleLogout">退出</button></nav></details>
+        <details v-else-if="userStore.isLoggedIn" class="identity-menu"><summary class="header-avatar" :aria-label="`打开 ${userStore.userInfo?.username ?? '个人'} 账户菜单`">{{ userInitial }}<ChevronDown :size="12" /></summary><nav><strong>{{ userStore.userInfo?.username }}</strong><RouterLink to="/profile">个人中心</RouterLink><RouterLink to="/community">站内信</RouterLink><a :href="`${identityCenterBase}/profile/`" target="_blank" rel="noopener noreferrer">统一资料与密码</a><hr><a :href="communityBase">社区</a><a :href="nebulaBase">博客</a><button type="button" @click="handleLogout">退出</button></nav></details>
       </div>
     </div>
 

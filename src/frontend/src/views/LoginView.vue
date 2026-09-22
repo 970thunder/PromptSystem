@@ -29,6 +29,8 @@ async function openLogin() {
     })
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '登录组件加载失败'
+    // 组件不可用（身份中心离线、被浏览器拦截）时退回整页登录，保证仍能完成登录。
+    window.location.replace(loginUrl.value)
   }
 }
 

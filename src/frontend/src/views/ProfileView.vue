@@ -2,13 +2,13 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
-import { Download, Eraser, Shield, UserRoundX } from 'lucide-vue-next'
+import { Download, Eraser, Github, KeyRound, LogOut, Shield, UserRoundX } from 'lucide-vue-next'
 import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import type { FollowStatus, Prompt, User } from '@/types'
-import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
+import { githubAuthUrl, githubOAuthEnabled, identityCenterBase } from '@/utils/authUrl'
 import { isDisplayableCover, resolveMediaUrl } from '@/utils/mediaUrl'
 import BackButton from '@/components/navigation/BackButton.vue'
 import AppShell from '@/components/layout/AppShell.vue'
@@ -389,6 +389,12 @@ const handleExportData = async () => {
   }
 }
 
+// 个人中心退出登录：结束本站会话并回到首页；统一账号的 SSO 会话由身份中心管理。
+const handleLogout = async () => {
+  await userStore.logoutServer()
+  await router.push('/')
+}
+
 const handleClearHistory = () => {
   if (!isOwnerView.value || clearingHistory.value) {
     return
@@ -612,6 +618,66 @@ watch(() => route.params.userId, loadProfile)
                   @click="handleSaveProfile"
                 >
                   {{ savingProfile ? '保存中...' : '保存资料' }}
+                </button>
+              </div>
+            </section>
+
+            <section
+              v-if="isOwnerView"
+              class="profile-card"
+              data-testid="profile-security"
+            >
+              <div class="profile-card__title">
+                账号与安全
+              </div>
+              <dl class="profile-security">
+                <div>
+                  <dt>登录方式</dt>
+                  <dd>isoumao 统一账号（本站不保存密码，邮箱验证由身份中心负责）</dd>
+                </div>
+                <div>
+                  <dt>GitHub</dt>
+                  <dd>{{ githubOAuthEnabled ? '用于资料校验与绑定，不作为登录入口' : '未开放' }}</dd>
+                </div>
+                <div>
+                  <dt>本站数据</dt>
+                  <dd>提示词、收藏、点赞、浏览记录与草稿保存在 PromptOS，可在此导出或清理</dd>
+                </div>
+              </dl>
+              <div class="profile-account-actions">
+                <a
+                  v-if="githubOAuthEnabled"
+                  class="profile-account-action"
+                  :href="githubAuthUrl()"
+                >
+                  <Github
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  绑定 GitHub
+                </a>
+                <a
+                  class="profile-account-action"
+                  :href="`${identityCenterBase}/profile/`"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <KeyRound
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  统一资料与密码
+                </a>
+                <button
+                  type="button"
+                  class="profile-account-action"
+                  @click="handleLogout"
+                >
+                  <LogOut
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                  退出登录
                 </button>
               </div>
             </section>
@@ -986,6 +1052,28 @@ watch(() => route.params.userId, loadProfile)
 .profile-account-actions {
   display: grid;
   gap: 8px;
+}
+
+.profile-security {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.profile-security div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.profile-security dt {
+  color: var(--prompt-text-faint, #6b7280);
+}
+
+.profile-security dd {
+  margin: 0;
 }
 
 .profile-account-action {

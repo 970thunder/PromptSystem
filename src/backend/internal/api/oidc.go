@@ -485,8 +485,11 @@ const oidcPopupPage = `<!DOCTYPE html>
 <script>
 (function () {
   var payload = __PAYLOAD__;
-  try { if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, __ORIGIN__); } } catch (error) {}
-  if (payload.status === 'ok') { window.close(); }
+  // 页面内嵌登录：优先把结果回传给承载本站页面的 iframe 父窗口；
+  // 独立窗口场景保留 window.opener，保持两种入口都能收到结果。
+  var target = window.parent && window.parent !== window ? window.parent : (window.opener && !window.opener.closed ? window.opener : null);
+  try { if (target) { target.postMessage(payload, __ORIGIN__); } } catch (error) {}
+  if (window.parent === window && payload.status === 'ok') { window.close(); }
 })();
 </script>
 </body>
