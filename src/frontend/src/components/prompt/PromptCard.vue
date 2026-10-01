@@ -38,7 +38,7 @@ const coverUrl = computed(() => {
   if (isDisplayableCover(props.prompt.cover)) {
     return resolveMediaUrl(props.prompt.cover)
   }
-  return fallbackCoverUrl(props.prompt.id)
+  return fallbackCoverUrl(props.prompt.id, props.prompt.title)
 })
 
 const imageFailed = ref(false)

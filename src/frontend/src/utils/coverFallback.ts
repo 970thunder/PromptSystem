@@ -1,17 +1,42 @@
-// 文件作用：封面缺失或不可显示时的确定性回退图池。按稳定种子（如提示词 id）
-// 取图，保证同一条内容刷新后仍显示同一张占位图；PromptCard 与首页大屏共用。
-export const FALLBACK_COVER_URLS = [
-  'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'
+// 文件作用：封面缺失或不可显示时的确定性字卡兜底。
+// 用本地 SVG data URI（品牌色渐变 + 标题首字），无外链依赖，弱网/国内外网络均可即时渲染；
+// 同一内容按 id 稳定取色，刷新后不变。PromptCard 与首页大屏共用。
+
+const COVER_PALETTES: Array<[string, string]> = [
+  ['#1d4ed8', '#38bdf8'],
+  ['#0f766e', '#34d399'],
+  ['#7c3aed', '#c4b5fd'],
+  ['#b45309', '#fcd34d'],
+  ['#be185d', '#f9a8d4'],
+  ['#334155', '#94a3b8']
 ]
 
-export function fallbackCoverUrl(seed: number): string {
-  if (!Number.isFinite(seed) || seed < 0) {
-    return FALLBACK_COVER_URLS[0]
+const escapeXml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&apos;')
+
+// 字卡主字取标题前两个字符；空标题回退为产品首字母。
+export function fallbackCoverGlyph(title: string | null | undefined): string {
+  const trimmed = (title ?? '').trim()
+  if (!trimmed) {
+    return 'P'
   }
-  return FALLBACK_COVER_URLS[seed % FALLBACK_COVER_URLS.length]
+  return Array.from(trimmed).slice(0, 2).join('')
+}
+
+export function fallbackCoverUrl(seed: number, title?: string | null): string {
+  const index = Number.isFinite(seed) ? Math.abs(Math.floor(seed)) : 0
+  const [from, to] = COVER_PALETTES[index % COVER_PALETTES.length]
+  const glyph = escapeXml(fallbackCoverGlyph(title))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">`
+    + `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">`
+    + `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>`
+    + `</linearGradient></defs>`
+    + `<rect width="1200" height="900" fill="url(#g)"/>`
+    + `<text x="600" y="520" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="340" font-weight="700" fill="rgba(255,255,255,0.85)" text-anchor="middle">${glyph}</text>`
+    + `</svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }

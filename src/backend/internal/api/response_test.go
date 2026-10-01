@@ -39,3 +39,23 @@ func TestErrorResponseGetsDefaultErrorCode(t *testing.T) {
 		t.Fatalf("errorCode = %q, want NOT_FOUND", payload.ErrorCode)
 	}
 }
+
+func TestPageResponseMarshalNilListAsEmptyArray(t *testing.T) {
+	payload, err := json.Marshal(pageResponse[store.Prompt]{
+		List:     nil,
+		Total:    0,
+		Page:     1,
+		PageSize: 12,
+	})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	body := string(payload)
+	if strings.Contains(body, `"list":null`) {
+		t.Fatalf("nil list must serialize as [], got %s", body)
+	}
+	if !strings.Contains(body, `"list":[]`) {
+		t.Fatalf("expected empty list array in page response, got %s", body)
+	}
+}

@@ -191,12 +191,11 @@ test.describe('PromptOS F-10 flows', () => {
     await expect(page.getByRole('button', { name: '点赞 · 894' })).toBeVisible()
   })
 
-  test('publish wizard uploads a cover and creates a prompt', async ({ page }, testInfo) => {
+  test('publish wizard creates a prompt without requiring a cover', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === 'mobile', 'publish wizard exercised on desktop')
     await mockSignedIn(page)
 
     let createPayload: Record<string, unknown> | null = null
-    await page.route('**/api/v1/uploads/images', (route) => route.fulfill(ok({ url: '/uploads/e2e-cover.png' })))
     await page.route('**/api/v1/prompts', async (route: Route) => {
       if (route.request().method() === 'POST') {
         createPayload = route.request().postDataJSON()
@@ -206,29 +205,28 @@ test.describe('PromptOS F-10 flows', () => {
     })
 
     await page.goto('/publish')
-    await page.locator('.publish-cover-pane input[type="file"]').first().setInputFiles({
-      name: 'cover.png',
-      mimeType: 'image/png',
-      buffer: coverPng
-    })
-    await expect(page.getByText('封面已就绪，可进入下一步')).toBeVisible()
+    // 第一步是提示词正文：先写内容，再补元信息
+    await expect(page.getByRole('heading', { name: '提示词正文', exact: true })).toBeVisible()
+    await page.getByPlaceholder('输入主提示词；JSON 模式可一键格式化').fill('You are an e2e smoke test prompt.')
     await page.getByRole('button', { name: '下一步' }).click()
 
     await page.getByPlaceholder('例如：电影感产品海报生成器').fill('E2E 发布测试提示词')
     await page.getByPlaceholder('说明使用场景、风格与预期输出').fill('验证发布向导的端到端流程。')
     await page.locator('.n-select').first().click()
     await page.locator('.n-base-select-menu').getByText('摄影', { exact: true }).click()
-    await page.getByPlaceholder('Midjourney v6 / SDXL / DALL·E 3').fill('GPT-4.1')
+    await page.getByPlaceholder('例如 GPT-4o、Claude、Gemini、Midjourney v6').fill('GPT-4.1')
     await page.getByRole('button', { name: '下一步' }).click()
 
-    await page.getByPlaceholder('输入主提示词；JSON 模式可一键格式化').fill('You are an e2e smoke test prompt.')
+    // 封面步骤可跳过：不上传也能继续，提交后由展示层生成标题字卡
+    await expect(page.getByRole('heading', { name: '封面（可选）', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '下一步' }).click()
+    await expect(page.getByRole('heading', { name: '参数与标签', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '下一步' }).click()
 
     await page.getByRole('button', { name: '发布提示词' }).click()
     await expect(page.getByText('提示词已发布')).toBeVisible({ timeout: 10_000 })
     expect(createPayload).toMatchObject({ title: 'E2E 发布测试提示词', categoryId: 1, model: 'GPT-4.1' })
-    expect((createPayload as { cover?: string } | null)?.cover).toBe('/uploads/e2e-cover.png')
+    expect((createPayload as { cover?: string } | null)?.cover).toBe('')
   })
 
   test('workspace switches between library tabs', async ({ page }, testInfo) => {
@@ -313,12 +311,12 @@ test.describe('PromptOS F-10 flows', () => {
     await expect(page).toHaveURL(/\/publish\?edit=101/)
     await expect(page.getByPlaceholder('例如：电影感产品海报生成器')).toHaveValue('Brand Poster Prompt Builder', { timeout: 10_000 })
 
-    // 编辑模式从封面步开始：已带封面，直接进入基本信息步
+    // 编辑模式从提示词步开始：依次经过基本信息、封面（可选）、参数与标签
     await page.getByRole('button', { name: '下一步' }).click()
     await expect(page.getByRole('heading', { name: '基本信息', exact: true })).toBeVisible()
     await page.getByPlaceholder('例如：电影感产品海报生成器').fill('Brand Poster Prompt Builder v2')
     await page.getByRole('button', { name: '下一步' }).click()
-    await expect(page.getByRole('heading', { name: '提示词正文', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '封面（可选）', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '下一步' }).click()
     await expect(page.getByRole('heading', { name: '参数与标签', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '下一步' }).click()

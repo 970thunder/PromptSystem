@@ -1006,9 +1006,7 @@ func validatePromptPayload(payload promptPayload) string {
 	if strings.TrimSpace(payload.Description) == "" {
 		return "Description is required"
 	}
-	if strings.TrimSpace(payload.Cover) == "" {
-		return "Cover image is required"
-	}
+	// 封面可选：展示层会为无封面的提示词自动生成标题字卡。
 	if strings.TrimSpace(payload.Content) == "" {
 		return "Prompt content is required"
 	}

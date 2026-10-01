@@ -127,6 +127,23 @@ describe('prompt store comments pagination', () => {
     expect(store.searchLoading).toBe(false)
   })
 
+  it('treats a null search list as an empty result instead of breaking render', async () => {
+    // 旧后端对空结果返回 list:null；这里必须归一为 []，否则空态页永远无法渲染。
+    vi.spyOn(promptApi, 'searchPrompts').mockResolvedValueOnce({
+      code: 200,
+      message: 'Success',
+      data: { list: null as unknown as ReturnType<typeof prompt>[], total: 0, page: 1, pageSize: 24 }
+    })
+
+    const store = usePromptStore()
+    await store.searchPrompts({ keyword: '图像', page: 1, pageSize: 24 })
+
+    expect(store.searchResults).toEqual([])
+    expect(store.searchTotal).toBe(0)
+    expect(store.searchError).toBe('')
+    expect(store.searchLoading).toBe(false)
+  })
+
   it('uses deterministic search fixtures when the prompt API is disabled', async () => {
     vi.stubEnv('VITE_ENABLE_PROMPT_API', 'false')
     const search = vi.spyOn(promptApi, 'searchPrompts')

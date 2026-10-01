@@ -2,7 +2,7 @@
      「今日精选」大屏展示（1 张大卡 + 2 张横排小卡）、「最新发布」卡片网格（支持
      加载更多）、分类/标签发现入口与发布引导。所有内容均来自实时服务（测试环境除外）。 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { usePromptStore } from '@/stores/prompt'
@@ -22,60 +22,56 @@ const searchKeyword = ref('')
 const categoryExpanded = ref(false)
 const collapsedCategoryCount = 14
 
-// 大屏展示取信息流前三条：1 张主卡 + 2 张小卡；最新发布网格展示其余内容。
-const featured = computed(() => promptStore.prompts[0] ?? null)
-const sideFeatures = computed(() => promptStore.prompts.slice(1, 3))
-const latestPrompts = computed(() => promptStore.prompts.slice(3))
+// 精选只从有真实互动（赞/藏/浏览）的内容中选取，主卡 + 侧卡同一标准；
+// 没有足够有互动的内容时整个板块隐藏，避免把最新内容包装成「精选」。
+const hasEngagement = (prompt: { likes: number; views: number; favorites: number }) =>
+  prompt.likes > 0 || prompt.views > 0 || prompt.favorites > 0
+const engagedPrompts = computed(() => promptStore.prompts.filter(hasEngagement))
+const featured = computed(() => engagedPrompts.value[0] ?? null)
+const sideFeatures = computed(() => engagedPrompts.value.slice(1, 3))
+const showFeatured = computed(() => !!featured.value)
+const latestPrompts = computed(() => {
+  if (!featured.value) {
+    return promptStore.prompts
+  }
+  const featuredIds = new Set([featured.value.id, ...sideFeatures.value.map((item) => item.id)])
+  return promptStore.prompts.filter((item) => !featuredIds.has(item.id))
+})
 
-const resolveCover = (prompt: { id: number; cover: string }) =>
-  isDisplayableCover(prompt.cover) ? resolveMediaUrl(prompt.cover) : fallbackCoverUrl(prompt.id)
+const resolveCover = (prompt: { id: number; cover: string; title: string }) =>
+  isDisplayableCover(prompt.cover) ? resolveMediaUrl(prompt.cover) : fallbackCoverUrl(prompt.id, prompt.title)
 
 const featuredCover = computed(() => (featured.value ? resolveCover(featured.value) : ''))
 
-const shuffle = <T,>(items: T[]) => {
-  const shuffled = [...items]
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1))
-    const current = shuffled[index]
-    shuffled[index] = shuffled[swapIndex]
-    shuffled[swapIndex] = current
-  }
-  return shuffled
-}
-
-type HeroTitle = { id: number; title: string; cover: string }
-
-const heroTitles = ref<HeroTitle[]>([])
-const heroSourceKey = computed(() => promptStore.prompts
-  .map((prompt) => `${prompt.id}:${prompt.title}:${prompt.cover}`)
-  .join('\u001f'))
-
-// 只在信息流真正变化时抽样一次。把 Math.random 放进 computed 会在任意
-// 计数/主题更新时换序，CSS 轨道因此被重排并出现视觉抽搐。
-const refreshHeroTitles = () => {
-  const prompts = promptStore.prompts.filter((prompt) => prompt.title.trim())
-  heroTitles.value = shuffle(prompts.map((prompt) => ({
-    id: prompt.id,
-    title: prompt.title.trim(),
-    cover: resolveCover(prompt)
-  })))
-    .slice(0, 8)
-}
-
-watch(heroSourceKey, refreshHeroTitles, { immediate: true })
+// 首屏飘带是纯装饰：使用静态词表，不引用线上内容，
+// 避免测试/垃圾数据泄漏到品牌首屏，也让轨道内容稳定不抽搐。
+const HERO_DECOR_WORDS = [
+  '写一份周报总结',
+  'SaaS 落地页文案',
+  'Code Review 助手',
+  '短视频脚本工厂',
+  '客服 SOP 工作流',
+  '品牌海报提示词',
+  '研究资料拆解',
+  'SQL 查询优化',
+  '小红书种草文案',
+  '产品需求 PRD 初稿',
+  '面试模拟官',
+  '周计划生成器'
+]
 
 const heroTitleRows = computed(() => {
-  const rows: Array<{ items: Array<{ id: number; title: string; cover: string }>; duration: number }> = []
-  const titlePool = heroTitles.value
-  if (!titlePool.length) {
+  const rows: Array<{ items: Array<{ id: number; word: string }>; duration: number }> = []
+  if (!HERO_DECOR_WORDS.length) {
     return rows
   }
 
-  // 用已有标题循环铺满首屏，保持每条轨道内容顺序略有变化。
+  // 循环铺满首屏，每条轨道内容顺序略有变化。
   for (let rowIndex = 0; rowIndex < 9; rowIndex += 1) {
-    const items = Array.from({ length: 3 }, (_, itemIndex) =>
-      titlePool[(rowIndex * 2 + itemIndex) % titlePool.length],
-    )
+    const items = Array.from({ length: 3 }, (_, itemIndex) => {
+      const index = (rowIndex * 2 + itemIndex) % HERO_DECOR_WORDS.length
+      return { id: index, word: HERO_DECOR_WORDS[index] }
+    })
     rows.push({
       items,
       duration: 24 + ((rowIndex * 7) % 19)
@@ -147,18 +143,11 @@ onMounted(() => {
                 >
                   <div class="home-hero__title-sequence">
                     <span
-                      v-for="prompt in row.items"
-                      :key="`${pass}-${prompt.id}`"
+                      v-for="item in row.items"
+                      :key="`${pass}-${item.id}`"
                       class="home-hero__title-item"
                     >
-                      <img
-                        :src="prompt.cover"
-                        alt=""
-                        class="home-hero__title-cover"
-                        loading="lazy"
-                        decoding="async"
-                      >
-                      <span>{{ prompt.title }}</span>
+                      <span>{{ item.word }}</span>
                     </span>
                   </div>
                 </template>
@@ -225,8 +214,9 @@ onMounted(() => {
           aria-hidden="true"
         >
 
-        <!-- 今日精选：1 张主卡 + 2 张横排小卡 -->
+        <!-- 今日精选：1 张主卡 + 2 张横排小卡；主卡无互动时不渲染，避免假精选 -->
         <section
+          v-if="promptStore.loading || promptStore.feedError || showFeatured"
           class="home-showcase"
           aria-labelledby="home-showcase-title"
         >
@@ -268,7 +258,7 @@ onMounted(() => {
           />
 
           <div
-            v-else-if="featured"
+            v-else-if="showFeatured && featured"
             class="home-showcase__grid"
             :class="{ 'home-showcase__grid--with-side': sideFeatures.length > 0 }"
           >
@@ -643,16 +633,6 @@ onMounted(() => {
   transform: translateZ(18px) rotateZ(-2deg);
   transform-style: preserve-3d;
   text-shadow: 0 2px 0 rgba(17, 17, 17, 0.08);
-}
-
-.home-hero__title-cover {
-  @apply h-12 w-20 shrink-0 object-cover sm:h-16 sm:w-28;
-  border-radius: 5px;
-  opacity: 0.82;
-  filter: saturate(0.78) contrast(0.92);
-  box-shadow: 0 10px 22px rgba(17, 17, 17, 0.16);
-  transform: rotateY(-10deg) translateZ(8px);
-  transform-style: preserve-3d;
 }
 
 @keyframes home-title-marquee {

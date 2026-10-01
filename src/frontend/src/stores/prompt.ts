@@ -353,14 +353,16 @@ export const usePromptStore = defineStore('prompt', () => {
       const response = await promptApi.searchPrompts(params, controller.signal)
       if (controller.signal.aborted || requestID !== searchRequestID) return null
 
+      // 旧后端可能返回 list:null（空结果），按数组消费，避免渲染层崩溃。
+      const incomingList = response.data.list ?? []
       if (append) {
         const existing = new Set(searchResults.value.map((item) => item.id))
         searchResults.value = [
           ...searchResults.value,
-          ...response.data.list.filter((item) => !existing.has(item.id))
+          ...incomingList.filter((item) => !existing.has(item.id))
         ]
       } else {
-        searchResults.value = response.data.list
+        searchResults.value = incomingList
       }
       searchTotal.value = response.data.total
       searchPage.value = response.data.page

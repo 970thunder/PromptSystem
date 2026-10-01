@@ -549,7 +549,10 @@ watch(commentSort, async () => {
 
               <div class="detail-hero__grid">
                 <div class="detail-preview">
-                  <div class="detail-preview__badge">
+                  <div
+                    v-if="showCoverImage"
+                    class="detail-preview__badge"
+                  >
                     AI 效果预览
                   </div>
                   <h1 class="detail-preview__title">
@@ -567,6 +570,19 @@ watch(commentSort, async () => {
                     >
                       {{ tag }}
                     </span>
+                  </div>
+
+                  <!-- 首屏主操作：复制即用是详情页存在的理由 -->
+                  <div
+                    v-if="prompt.content?.trim()"
+                    class="detail-preview__cta"
+                  >
+                    <button
+                      class="detail-copy-btn detail-copy-btn--primary"
+                      @click="copyText('提示词', prompt.content)"
+                    >
+                      复制提示词，马上用
+                    </button>
                   </div>
                 </div>
 
@@ -657,21 +673,18 @@ watch(commentSort, async () => {
                       </div>
                     </div>
                   </div>
-
-                  <div class="detail-output">
-                    <div class="detail-output__label">
-                      预期输出
-                    </div>
-                    <p class="detail-output__text">
-                      适合作为可直接落地的起点。上线前请替换为你的业务场景、品牌信息与约束条件。
-                    </p>
-                  </div>
                 </div>
               </div>
             </section>
 
-            <section class="detail-content-grid">
-              <article class="detail-content-card">
+            <section
+              v-if="prompt.content?.trim() || prompt.systemPrompt?.trim()"
+              class="detail-content-grid"
+            >
+              <article
+                v-if="prompt.content?.trim()"
+                class="detail-content-card"
+              >
                 <div class="detail-content-head">
                   <div class="detail-eyebrow">
                     提示词正文
@@ -686,7 +699,10 @@ watch(commentSort, async () => {
                 <pre class="detail-pre">{{ prompt.content }}</pre>
               </article>
 
-              <article class="detail-content-card">
+              <article
+                v-if="prompt.systemPrompt?.trim()"
+                class="detail-content-card"
+              >
                 <div class="detail-content-head">
                   <div class="detail-eyebrow">
                     系统提示词
@@ -702,8 +718,15 @@ watch(commentSort, async () => {
               </article>
             </section>
 
-            <section class="detail-content-grid">
-              <article class="detail-content-card">
+            <!-- 结构化示例/流程只在有数据时渲染，不用空态样板占位 -->
+            <section
+              v-if="promptExamples.length > 0 || promptWorkflow.length > 0"
+              class="detail-content-grid"
+            >
+              <article
+                v-if="promptExamples.length > 0"
+                class="detail-content-card"
+              >
                 <div>
                   <div class="detail-eyebrow">
                     Few-shot
@@ -713,10 +736,7 @@ watch(commentSort, async () => {
                   </h2>
                 </div>
 
-                <div
-                  v-if="promptExamples.length > 0"
-                  class="detail-structure-list"
-                >
+                <div class="detail-structure-list">
                   <article
                     v-for="example in promptExamples"
                     :key="example.title"
@@ -745,15 +765,12 @@ watch(commentSort, async () => {
                     </div>
                   </article>
                 </div>
-                <p
-                  v-else
-                  class="detail-structure-empty"
-                >
-                  当前提示词未提供结构化示例。
-                </p>
               </article>
 
-              <article class="detail-content-card">
+              <article
+                v-if="promptWorkflow.length > 0"
+                class="detail-content-card"
+              >
                 <div>
                   <div class="detail-eyebrow">
                     Workflow
@@ -763,10 +780,7 @@ watch(commentSort, async () => {
                   </h2>
                 </div>
 
-                <div
-                  v-if="promptWorkflow.length > 0"
-                  class="detail-workflow-list"
-                >
+                <div class="detail-workflow-list">
                   <div
                     v-for="step in promptWorkflow"
                     :key="`${step.title}-${step.detail}`"
@@ -780,12 +794,6 @@ watch(commentSort, async () => {
                     </p>
                   </div>
                 </div>
-                <p
-                  v-else
-                  class="detail-structure-empty"
-                >
-                  当前提示词未提供结构化流程说明。
-                </p>
               </article>
             </section>
 
@@ -1062,17 +1070,6 @@ watch(commentSort, async () => {
                 </div>
               </div>
             </section>
-
-            <section class="detail-content-card">
-              <div class="detail-eyebrow">
-                使用说明
-              </div>
-              <ul class="detail-usage-list">
-                <li>保留整体结构，再替换为你的业务场景、目标用户与约束条件。</li>
-                <li>若输出过于发散，可先降低温度，再补充更强示例。</li>
-                <li>上线前请用真实生产输入至少跑一遍工作流回归验证。</li>
-              </ul>
-            </section>
           </aside>
         </section>
 
@@ -1274,18 +1271,6 @@ watch(commentSort, async () => {
   @apply mt-1 text-xs text-[var(--prompt-text-faint)];
 }
 
-.detail-output {
-  @apply rounded-[18px] border border-[var(--prompt-border)] bg-[var(--prompt-primary)] p-4 text-[var(--prompt-primary-contrast)];
-}
-
-.detail-output__label {
-  @apply text-xs uppercase tracking-[0.2em] text-[color-mix(in_srgb,var(--prompt-primary-contrast)_60%,transparent)];
-}
-
-.detail-output__text {
-  @apply mt-3 text-sm leading-6 text-[color-mix(in_srgb,var(--prompt-primary-contrast)_70%,transparent)];
-}
-
 .detail-content-grid {
   @apply grid gap-6 xl:grid-cols-[1fr_1fr];
 }
@@ -1300,6 +1285,14 @@ watch(commentSort, async () => {
 
 .detail-copy-btn {
   @apply rounded-full border border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-3 py-1.5 text-xs text-[var(--prompt-text-muted)] transition hover:border-[var(--prompt-border-strong)] hover:text-[var(--prompt-text)];
+}
+
+.detail-preview__cta {
+  @apply mt-5;
+}
+
+.detail-copy-btn--primary {
+  @apply border-transparent bg-[var(--prompt-primary)] px-6 py-3 text-base font-semibold text-[var(--prompt-primary-contrast)] shadow-sm transition hover:opacity-90;
 }
 
 .detail-pre {
@@ -1330,13 +1323,8 @@ watch(commentSort, async () => {
 }
 
 .detail-structure-text,
-.detail-workflow-step__detail,
-.detail-structure-empty {
+.detail-workflow-step__detail {
   @apply mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--prompt-text-muted)];
-}
-
-.detail-structure-empty {
-  @apply rounded-[18px] border border-dashed border-[var(--prompt-border)] bg-[var(--prompt-surface-muted)] px-4 py-5;
 }
 
 .detail-related-grid {
@@ -1381,10 +1369,6 @@ watch(commentSort, async () => {
 
 .detail-params-grid {
   @apply mt-5 grid grid-cols-3 gap-3;
-}
-
-.detail-usage-list {
-  @apply mt-5 space-y-3 text-sm leading-6 text-[var(--prompt-text-muted)];
 }
 
 .detail-section-title {

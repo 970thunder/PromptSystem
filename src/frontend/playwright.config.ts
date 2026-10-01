@@ -11,15 +11,15 @@ export default defineConfig({
   fullyParallel: false,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:28311',
+    baseURL: 'http://127.0.0.1:28315',
     headless: true,
     browserName: 'chromium',
     launchOptions: { executablePath },
     trace: 'retain-on-failure'
   },
   webServer: {
-    command: 'npm run dev -- --mode e2e --host 127.0.0.1 --port 28311',
-    url: 'http://127.0.0.1:28311',
+    command: 'npm run dev -- --mode e2e --host 127.0.0.1 --port 28315',
+    url: 'http://127.0.0.1:28315',
     reuseExistingServer: false,
     timeout: 120_000,
     env: {}

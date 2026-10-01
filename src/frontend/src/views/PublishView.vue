@@ -80,10 +80,11 @@ const editingPromptId = computed(() => Number(route.query.edit) || 0)
 const isEditing = computed(() => editingPromptId.value > 0)
 const isEditingDraft = ref(false)
 
+// 步骤以创作为中心排序：先写正文，再补元信息；封面可选。
 const wizardSteps = [
-  { title: '封面', description: '上传作品封面' },
-  { title: '基本信息', description: '标题与分类' },
   { title: '提示词', description: '正文与系统词' },
+  { title: '基本信息', description: '标题与分类' },
+  { title: '封面（可选）', description: '不上传则自动生成字卡' },
   { title: '参数与标签', description: '标签与高级项' },
   { title: '确认发布', description: '检查并提交' }
 ] as const
@@ -101,9 +102,10 @@ const form = reactive<PublishPromptRequest>({
   images: [],
   content: '',
   systemPrompt: '',
-  model: 'Midjourney v6',
+  model: '',
   params: { ...defaultParams },
-  categoryId: 1,
+  // null 让 NSelect 显示占位符，强制用户有意识选择分类
+  categoryId: null as unknown as number,
   tags: [],
   status: 1
 })
@@ -126,7 +128,13 @@ const selectedCategoryName = computed(() =>
 const stepValid = computed(() => {
   switch (currentStep.value) {
     case 0:
-      return Boolean(form.cover.trim())
+      if (!form.content.trim()) {
+        return false
+      }
+      if (contentMode.value === 'json' && jsonError.value) {
+        return false
+      }
+      return true
     case 1:
       return Boolean(
         form.title.trim()
@@ -135,12 +143,7 @@ const stepValid = computed(() => {
         && form.categoryId > 0
       )
     case 2:
-      if (!form.content.trim()) {
-        return false
-      }
-      if (contentMode.value === 'json' && jsonError.value) {
-        return false
-      }
+      // 封面可选：不上传时展示层会自动生成标题字卡。
       return true
     case 3:
       return tagCount.value <= MAX_TAGS
@@ -153,7 +156,6 @@ const canSubmit = computed(() =>
   Boolean(
     form.title.trim()
     && form.description.trim()
-    && form.cover.trim()
     && form.content.trim()
     && form.model.trim()
     && form.categoryId > 0
@@ -374,7 +376,7 @@ const formatJsonContent = () => {
 }
 
 const goNext = () => {
-  if (currentStep.value === 2) {
+  if (currentStep.value === 0) {
     if (contentMode.value === 'json' && jsonError.value) {
       message.error('请先修正 JSON 格式')
       return
@@ -507,7 +509,7 @@ const handleSaveDraft = async () => {
                 {{ isEditing ? '编辑' : '发布' }}
               </p>
               <h1 class="publish-cover-pane__title">
-                {{ isEditingDraft ? '编辑草稿' : isEditing ? '编辑提示词' : '发布图像提示词' }}
+                {{ isEditingDraft ? '编辑草稿' : isEditing ? '编辑提示词' : '发布提示词' }}
               </h1>
             </div>
             <BackButton
@@ -530,10 +532,10 @@ const handleSaveDraft = async () => {
                 @change="handleCoverChange"
               >
               <span class="publish-upload-zone__title">
-                {{ uploading ? '正在上传...' : '点击上传封面图' }}
+                {{ uploading ? '正在上传...' : '上传封面图（可选）' }}
               </span>
               <span class="publish-upload-zone__hint">
-                JPG · PNG · WEBP · GIF，横版效果更佳
+                JPG · PNG · WEBP · GIF，横版效果更佳；不上传将自动生成标题字卡
               </span>
               <span
                 v-if="selectedFileName"
@@ -566,10 +568,10 @@ const handleSaveDraft = async () => {
             </div>
 
             <p
-              v-if="currentStep === 0 && !form.cover"
+              v-if="currentStep === 2 && !form.cover"
               class="publish-cover-hint"
             >
-              第一步需上传封面，完成后点击「下一步」
+              封面可选：不上传时，列表会自动生成标题字卡，可直接点击「下一步」
             </p>
 
             <div
@@ -635,14 +637,14 @@ const handleSaveDraft = async () => {
           <div class="publish-wizard__body">
             <div class="publish-wizard__card panel-card">
               <div
-                v-show="currentStep === 0"
+                v-show="currentStep === 2"
                 class="publish-step"
               >
                 <h2 class="publish-step__title">
-                  封面
+                  封面（可选）
                 </h2>
                 <p class="publish-step__desc">
-                  左侧为封面预览区。请上传一张能代表生成效果的横版图片，画廊首页会以封面作为主视觉。
+                  左侧为封面预览区。可上传一张能代表使用场景的横版图片；不上传时，社区会为你的提示词自动生成标题字卡。
                 </p>
                 <label class="publish-upload-btn">
                   <input
@@ -657,7 +659,7 @@ const handleSaveDraft = async () => {
                   v-if="form.cover"
                   class="publish-step__success"
                 >
-                  封面已就绪，可进入下一步
+                  封面已就绪
                 </p>
               </div>
 
@@ -697,7 +699,8 @@ const handleSaveDraft = async () => {
                     <NSelect
                       v-model:value="form.categoryId"
                       :options="categoryOptions"
-                      placeholder="选择图像分类"
+                      placeholder="选择提示词分类"
+                      clearable
                     />
                   </label>
 
@@ -705,14 +708,14 @@ const handleSaveDraft = async () => {
                     <span class="publish-field__label">适用模型 <span class="publish-required">*</span></span>
                     <NInput
                       v-model:value="form.model"
-                      placeholder="Midjourney v6 / SDXL / DALL·E 3"
+                      placeholder="例如 GPT-4o、Claude、Gemini、Midjourney v6"
                     />
                   </label>
                 </div>
               </div>
 
               <div
-                v-show="currentStep === 2"
+                v-show="currentStep === 0"
                 class="publish-step publish-step--fill"
               >
                 <div class="publish-step__head">
@@ -977,7 +980,7 @@ const handleSaveDraft = async () => {
                   </div>
                 </dl>
                 <p class="publish-confirm__note">
-                  提交后将在社区画廊展示。请确认封面与提示词内容符合平台规范。
+                  提交后将展示在社区。请确认提示词内容符合平台规范；未上传封面的提示词会自动生成标题字卡。
                 </p>
               </div>
             </div>

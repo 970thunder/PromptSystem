@@ -62,8 +62,24 @@ describe('HomeView', () => {
     expect(wrapper.text()).not.toContain('内容分类')
     expect(wrapper.text()).not.toContain('热门标签')
     expect(wrapper.findAll('.home-hero__title-item').length).toBeGreaterThan(0)
-    expect(wrapper.findAll('.home-hero__title-cover').length).toBeGreaterThan(0)
+    // 飘带是纯装饰：不出现线上真实提示词标题，也不再有封面小图
+    expect(wrapper.findAll('.home-hero__title-cover').length).toBe(0)
+    expect(wrapper.find('.home-hero__title-barrage').text()).not.toContain('Brand Poster Prompt Builder')
+    expect(wrapper.find('.home-hero__title-barrage').text()).toContain('SaaS 落地页文案')
     expect(wrapper.find('.home-hero__title-barrage').text()).not.toContain('#')
+  })
+
+  it('精选主卡没有互动数据时隐藏精选板块并完整展示最新流', async () => {
+    const wrapper = await mountHome()
+    const piniaStore = usePromptStore()
+    // 模拟全部内容都无赞/无浏览（如冷启动或测试数据残留）
+    piniaStore.prompts = piniaStore.prompts.map((prompt) => ({ ...prompt, likes: 0, views: 0, favorites: 0 }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).not.toContain('今日精选')
+    // 最新发布网格接收全部内容，不丢第一条
+    expect(wrapper.text()).toContain('刚刚更新')
+    expect(wrapper.text()).toContain('Brand Poster Prompt Builder')
   })
 
   it('默认折叠分类并可展开全部分类', async () => {

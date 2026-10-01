@@ -404,3 +404,24 @@ type pageResponse[T any] struct {
 	Page     int `json:"page"`
 	PageSize int `json:"pageSize"`
 }
+
+// MarshalJSON 把 nil 列表序列化为 []：前端按数组消费 list 字段，
+// null 会让空结果渲染路径崩溃（空态永不出现）。
+func (p pageResponse[T]) MarshalJSON() ([]byte, error) {
+	list := p.List
+	if list == nil {
+		list = []T{}
+	}
+	type pageResponseAlias[T any] struct {
+		List     []T `json:"list"`
+		Total    int `json:"total"`
+		Page     int `json:"page"`
+		PageSize int `json:"pageSize"`
+	}
+	return json.Marshal(pageResponseAlias[T]{
+		List:     list,
+		Total:    p.Total,
+		Page:     p.Page,
+		PageSize: p.PageSize,
+	})
+}

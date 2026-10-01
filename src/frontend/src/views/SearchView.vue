@@ -35,10 +35,17 @@ const filters = reactive({
 })
 
 const modelOptions = computed(() => {
-  const set = new Set<string>()
-  promptStore.prompts.forEach((prompt) => set.add(prompt.model))
-  results.value.forEach((prompt) => set.add(prompt.model))
-  return Array.from(set).sort((a, b) => a.localeCompare(b))
+  // 同一模型常以不同大小写入库（gpt-4o / GPT-4o），按小写去重、保留首次出现的写法。
+  const byLower = new Map<string, string>()
+  const add = (model: string) => {
+    const name = (model ?? '').trim()
+    if (!name) return
+    const key = name.toLowerCase()
+    if (!byLower.has(key)) byLower.set(key, name)
+  }
+  promptStore.prompts.forEach((prompt) => add(prompt.model))
+  results.value.forEach((prompt) => add(prompt.model))
+  return Array.from(byLower.values()).sort((a, b) => a.localeCompare(b))
 })
 
 const sortLabels: Record<string, string> = {
