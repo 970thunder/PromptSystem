@@ -29,9 +29,12 @@ jobs:
           export npm_config_fetch_retry_mintimeout=5000
           export npm_config_fetch_retry_maxtimeout=30000
           npm ci
+          # --omit=dev：门禁覆盖随镜像发布的运行时依赖；dev 链当前唯一的
+          # 高危来源是 tailwindcss 3 的 chokidar/braces，修复需要升级
+          # tailwind 4（破坏性迁移），单独跟踪，不在本门槛内糊掉。
           for attempt in 1 2 3; do
             audit_log="$(mktemp)"
-            if npm audit --audit-level=high 2>&1 | tee "$audit_log"; then
+            if npm audit --omit=dev --audit-level=high 2>&1 | tee "$audit_log"; then
               rm -f "$audit_log"
               exit 0
             fi

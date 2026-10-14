@@ -47,7 +47,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.27'
           cache-dependency-path: src/backend/go.sum
 
       - name: gofmt check
@@ -101,7 +101,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.27'
 
       - name: run migration matrix test
         env:
@@ -113,6 +113,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Compose requires the PROMPTOS_* variables; the placeholder example is
+      # the intended source for CI (dev-mode stack, never production secrets).
+      - name: prepare .env from example
+        run: cp .env.docker.example .env
 
       - name: compose config
         run: docker compose config --quiet
