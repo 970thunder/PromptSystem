@@ -113,34 +113,36 @@ const activeTheme = computed(() => (resolvedMode.value === 'dark' ? darkTheme : 
 
 .route-forward-enter-active,
 .route-back-enter-active {
-  transition: opacity 420ms var(--prompt-ease-out),
-    transform 420ms var(--prompt-ease-out);
+  /* 640ms 的 out-in 双段动画是导航“卡顿感”的主要来源，压缩到 ~260ms
+     并去掉 rotate/大位移，把过渡留给合成器（仅 opacity + 小 translate）。 */
+  transition: opacity 180ms var(--prompt-ease-out),
+    transform 180ms var(--prompt-ease-out);
 }
 
 .route-forward-leave-active,
 .route-back-leave-active {
-  transition: opacity 220ms var(--prompt-ease-in),
-    transform 220ms var(--prompt-ease-in);
+  transition: opacity 100ms var(--prompt-ease-in),
+    transform 100ms var(--prompt-ease-in);
 }
 
 .route-forward-enter-from {
   opacity: 0;
-  transform: translate3d(34px, 0, 0) rotate(0.6deg);
+  transform: translate3d(16px, 0, 0);
 }
 
 .route-forward-leave-to {
   opacity: 0;
-  transform: translate3d(-26px, 0, 0) rotate(-0.4deg);
+  transform: translate3d(-12px, 0, 0);
 }
 
 .route-back-enter-from {
   opacity: 0;
-  transform: translate3d(-34px, 0, 0) rotate(-0.6deg);
+  transform: translate3d(-16px, 0, 0);
 }
 
 .route-back-leave-to {
   opacity: 0;
-  transform: translate3d(26px, 0, 0) rotate(0.4deg);
+  transform: translate3d(12px, 0, 0);
 }
 
 .route-replace-enter-active,

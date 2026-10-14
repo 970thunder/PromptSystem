@@ -134,6 +134,10 @@ const imageFailed = ref(false)
 .prompt-card {
   @apply relative overflow-hidden rounded-[24px] border border-[var(--prompt-border)] bg-[var(--prompt-surface)] transition;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+  /* 长网格中跳过视口外卡片的渲染；intrinsic 尺寸接近真实卡片高度，
+     避免滚动条跳动。contain-intrinsic-size 支持度不足时自动忽略。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
 }
 
 .prompt-card__link {

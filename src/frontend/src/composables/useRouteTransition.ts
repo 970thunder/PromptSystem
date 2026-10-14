@@ -9,6 +9,8 @@ export const useRouteTransition = () => {
 
   return {
     name: computed(() => `route-${direction.value}`),
-    key: computed(() => route.fullPath)
+    // 以 path 为 key：查询串变化（筛选/翻页）不再整页卸载重挂载，
+    // 视图内部已 watch route.fullPath 做响应式同步。
+    key: computed(() => route.path)
   }
 }

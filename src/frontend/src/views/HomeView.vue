@@ -2,7 +2,7 @@
      「今日精选」大屏展示（1 张大卡 + 2 张横排小卡）、「最新发布」卡片网格（支持
      加载更多）、分类/标签发现入口与发布引导。所有内容均来自实时服务（测试环境除外）。 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { usePromptStore } from '@/stores/prompt'
@@ -21,6 +21,33 @@ const router = useRouter()
 const searchKeyword = ref('')
 const categoryExpanded = ref(false)
 const collapsedCategoryCount = 14
+
+// 飘带离开视口时暂停动画：9 条无限滚动的合成层是首页滚动卡顿的主要来源，
+// 滚出首屏后继续空转会持续占用合成/绘制带宽。
+const heroBarrageRef = ref<HTMLElement | null>(null)
+const barrageVisible = ref(true)
+
+let barrageObserver: IntersectionObserver | null = null
+
+onMounted(() => {
+  void promptStore.loadHomeFeed()
+  const el = heroBarrageRef.value
+  if (!el || typeof IntersectionObserver === 'undefined') {
+    return
+  }
+  barrageObserver = new IntersectionObserver(
+    (entries) => {
+      barrageVisible.value = entries.some((entry) => entry.isIntersecting)
+    },
+    { rootMargin: '80px' }
+  )
+  barrageObserver.observe(el)
+})
+
+onBeforeUnmount(() => {
+  barrageObserver?.disconnect()
+  barrageObserver = null
+})
 
 // 精选只从有真实互动（赞/藏/浏览）的内容中选取，主卡 + 侧卡同一标准；
 // 没有足够有互动的内容时整个板块隐藏，避免把最新内容包装成「精选」。
@@ -109,10 +136,6 @@ const goPublish = async () => {
   }
   await router.push('/publish')
 }
-
-onMounted(() => {
-  void promptStore.loadHomeFeed()
-})
 </script>
 
 <template>
@@ -126,7 +149,9 @@ onMounted(() => {
         >
           <div
             v-if="heroTitleRows.length"
+            ref="heroBarrageRef"
             class="home-hero__title-barrage"
+            :class="{ 'home-hero__title-barrage--paused': !barrageVisible }"
             aria-hidden="true"
           >
             <div
@@ -607,6 +632,11 @@ onMounted(() => {
   transform-style: preserve-3d;
 }
 
+/* 离开视口即暂停全部轨道：滚动到下方内容时不再空转合成层 */
+.home-hero__title-barrage--paused .home-hero__title-track {
+  animation-play-state: paused;
+}
+
 .home-hero__title-row {
   @apply flex w-full overflow-hidden;
   transform: perspective(1200px) rotateX(8deg);
@@ -616,8 +646,14 @@ onMounted(() => {
 .home-hero__title-track {
   @apply flex w-max shrink-0 items-center;
   transform-style: preserve-3d;
-  will-change: transform;
   animation: home-title-marquee var(--marquee-duration, 34s) linear infinite;
+}
+
+/* 小屏减半轨道数量：移动端 GPU/带宽预算有限，装饰层优先让位 */
+@media (max-width: 767px) {
+  .home-hero__title-row:nth-child(n + 5) {
+    display: none;
+  }
 }
 
 .home-hero__title-sequence {
