@@ -1,5 +1,6 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useSiteStore } from '@/stores/site'
 import { isSafeInternalPath } from '@/composables/useBackNavigation'
 
 const routes: RouteRecordRaw[] = [
@@ -84,6 +85,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '隐私政策' }
   },
   {
+    path: '/setup',
+    name: 'Setup',
+    component: () => import('@/views/SetupView.vue'),
+    meta: { title: '系统初始化' }
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('@/views/AdminView.vue'),
@@ -113,11 +120,25 @@ const router = createRouter({
   }
 })
 
+// 会话恢复只在“必须知道登录态”的路由上阻塞首屏：公开页面先渲染，
+// 恢复完成后顶栏等响应式 UI 自动更新。promise 缓存避免并发导航重复探测。
+let sessionRestorePromise: Promise<boolean> | null = null
+const ensureSession = (userStore: ReturnType<typeof useUserStore>) => {
+  if (!sessionRestorePromise) {
+    sessionRestorePromise = userStore.restoreSession()
+  }
+  return sessionRestorePromise
+}
+
 router.beforeEach(async (to) => {
   const userStore = useUserStore()
 
-  if (!userStore.sessionReady) {
-    await userStore.restoreSession()
+  const isAuthPage = to.path === '/login' || to.path === '/register' || to.path === '/forgot-password'
+  const needsSessionNow = Boolean(to.meta.requiresAuth) || isAuthPage
+  if (needsSessionNow && !userStore.sessionReady) {
+    await ensureSession(userStore)
+  } else {
+    void ensureSession(userStore)
   }
 
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
@@ -128,17 +149,29 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if ((to.path === '/login' || to.path === '/register' || to.path === '/forgot-password') && userStore.isLoggedIn) {
+  if (isAuthPage && userStore.isLoggedIn) {
     return '/'
   }
 
   return true
 })
 
-router.afterEach((to) => {
+const applyDocumentTitle = (to: RouteLocationNormalized) => {
+  const siteStore = useSiteStore()
   const pageTitle = typeof to.meta.title === 'string' ? to.meta.title : ''
-  document.title = pageTitle ? `${pageTitle} · PromptOS` : 'PromptOS'
+  const siteName = siteStore.siteName
+  document.title = pageTitle ? `${pageTitle} · ${siteName}` : siteName
+}
+
+router.afterEach((to) => {
+  applyDocumentTitle(to)
   window.dispatchEvent(new CustomEvent('promptos:navigation'))
+
+  // 站点名称来自 /site/info：首次加载完成后用真实名称刷新一次标题。
+  const siteStore = useSiteStore()
+  if (!siteStore.loaded) {
+    void siteStore.ensureLoaded().then(() => applyDocumentTitle(to))
+  }
 })
 
 export default router

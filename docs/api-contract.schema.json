@@ -114,6 +114,31 @@
         "eventHash": {"type": "string"},
         "createdAt": {"type": "string"}
       }
+    },
+    "SetupStatus": {
+      "type": "object",
+      "required": ["initialized", "storageMode", "environment", "smtpConfigured", "emailAuthEnabled", "registrationOpen", "siteName", "siteDescription"],
+      "properties": {
+        "initialized": {"type": "boolean"},
+        "storageMode": {"type": "string"},
+        "environment": {"type": "string"},
+        "smtpConfigured": {"type": "boolean"},
+        "emailAuthEnabled": {"type": "boolean"},
+        "registrationOpen": {"type": "boolean"},
+        "siteName": {"type": "string"},
+        "siteDescription": {"type": "string"}
+      }
+    },
+    "SiteInfo": {
+      "type": "object",
+      "required": ["name", "description", "registrationOpen", "emailAuthEnabled", "githubOAuthEnabled"],
+      "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "registrationOpen": {"type": "boolean"},
+        "emailAuthEnabled": {"type": "boolean"},
+        "githubOAuthEnabled": {"type": "boolean"}
+      }
     }
   }
 }

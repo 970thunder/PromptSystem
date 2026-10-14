@@ -105,3 +105,22 @@ export interface ApiContractAuditEvent {
   createdAt: string
 }
 
+export interface ApiContractSetupStatus {
+  initialized: boolean
+  storageMode: string
+  environment: string
+  smtpConfigured: boolean
+  emailAuthEnabled: boolean
+  registrationOpen: boolean
+  siteName: string
+  siteDescription: string
+}
+
+export interface ApiContractSiteInfo {
+  name: string
+  description: string
+  registrationOpen: boolean
+  emailAuthEnabled: boolean
+  githubOAuthEnabled: boolean
+}
+

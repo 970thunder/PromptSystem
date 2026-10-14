@@ -5,6 +5,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, type ReportStatusFilter } from '@/api/adminApi'
 import { promptApi } from '@/api/promptApi'
+import SiteSettingsPanel from '@/components/admin/SiteSettingsPanel.vue'
 import PageError from '@/components/feedback/PageError.vue'
 import PageLoading from '@/components/feedback/PageLoading.vue'
 import type { AuditEvent, Report } from '@/types'
@@ -14,6 +15,16 @@ const STATUS_TABS: Array<{ key: ReportStatusFilter; label: string }> = [
   { key: 'reviewed', label: '已办结' },
   { key: 'rejected', label: '已驳回' }
 ]
+
+// 控制台两个面板：举报审核与站点设置（初始化向导后的运行时配置入口）。
+const PANEL_TABS = [
+  { key: 'reports', label: '举报审核' },
+  { key: 'settings', label: '站点设置' }
+] as const
+
+type PanelKey = (typeof PANEL_TABS)[number]['key']
+
+const activePanel = ref<PanelKey>('reports')
 
 const REASON_LABELS: Record<string, string> = {
   spam: '垃圾内容',
@@ -183,18 +194,41 @@ onMounted(() => {
             审核控制台
           </h1>
         </div>
-        <button
-          type="button"
-          class="admin-audit-toggle"
-          :aria-expanded="auditOpen"
-          @click="toggleAudit"
-        >
-          {{ auditOpen ? '收起审计链' : '查看审计链' }}
-        </button>
+        <div class="admin-head__actions">
+          <div
+            class="admin-tabs"
+            role="tablist"
+            aria-label="控制台面板"
+          >
+            <button
+              v-for="panel in PANEL_TABS"
+              :key="panel.key"
+              type="button"
+              role="tab"
+              class="admin-tab"
+              :class="{ 'admin-tab--active': activePanel === panel.key }"
+              :aria-selected="activePanel === panel.key"
+              @click="activePanel = panel.key"
+            >
+              {{ panel.label }}
+            </button>
+          </div>
+          <button
+            v-if="activePanel === 'reports'"
+            type="button"
+            class="admin-audit-toggle"
+            :aria-expanded="auditOpen"
+            @click="toggleAudit"
+          >
+            {{ auditOpen ? '收起审计链' : '查看审计链' }}
+          </button>
+        </div>
       </header>
 
+      <SiteSettingsPanel v-if="activePanel === 'settings' && !forbidden" />
+
       <PageLoading
-        v-if="loading && reports.length === 0"
+        v-else-if="loading && reports.length === 0 && activePanel === 'reports'"
         label="正在加载举报"
         variant="blocks"
       />
@@ -218,7 +252,7 @@ onMounted(() => {
         @action="loadReports()"
       />
 
-      <template v-else>
+      <template v-else-if="activePanel === 'reports'">
         <section
           class="admin-reports"
           aria-labelledby="admin-reports-title"
@@ -445,7 +479,11 @@ onMounted(() => {
 }
 
 .admin-head {
-  @apply flex items-end justify-between gap-4 py-10;
+  @apply flex flex-wrap items-end justify-between gap-4 py-10;
+}
+
+.admin-head__actions {
+  @apply flex items-center gap-3;
 }
 
 .admin-head__title {

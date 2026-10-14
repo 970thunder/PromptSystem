@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useMessage, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
+import { useSiteStore } from '@/stores/site'
 import { userApi } from '@/api/userApi'
 import { githubAuthUrl, githubOAuthEnabled } from '@/utils/authUrl'
 import { siteCapabilities } from '@/config/capabilities'
@@ -129,7 +130,9 @@ const handleSubmit = async () => {
   } catch (error) {
     // 后端错误码映射：把常见注册失败翻译成可行动的中文提示。
     const errorCode = (error as { response?: { data?: { errorCode?: string } } }).response?.data?.errorCode
-    if (errorCode === 'USER_EXISTS') {
+    if (errorCode === 'REGISTRATION_DISABLED') {
+      message.error('站点当前已关闭新用户注册')
+    } else if (errorCode === 'USER_EXISTS') {
       message.error('该邮箱已注册，请直接登录或更换邮箱')
     } else if (errorCode === 'INVALID_CAPTCHA') {
       message.error('验证码错误或已过期，请重新获取验证码后再试')
@@ -144,6 +147,15 @@ const handleSubmit = async () => {
 const handleGitHubLogin = () => {
   window.location.href = githubAuthUrl()
 }
+
+// 站点注册开关（/setup 初始化或管理员站点设置控制）：关闭时给出明确提示，
+// 而不是让用户走完验证码流程后才收到 403。
+const siteStore = useSiteStore()
+const registrationClosed = computed(() => siteStore.loaded && !siteStore.siteInfo.registrationOpen)
+
+onMounted(() => {
+  void siteStore.ensureLoaded()
+})
 
 onBeforeUnmount(() => {
   if (countdownTimer) {
@@ -188,6 +200,14 @@ onBeforeUnmount(() => {
                 开始使用
               </h2>
             </div>
+
+            <p
+              v-if="registrationClosed"
+              class="register-closed-note"
+              role="alert"
+            >
+              站点当前已关闭新用户注册，如有需要请联系站点管理员。
+            </p>
 
             <NForm @submit.prevent="handleSubmit">
               <NFormItem label="用户名">
@@ -293,6 +313,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .auth-page {
   @apply view-page px-4 py-10 sm:px-6;
+}
+
+.register-closed-note {
+  @apply mb-4 rounded-xl px-4 py-3 text-sm leading-6;
+  background-color: var(--prompt-warning-bg);
+  color: var(--prompt-warning);
 }
 
 .auth-layout {
