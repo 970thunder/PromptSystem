@@ -218,6 +218,7 @@ func (s *server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		s.redirectOAuthError(w, r, "Failed to create user session")
 		return
 	}
+	s.primeAuthUserCache(user)
 
 	// Issue a short-lived one-time code instead of placing the JWT in the URL.
 	// The frontend calls POST /api/v1/auth/exchange to trade it for a JWT.

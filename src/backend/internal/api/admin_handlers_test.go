@@ -18,6 +18,9 @@ type fakeModerationStore struct {
 	report      store.Report
 	reviewInput store.ReviewReportInput
 	statusCalls int
+	// onSetUserStatus lets tests apply the status change to a real user
+	// store, mirroring what the MySQL implementation commits.
+	onSetUserStatus func(userID, status int)
 }
 
 func (f *fakeModerationStore) IsAdmin(userID int) (bool, error) {
@@ -40,8 +43,11 @@ func (f *fakeModerationStore) SetPromptStatus(int, int, int, string) error {
 	return nil
 }
 
-func (f *fakeModerationStore) SetUserStatus(int, int, int, string) error {
+func (f *fakeModerationStore) SetUserStatus(userID int, actorID int, status int, reason string) error {
 	f.statusCalls++
+	if f.onSetUserStatus != nil {
+		f.onSetUserStatus(userID, status)
+	}
 	return nil
 }
 

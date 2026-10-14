@@ -34,6 +34,7 @@ type server struct {
 	uploadStore         store.UploadManager
 	settingsStore       store.SettingsManager
 	setupStore          store.SetupManager
+	authUserCache       *authUserCache
 	imageStorage        storage.ImageStorage
 	emailSender         emailSender
 	storageMode         string
@@ -69,6 +70,9 @@ type serverDeps struct {
 	emailSender     emailSender
 	storageMode     string
 	readyCheck      func(context.Context) map[string]bool
+	// authUserCache optionally overrides the config-derived auth user cache
+	// so tests can control the clock and observe invalidations directly.
+	authUserCache *authUserCache
 }
 
 func NewServer(cfg config.Config) (http.Handler, error) {
@@ -194,6 +198,14 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	s.authService = service.NewAuthService(s.userStore, s.promptStore, s.cache)
 	s.promptService = service.NewPromptService(s.promptStore, s.uploadStore, s.invalidateContentCaches)
 	s.commentService = service.NewCommentService(s.commentStore)
+	// The auth user cache removes one primary-key SELECT per authenticated
+	// request. A zero TTL (all zero-value test configs) keeps the uncached
+	// behavior; production Load() defaults to 30s.
+	if deps.authUserCache != nil {
+		s.authUserCache = deps.authUserCache
+	} else if ttl := time.Duration(s.config.AuthUserCacheTTLSeconds) * time.Second; ttl > 0 {
+		s.authUserCache = newAuthUserCache(ttl)
+	}
 	s.uploadOnce.Do(func() {
 		limit := s.config.UploadMaxConcurrent
 		if limit <= 0 {

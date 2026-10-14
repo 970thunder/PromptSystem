@@ -9,51 +9,52 @@ import (
 )
 
 type Config struct {
-	AppEnv               string
-	Port                 string
-	JWTSecret            string
-	JWTExpireHours       int
-	AuthCookieEnabled    bool
-	UploadProvider       string
-	UploadDir            string
-	UploadBaseURL        string
-	UploadMaxMB          int
-	UploadMaxConcurrent  int
-	UploadDailyQuotaMB   int
-	UploadTotalQuotaMB   int
-	AllowGif             bool
-	R2AccountID          string
-	R2Endpoint           string
-	R2AccessKeyID        string
-	R2SecretKey          string
-	R2Bucket             string
-	R2PublicURL          string
-	AllowedImageDomains  []string
-	MySQLHost            string
-	MySQLPort            string
-	MySQLUser            string
-	MySQLPass            string
-	MySQLDB              string
-	MySQLMigrationUser   string
-	MySQLMigrationPass   string
-	DBMaxOpenConns       int
-	DBMaxIdleConns       int
-	DBConnMaxLifetimeMin int
-	RedisHost            string
-	RedisPort            string
-	RedisPass            string
-	AllowedOrigin        string
-	GitHubClientID       string
-	GitHubClientSecret   string
-	GitHubOAuthEnabled   bool
-	GitHubRedirectURI    string
-	FrontendURL          string
-	SMTPHost             string
-	SMTPPort             string
-	SMTPUser             string
-	SMTPPassword         string
-	SMTPFrom             string
-	EmailAuthEnabled     bool
+	AppEnv                  string
+	Port                    string
+	JWTSecret               string
+	JWTExpireHours          int
+	AuthCookieEnabled       bool
+	UploadProvider          string
+	UploadDir               string
+	UploadBaseURL           string
+	UploadMaxMB             int
+	UploadMaxConcurrent     int
+	UploadDailyQuotaMB      int
+	UploadTotalQuotaMB      int
+	AllowGif                bool
+	R2AccountID             string
+	R2Endpoint              string
+	R2AccessKeyID           string
+	R2SecretKey             string
+	R2Bucket                string
+	R2PublicURL             string
+	AllowedImageDomains     []string
+	MySQLHost               string
+	MySQLPort               string
+	MySQLUser               string
+	MySQLPass               string
+	MySQLDB                 string
+	MySQLMigrationUser      string
+	MySQLMigrationPass      string
+	DBMaxOpenConns          int
+	DBMaxIdleConns          int
+	DBConnMaxLifetimeMin    int
+	RedisHost               string
+	RedisPort               string
+	RedisPass               string
+	AllowedOrigin           string
+	GitHubClientID          string
+	GitHubClientSecret      string
+	GitHubOAuthEnabled      bool
+	GitHubRedirectURI       string
+	FrontendURL             string
+	SMTPHost                string
+	SMTPPort                string
+	SMTPUser                string
+	SMTPPassword            string
+	SMTPFrom                string
+	EmailAuthEnabled        bool
+	AuthUserCacheTTLSeconds int
 }
 
 // DefaultAllowedOrigins is the comma-separated origin list used in development.
@@ -108,6 +109,9 @@ func Load() Config {
 		SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:             getEnv("SMTP_FROM", ""),
 		EmailAuthEnabled:     getEnvAsBool("EMAIL_AUTH_ENABLED", true),
+		// Zero disables the per-process auth user cache; a plain go test
+		// Config literal therefore keeps the uncached behavior.
+		AuthUserCacheTTLSeconds: getEnvAsIntAllowZero("AUTH_USER_CACHE_TTL_SECONDS", 30),
 	}
 }
 
@@ -145,6 +149,9 @@ func (c Config) Validate() error {
 	}
 	if c.DBMaxOpenConns > 0 && c.DBMaxIdleConns > c.DBMaxOpenConns {
 		return errors.New("DB_MAX_IDLE_CONNS cannot exceed DB_MAX_OPEN_CONNS")
+	}
+	if c.AuthUserCacheTTLSeconds < 0 {
+		return errors.New("AUTH_USER_CACHE_TTL_SECONDS must not be negative")
 	}
 
 	if prod && (strings.TrimSpace(c.JWTSecret) == "" || c.JWTSecret == "promptos-dev-secret-change-me") {
@@ -258,6 +265,22 @@ func getEnvAsInt(key string, fallback int) int {
 
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
+		return fallback
+	}
+
+	return parsed
+}
+
+// getEnvAsIntAllowZero parses a non-negative integer: 0 is meaningful
+// (disable) and falls back only on empty or invalid input.
+func getEnvAsIntAllowZero(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
 		return fallback
 	}
 

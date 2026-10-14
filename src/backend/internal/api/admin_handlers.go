@@ -146,6 +146,11 @@ func (s *server) handleAdminUserStatus(w http.ResponseWriter, r *http.Request, u
 		writeStoreError(w, err)
 		return
 	}
+	// Disabling (or re-enabling) a user must take effect before the cached
+	// auth row expires.
+	if s.authUserCache != nil {
+		s.authUserCache.invalidate(userID)
+	}
 	writeJSON(w, http.StatusOK, apiResponse[map[string]bool]{Code: 200, Message: "Success", Data: map[string]bool{"updated": true}})
 }
 

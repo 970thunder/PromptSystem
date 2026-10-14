@@ -176,6 +176,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, apiResponse[any]{Code: 401, ErrorCode: "AUTH_INVALID_CREDENTIALS", Message: "Invalid email or password"})
 		return
 	}
+	s.primeAuthUserCache(user)
 
 	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
@@ -249,6 +250,9 @@ func (s *server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reset bumps the session version and is keyed by email in the store; the
+	// cache is keyed by user id, so a global drop is the safe invalidation.
+	s.dropAuthUserCache()
 	writeJSON(w, http.StatusOK, apiResponse[any]{Code: 200, Message: resetGenericMessage})
 }
 
@@ -319,6 +323,7 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	s.primeAuthUserCache(user)
 
 	token, err := s.tokenManager.Generate(user.ID, user.Email, user.SessionVer)
 	if err != nil {
@@ -378,6 +383,7 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 			writeStoreError(w, err)
 			return
 		}
+		s.primeAuthUserCache(user)
 
 		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
@@ -460,6 +466,9 @@ func (s *server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		writeStoreError(w, err)
 		return
+	}
+	if s.authUserCache != nil {
+		s.authUserCache.invalidate(userID)
 	}
 
 	writeJSON(w, http.StatusOK, apiResponse[map[string]bool]{
@@ -757,8 +766,20 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Confirm the user still exists and is active; disabled users' old
-		// tokens must not keep working.
-		userRecord, found := s.getAuthService().FindByID(userID)
+		// tokens must not keep working. The row is served from a short-TTL
+		// cache; every API-level write path invalidates it, so app-driven
+		// disables/resets propagate immediately.
+		var userRecord store.AuthUser
+		var found bool
+		if s.authUserCache != nil {
+			userRecord, found = s.authUserCache.get(userID)
+		}
+		if !found {
+			userRecord, found = s.getAuthService().FindByID(userID)
+			if found && s.authUserCache != nil {
+				s.authUserCache.put(userRecord)
+			}
+		}
 		if !found || userRecord.Status != 1 {
 			writeJSON(w, http.StatusUnauthorized, apiResponse[any]{
 				Code:      401,
