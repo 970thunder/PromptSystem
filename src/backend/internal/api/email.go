@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/smtp"
 	"strings"
+	"sync"
 	"time"
 
 	"promptos-backend/internal/config"
@@ -44,27 +45,56 @@ func newSMTPSenderFromSettings(s store.SiteSettings) *smtpEmailSender {
 
 // settingsEmailSender resolves the effective sender per send: wizard/admin
 // settings override environment configuration, so SMTP can be configured at
-// runtime without a restart. When neither source is configured it behaves
-// like the legacy nil sender (Send fails, Configured reports false).
+// runtime without a restart. The settings map is cached until Invalidate is
+// called by the write paths (admin console, setup wizard) — the hot
+// "is email configured" check no longer hits the settings table per request,
+// while an actual Send always resolves through the same cache warmed by the
+// most recent write.
 type settingsEmailSender struct {
 	settings store.SettingsManager
 	fallback emailSender
+
+	mu    sync.RWMutex
+	cache *store.SiteSettings
 }
 
 func newSettingsEmailSender(settings store.SettingsManager, cfg config.Config) emailSender {
 	return &settingsEmailSender{settings: settings, fallback: newSMTPEmailSender(cfg)}
 }
 
+// Invalidate drops the cached settings snapshot; the next resolve re-reads.
+func (s *settingsEmailSender) Invalidate() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cache = nil
+}
+
+func (s *settingsEmailSender) current() store.SiteSettings {
+	s.mu.RLock()
+	cached := s.cache
+	s.mu.RUnlock()
+	if cached != nil {
+		return *cached
+	}
+	var all map[string]string
+	if s.settings != nil {
+		if read, err := s.settings.GetAll(); err == nil {
+			all = read
+		}
+	}
+	settings := store.ParseSiteSettings(all)
+	s.mu.Lock()
+	s.cache = &settings
+	s.mu.Unlock()
+	return settings
+}
+
 func (s *settingsEmailSender) resolve() emailSender {
 	if s == nil {
 		return nil
 	}
-	if s.settings != nil {
-		if all, err := s.settings.GetAll(); err == nil {
-			if sender := newSMTPSenderFromSettings(store.ParseSiteSettings(all)); sender != nil {
-				return sender
-			}
-		}
+	if sender := newSMTPSenderFromSettings(s.current()); sender != nil {
+		return sender
 	}
 	return s.fallback
 }

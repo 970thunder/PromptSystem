@@ -263,10 +263,10 @@ func TestRegistrationToggleBlocksRegister(t *testing.T) {
 func TestSettingsEmailSenderPrefersDatabaseOverEnv(t *testing.T) {
 	settings := store.NewMemorySettingsStore()
 	envCfg := config.Config{SMTPHost: "env.example.com", SMTPPort: "587", SMTPFrom: "env@example.com"}
-	sender := newSettingsEmailSender(settings, envCfg)
+	sender := newSettingsEmailSender(settings, envCfg).(*settingsEmailSender)
 
 	// No database settings: the env fallback applies.
-	resolved := sender.(*settingsEmailSender).resolve()
+	resolved := sender.resolve()
 	if smtp, ok := resolved.(*smtpEmailSender); !ok || smtp.host != "env.example.com" {
 		t.Fatalf("expected env fallback, got %#v", resolved)
 	}
@@ -279,17 +279,25 @@ func TestSettingsEmailSenderPrefersDatabaseOverEnv(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	resolved = sender.(*settingsEmailSender).resolve()
+	// 写路径契约：设置变更后必须 Invalidate（管理员/向导处理器负责调用）。
+	sender.Invalidate()
+	resolved = sender.resolve()
 	smtp, ok := resolved.(*smtpEmailSender)
 	if !ok || smtp.host != "db.example.com" || smtp.port != "465" {
 		t.Fatalf("expected db sender, got %#v", resolved)
+	}
+
+	// 缓存吸收：失效前重复 resolve 不再触达设置存储。
+	if sender.current().SMTPHost != "db.example.com" {
+		t.Fatal("expected cached settings")
 	}
 
 	// Clearing the database host drops back to env again.
 	if err := settings.SetMany(map[string]string{store.SettingSMTPHost: ""}); err != nil {
 		t.Fatal(err)
 	}
-	resolved = sender.(*settingsEmailSender).resolve()
+	sender.Invalidate()
+	resolved = sender.resolve()
 	if smtp, ok := resolved.(*smtpEmailSender); !ok || smtp.host != "env.example.com" {
 		t.Fatalf("expected env fallback after clear, got %#v", resolved)
 	}
@@ -395,6 +403,14 @@ func TestAdminSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("anonymous settings read status=%d", rec.Code)
 	}
 
+	// 先预热公开 site/info 的设置快照，使后续更新后的断言能抓住过期缓存。
+	info := httptest.NewRequest(http.MethodGet, "/api/v1/site/info", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, info)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("site info prime status=%d", rec.Code)
+	}
+
 	put := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", strings.NewReader(`{
 		"siteName": "Renamed Hub",
 		"siteDescription": "Updated",
@@ -411,6 +427,15 @@ func TestAdminSettingsRoundTrip(t *testing.T) {
 	h.ServeHTTP(rec, put)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("settings update status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 更新前预热过的公开 site/info 缓存，必须在更新后立即反映新值
+	//（保存即生效的回归断言）。
+	info = httptest.NewRequest(http.MethodGet, "/api/v1/site/info", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, info)
+	if !strings.Contains(rec.Body.String(), "Renamed Hub") || !strings.Contains(rec.Body.String(), `"registrationOpen":false`) {
+		t.Fatalf("site info stale after update: %s", rec.Body.String())
 	}
 
 	get := httptest.NewRequest(http.MethodGet, "/api/v1/admin/settings", nil)
@@ -467,7 +492,7 @@ func TestAdminSettingsRoundTrip(t *testing.T) {
 	}
 
 	// The updated site name surfaces on the public site info endpoint.
-	info := httptest.NewRequest(http.MethodGet, "/api/v1/site/info", nil)
+	info = httptest.NewRequest(http.MethodGet, "/api/v1/site/info", nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, info)
 	if !strings.Contains(rec.Body.String(), "Renamed Hub") || !strings.Contains(rec.Body.String(), `"registrationOpen":false`) {

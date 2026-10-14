@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"promptos-backend/internal/auth"
@@ -48,6 +49,7 @@ type server struct {
 	uploadQuotaMu       sync.Mutex
 	uploadReservedBytes int64
 	uploadDailyUsage    map[string]int64
+	cachedSettings      atomic.Pointer[store.SiteSettings]
 }
 
 // serverDeps carries the pluggable dependencies of the API server. NewServer

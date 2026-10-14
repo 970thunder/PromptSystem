@@ -60,15 +60,34 @@ type setupTestSMTPRequest struct {
 
 // siteSettings resolves typed settings from the settings store; a nil store
 // (directly constructed test servers) or a read error yields defaults.
+// siteSettings resolves typed settings from the settings store. The snapshot
+// is cached until a write path calls invalidateSettingsCaches; a failed read
+// yields defaults WITHOUT caching so a transient store error cannot pin
+// wrong registration/SMTP state.
 func (s *server) siteSettings() store.SiteSettings {
-	if s.settingsStore == nil {
-		return store.ParseSiteSettings(nil)
+	if p := s.cachedSettings.Load(); p != nil {
+		return *p
 	}
-	all, err := s.settingsStore.GetAll()
-	if err != nil {
-		return store.ParseSiteSettings(nil)
+	var all map[string]string
+	if s.settingsStore != nil {
+		if read, err := s.settingsStore.GetAll(); err == nil {
+			all = read
+			settings := store.ParseSiteSettings(all)
+			s.cachedSettings.Store(&settings)
+			return settings
+		}
 	}
 	return store.ParseSiteSettings(all)
+}
+
+// invalidateSettingsCaches drops the server settings snapshot and the email
+// sender's cached resolution. Every settings write path must call this so
+// "save takes effect immediately" holds.
+func (s *server) invalidateSettingsCaches() {
+	s.cachedSettings.Store(nil)
+	if inv, ok := s.emailSender.(interface{ Invalidate() }); ok {
+		inv.Invalidate()
+	}
 }
 
 // emailConfigured reports whether any sender source (settings or environment)
@@ -231,6 +250,7 @@ func (s *server) handleSetupInitialize(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data:    setupInitializeResponse{AdminID: adminID},
 	})
+	s.invalidateSettingsCaches()
 }
 
 func (s *server) handleSetupTestSMTP(w http.ResponseWriter, r *http.Request) {

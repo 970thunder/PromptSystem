@@ -462,7 +462,10 @@ func (s *server) handleRelatedPrompts(w http.ResponseWriter, r *http.Request, id
 		writeAPIError(w, &apiError{Status: http.StatusNotFound, Code: "PROMPT_NOT_FOUND", Message: "Prompt not found"})
 		return
 	}
-	list, _, err := s.promptStore.QueryPage(store.PromptFilter{CategoryID: current.CategoryID, SortBy: "popular"}, 1, 12)
+	// pageSize 4 is sufficient: after dropping the current prompt at most one
+	// row is filtered, so three related prompts always remain when the
+	// category has them. The old 12-row fetch over-read every request.
+	list, _, err := s.promptStore.QueryPage(store.PromptFilter{CategoryID: current.CategoryID, SortBy: "popular"}, 1, 4)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiResponse[any]{Code: 500, Message: "Failed to load related prompts", ErrorCode: "RELATED_LOAD_FAILED"})
 		return

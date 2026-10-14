@@ -158,6 +158,8 @@ func (s *server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		writeStoreError(w, err)
 		return
 	}
+	// 保存即生效：丢掉服务端快照与发件器缓存。
+	s.invalidateSettingsCaches()
 
 	// Audit records which keys changed, never the values (secrets!).
 	changed := make([]string, 0, len(values))
