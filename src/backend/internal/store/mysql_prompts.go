@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type MySQLPromptStore struct {
@@ -142,6 +143,146 @@ func (s *MySQLPromptStore) CategoryExists(id int) (bool, error) {
 	return n > 0, nil
 }
 
+// maxKeywordMatchIDs caps how many prompt ids each keyword phase may collect.
+// It bounds the IN-list of the paging query; common-keyword totals beyond the
+// cap are reported from the capped universe (documented trade-off).
+const maxKeywordMatchIDs = 2000
+
+// fulltextPhrase renders a BOOLEAN MODE phrase for the ngram parser. A quoted
+// phrase matches the exact character sequence (bigram adjacency), which is
+// the closest semantic to the legacy LIKE '%kw%'. Embedded quotes, backslashes
+// and control characters are stripped so the phrase stays well-formed.
+func fulltextPhrase(keyword string) string {
+	clean := strings.Map(func(r rune) rune {
+		if r == '"' || r == '\\' || unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, keyword)
+	clean = strings.TrimSpace(clean)
+	if clean == "" {
+		return ""
+	}
+	return `"` + clean + `"`
+}
+
+// keywordMatchIDs resolves the prompt-id universe matching the keyword.
+//
+// Phase A uses the ngram FULLTEXT index for the large text columns (the index
+// only serves keywords of at least ngram_token_size runes, 2 by default).
+// Phase B light-scans the small columns (category/model/username/tag) that
+// the index does not cover. For single-rune keywords (or when the index is
+// unavailable) phase B also scans the text columns, keeping the legacy
+// leading-wildcard LIKE semantics as the fallback. The union is identical to
+// the previous single OR-LIKE condition.
+func (s *MySQLPromptStore) keywordMatchIDs(keyword string) (map[int64]struct{}, error) {
+	like := "%" + strings.ToLower(keyword) + "%"
+	matches := make(map[int64]struct{})
+	useFulltext := len([]rune(keyword)) >= 2
+
+	if useFulltext {
+		if phrase := fulltextPhrase(keyword); phrase != "" {
+			rows, err := s.db.Query(`
+				SELECT DISTINCT p.id
+				FROM prompts p
+				JOIN users u ON u.id = p.user_id
+				WHERE p.status = 1 AND u.status = 1
+				  AND MATCH(p.title, p.description, p.content, p.system_prompt) AGAINST(? IN BOOLEAN MODE)
+				LIMIT ?
+			`, phrase, maxKeywordMatchIDs)
+			if err != nil {
+				return nil, err
+			}
+			for rows.Next() {
+				var id int64
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				matches[id] = struct{}{}
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			rows.Close()
+		}
+	}
+
+	// Phase B: small columns always; text columns only when FULLTEXT did not
+	// or cannot serve them (single-rune keyword / index error fallback).
+	small := `LOWER(c.name) LIKE ? OR LOWER(p.model) LIKE ? OR LOWER(u.username) LIKE ? OR EXISTS (
+		SELECT 1 FROM prompt_tags search_tags WHERE search_tags.prompt_id = p.id AND LOWER(search_tags.tag) LIKE ?
+	)`
+	text := `LOWER(p.title) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(p.content) LIKE ? OR LOWER(p.system_prompt) LIKE ?`
+	condition := small
+	args := []any{like, like, like, like}
+	if !useFulltext {
+		condition = text + ` OR ` + small
+		args = []any{like, like, like, like, like, like, like, like}
+	}
+	rows, err := s.db.Query(`
+		SELECT DISTINCT p.id
+		FROM prompts p
+		JOIN categories c ON c.id = p.category_id
+		JOIN users u ON u.id = p.user_id
+		WHERE p.status = 1 AND u.status = 1 AND (`+condition+`)
+		LIMIT ?
+	`, append(args, maxKeywordMatchIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		matches[id] = struct{}{}
+	}
+	return matches, rows.Err()
+}
+
+// keywordMatchCondition builds the WHERE fragment for the keyword filter.
+// The normal path is `p.id IN (...)` over the resolved match universe, which
+// lets both the page query and COUNT drive off primary-key ranges instead of
+// scanning every row's TEXT columns. Errors from the FULLTEXT phase degrade
+// to the legacy LIKE-only condition so search stays available.
+func (s *MySQLPromptStore) keywordMatchCondition(keyword string) (string, []any, error) {
+	like := "%" + strings.ToLower(keyword) + "%"
+	legacy := `(LOWER(p.title) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(p.content) LIKE ? OR LOWER(p.system_prompt) LIKE ? OR LOWER(c.name) LIKE ? OR LOWER(p.model) LIKE ? OR LOWER(u.username) LIKE ? OR EXISTS (
+		SELECT 1 FROM prompt_tags search_tags WHERE search_tags.prompt_id = p.id AND LOWER(search_tags.tag) LIKE ?
+	))`
+	legacyArgs := []any{like, like, like, like, like, like, like, like}
+
+	if len([]rune(keyword)) < 2 {
+		// Below ngram_token_size the FULLTEXT index cannot match; keep the
+		// exact legacy semantics.
+		return legacy, legacyArgs, nil
+	}
+
+	matches, err := s.keywordMatchIDs(keyword)
+	if err != nil {
+		// FULLTEXT unavailable (e.g. index missing on an un-migrated
+		// database): degrade to the original full scan.
+		return legacy, legacyArgs, nil
+	}
+	if len(matches) == 0 {
+		// No match at all: an impossible id keeps the SQL shape uniform.
+		return "p.id = -1", nil, nil
+	}
+	ids := make([]int64, 0, len(matches))
+	for id := range matches {
+		ids = append(ids, id)
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	return "p.id IN (" + placeholders + ")", args, nil
+}
+
 func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([]Prompt, int, error) {
 	if page < 1 {
 		page = 1
@@ -189,11 +330,12 @@ func (s *MySQLPromptStore) queryPage(filter PromptFilter, page, pageSize int) ([
 	}
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
 		keyword = capKeywordLength(keyword)
-		like := "%" + strings.ToLower(keyword) + "%"
-		conditions = append(conditions, `(LOWER(p.title) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(p.content) LIKE ? OR LOWER(p.system_prompt) LIKE ? OR LOWER(c.name) LIKE ? OR LOWER(p.model) LIKE ? OR LOWER(u.username) LIKE ? OR EXISTS (
-			SELECT 1 FROM prompt_tags search_tags WHERE search_tags.prompt_id = p.id AND LOWER(search_tags.tag) LIKE ?
-		))`)
-		args = append(args, like, like, like, like, like, like, like, like)
+		keywordCondition, keywordArgs, err := s.keywordMatchCondition(keyword)
+		if err != nil {
+			return nil, 0, err
+		}
+		conditions = append(conditions, keywordCondition)
+		args = append(args, keywordArgs...)
 	}
 
 	if len(conditions) > 0 {

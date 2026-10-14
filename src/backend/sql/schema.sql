@@ -62,6 +62,9 @@ CREATE TABLE prompts (
     INDEX idx_status_category_created (status, category_id, created_at),
     INDEX idx_user_created (user_id, created_at),
     INDEX idx_status_popular (status, likes),
+    -- ngram FULLTEXT for keyword search over the large text columns; the
+    -- application pairs it with small-column scans for exact OR semantics.
+    FULLTEXT KEY ft_prompts_text (title, description, content, system_prompt) WITH PARSER ngram,
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
