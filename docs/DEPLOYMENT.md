@@ -45,6 +45,25 @@
 - 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；`v0.3.0` 已切换为强制 `Content-Security-Policy`，不得直接放宽为 `*`。
 - 首次新库不需要人工导入 SQL：backend 检测到当前数据库无表时自动应用 `src/backend/sql/schema.sql` 基线，随后通过 `schema_migrations` 执行全部 `sql/migrations`。已有卷和部分迁移库只执行未记录的迁移，不会覆盖数据；
 
+### 首次部署初始化向导（v0.5.0 起）
+
+全新部署（库里没有 `admin` 角色且无 `setup.completed_at` 标记）在服务启动后访问 `https://<域名>/setup` 完成一次性引导：
+
+1. **环境检查**：确认存储模式为 MySQL（内存模式仅限开发）；
+2. **创建管理员账号**：写入 `users` 并在 `user_roles` 授予 `admin`，与设置保存在同一事务；
+3. **站点信息**：站点名称/描述、是否开放注册；
+4. **SMTP 邮件配置**：可先「发送测试邮件」验证连通性再保存，也可整步跳过（沿用 `SMTP_*` 环境变量）；
+5. **确认提交**：`system_settings.setup.completed_at` 主键作为原子闸门，初始化只能成功一次。
+
+安全边界：
+
+- 已存在管理员（含历史上手工 `INSERT INTO user_roles` 配置的账号，如现网 user 8）的部署会返回 `409 SETUP_COMPLETED`，向导无法被利用来接管站点；
+- `POST /setup/test-smtp` 在初始化完成后对匿名请求关闭（403），此后测试发信走 `/admin/settings` 的管理员接口；
+- `/api/v1/setup/initialize` 受 IP 限流（5 次/10 分钟）；
+- SMTP 密码等敏感值存于 `system_settings`，所有读取接口只返回 `smtpPasswordSet` 布尔，不回显明文；变更写入 `audit_logs`（仅键名）。
+
+向导完成后，站点名称/注册开关/SMTP 等配置可在「工作台 → 审核控制台 → 站点设置」中随时调整，保存即生效（邮件配置数据库优先、`SMTP_*` 环境变量兜底，无需重启）。
+
 ## 当前生产发布
 
 - 版本：`v0.3.4`（CI 制品对应提交 `2e79994`）

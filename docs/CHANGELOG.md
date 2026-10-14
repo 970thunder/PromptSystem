@@ -2,6 +2,27 @@
 
 所有对外可见的变更记录在本文件。版本号：`v主.次.修订`（主=大改/不兼容，次=新功能，修订=修复）。
 
+## [v0.5.0] - 2026-10-14
+
+### Added
+- 首次部署初始化向导 `/setup`：五步引导（环境检查 → 创建管理员账号 → 站点信息 → SMTP 邮件配置（可发测试邮件/可跳过） → 确认提交）。后端 `/api/v1/setup/*` 以新表 `system_settings` 的 `setup.completed_at` 主键为原子闸门，初始化仅能成功一次；已存在管理员（含 SQL 手工配置）的部署会拒绝再次初始化，防止接管。迁移 `0019_system_settings.sql`。
+- 管理员站点设置控制台（`/admin` 新增「站点设置」页签）：站点名称/描述、开放注册开关、SMTP 运行时配置——保存即生效、无需重启；SMTP 密码只写不读（留空保持不变），支持向任意邮箱发送测试邮件；变更写入哈希链审计（仅记录键名，不含值）。
+- 运行时可切换邮件发送器 `settingsEmailSender`：每次发送时数据库配置优先，环境变量 `SMTP_*` 兜底；清空数据库 SMTP 配置即回退环境变量。
+- 公开站点信息接口 `GET /api/v1/site/info` 与全站注册开关：关闭后注册接口返回 `403 REGISTRATION_DISABLED`，注册页在表单顶部提前提示；站点名称驱动浏览器标题。
+- `SetupStatus` / `SiteInfo` 纳入 `docs/api-contract.schema.json` 并重新生成前端契约类型。
+- 后端新增内存实现（开发回退）与 MySQL 集成测试（一次性引导并发唯一胜者、设置清除语义）。
+
+### Performance
+- 移除 naive-ui 全局注册（各视图本就按需 import）：`vendor-ui` 1,185 KB → 378 KB（gzip 308 KB → 97 KB），首屏 JS 约 1.48 MB → 0.66 MB。
+- 前端 nginx 增加 gzip 压缩（JS/CSS/JSON/SVG）与缓存策略：`/assets/*` 一年 immutable、`index.html` no-cache——回访几乎零下载，首次加载传输体积约降为原来的 1/4。
+- 路由过渡从 640ms（220 离场 + 420 入场，含旋转位移）压缩到约 280ms 且仅用合成器友好的 opacity/translate；过渡 key 由 `fullPath` 改为 `path`，搜索筛选/翻页不再整页卸载重挂载。
+- 会话恢复非阻塞：公开路由立即渲染，`/user/info` 探测在后台完成后再响应式更新顶栏，省去首屏一个阻塞往返。
+- 首页标题飘带离开视口自动暂停（IntersectionObserver）、移动端轨道减半；提示词卡片 `content-visibility: auto` 跳过视口外渲染，长列表滚动更流畅。
+
+### Security
+- `/setup/initialize` 匿名可用但受 IP 限流（5 次/10 分钟）且一次性；`/setup/test-smtp` 初始化完成后即对匿名关闭（403），此后仅管理员可测试发信，防止被当作匿名 SMTP 探测跳板。
+- SMTP 密码存于 `system_settings` 表但任何读取接口都不回显（仅返回 `smtpPasswordSet` 布尔）；生产建议配合数据库盘加密与最小权限账号（既有要求不变）。
+
 ## [v0.4.1] - 2026-09-22
 
 ### Changed

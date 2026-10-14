@@ -164,6 +164,11 @@
 
 每完成一项在此追加：日期、编号、修改文件、验证命令/服务器证据、提交哈希、剩余风险。
 
+### 2026-10-14
+
+- `首次部署初始化向导（新能力，未占用既有编号）`：新增 `/setup` 五步向导（环境检查→管理员账号→站点信息→SMTP 测试→确认）与管理员「站点设置」控制台。后端新增 `system_settings` 表（迁移 `0019`，schema 基线同步）、`SettingsManager`/`SetupManager` 存储（MySQL 事务实现 + 内存开发回退）、`/api/v1/setup/status|initialize|test-smtp`、`/api/v1/admin/settings`（GET/PUT + test-smtp）、公开 `/api/v1/site/info` 与全站注册开关（关闭时注册返回 `403 REGISTRATION_DISABLED`）。一次性语义由 `setup.completed_at` 主键原子保证，且已存在管理员的部署（含手工 SQL 配置，如现网 user 8）拒绝再次初始化；`/setup/test-smtp` 在初始化完成后对匿名关闭。邮件发送器改为 `settingsEmailSender`：数据库配置优先、`SMTP_*` 环境变量兜底，管理员改配置即时生效。验证：`go test ./...`、`go vet ./...`、`gofmt`（LF 归一化副本核查）通过；新增 `internal/api/setup_test.go`（一次性/并发劫持/校验/注册开关/管理设置掩码/发件器优先级）、`internal/store/mysql_settings_test.go`（一次性 MySQL 集成，DSN 未设跳过）；前端 Vitest 13 files/35 tests、`npm run build`、`npm run lint:check`、`npm run contract:check`（SetupStatus/SiteInfo 入契约）、Playwright 19 passed/7 skipped 全部通过。剩余风险：SMTP 密码明文存库（读取全掩码、审计仅键名），建议后续增加应用层加密；`/setup` 未做强制跳转（避免劫持在用站点），首次部署需人工访问。
+- `前端加载与滚动性能（对应用户反馈"加载慢、卡顿"）`：移除 naive-ui 全局注册后 `vendor-ui` 1,185 KB → 378 KB（gzip 308→97 KB），首屏 JS 1.48 MB → 0.66 MB；nginx 增加 gzip 与 `/assets` 一年 immutable 缓存；路由过渡 640ms→约 280ms 且 key 改为 path（筛选/翻页不再整页重挂载）；公开路由会话恢复非阻塞；首页飘带离屏暂停 + 移动端减半；PromptCard `content-visibility:auto`。验证同上（Vitest/build/e2e 全过）。
+
 ### 2026-08-30
 
 - `P0-01/P0-05/P0-07/P0-08/P0-10/P0-11`、`S-03`、`F-01/F-02/F-03/F-04`、`O-02/O-08/O-09`、`R-01/R-03`：代码见提交 `b584585`、`b78a8b9`、`ac0c406`；后端 `gofmt -w && go test ./... && go vet ./...` 通过；前端 `npm run lint:check`、`npm test -- --run`（6 files/8 tests）、`npm run build` 通过。线上 `/api/v1/health/ready` 返回 `200`、`environment=production`、`storageMode=mysql`、`degraded=false`；详情、评论分页、匿名浏览返回正常；公网端口检查仅 80/443，PromptSystem 3092/5092 为 loopback，其他 Compose 项目未变。剩余风险：CI 尚未接入，P0-04 演示账号处置和邮件发送尚未完成。
