@@ -219,6 +219,16 @@ CREATE TABLE user_roles (
     INDEX idx_user_roles_role (role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Runtime site configuration owned by the first-run setup wizard and the
+-- admin settings console. The `setup.completed_at` key doubles as the atomic
+-- bootstrap marker; secrets stored here are masked on every read API.
+CREATE TABLE system_settings (
+    setting_key VARCHAR(64) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Append-only moderation audit chain. The application never updates or deletes
 -- these rows; event_hash commits to the previous row and canonical metadata.
 CREATE TABLE audit_logs (

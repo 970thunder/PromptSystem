@@ -32,6 +32,8 @@ type server struct {
 	commentStore        store.CommentManager
 	moderationStore     store.ModerationManager
 	uploadStore         store.UploadManager
+	settingsStore       store.SettingsManager
+	setupStore          store.SetupManager
 	imageStorage        storage.ImageStorage
 	emailSender         emailSender
 	storageMode         string
@@ -61,6 +63,8 @@ type serverDeps struct {
 	commentStore    store.CommentManager
 	moderationStore store.ModerationManager
 	uploadStore     store.UploadManager
+	settingsStore   store.SettingsManager
+	setupStore      store.SetupManager
 	imageStorage    storage.ImageStorage
 	emailSender     emailSender
 	storageMode     string
@@ -73,11 +77,16 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		return nil, fmt.Errorf("initialize image storage: %w", err)
 	}
 
-	userStore := store.UserManager(store.NewUserStore())
+	memoryUsers := store.NewUserStore()
+	userStore := store.UserManager(memoryUsers)
 	promptStore := store.PromptManager(store.NewMemoryPromptStore())
 	commentStore := store.CommentManager(store.NewMemoryCommentStore())
 	var moderationStore store.ModerationManager
 	uploadStore := store.UploadManager(store.NewMemoryUploadStore())
+	memorySettings := store.NewMemorySettingsStore()
+	memorySettings.SetUserStore(memoryUsers)
+	settingsStore := store.SettingsManager(memorySettings)
+	setupStore := store.SetupManager(memorySettings)
 	storageMode := "memory"
 	runtimeCache := cache.New(cfg)
 	var readyCheck func(context.Context) map[string]bool
@@ -112,6 +121,9 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 				commentStore = store.NewMySQLCommentStore(db)
 				moderationStore = store.NewMySQLModerationStore(db)
 				uploadStore = store.NewMySQLUploadStore(db)
+				mysqlSettings := store.NewMySQLSettingsStore(db)
+				settingsStore = mysqlSettings
+				setupStore = mysqlSettings
 				storageMode = "mysql"
 				readyCheck = func(ctx context.Context) map[string]bool {
 					mysqlOK := db.PingContext(ctx) == nil
@@ -145,10 +157,14 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		commentStore:    commentStore,
 		moderationStore: moderationStore,
 		uploadStore:     uploadStore,
+		settingsStore:   settingsStore,
+		setupStore:      setupStore,
 		imageStorage:    imageStorage,
-		emailSender:     newSMTPEmailSender(cfg),
-		storageMode:     storageMode,
-		readyCheck:      readyCheck,
+		// The settings-backed sender lets the wizard/admin console reconfigure
+		// SMTP at runtime; env configuration remains the fallback.
+		emailSender: newSettingsEmailSender(settingsStore, cfg),
+		storageMode: storageMode,
+		readyCheck:  readyCheck,
 	}), nil
 }
 
@@ -166,6 +182,8 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 		commentStore:     deps.commentStore,
 		moderationStore:  deps.moderationStore,
 		uploadStore:      deps.uploadStore,
+		settingsStore:    deps.settingsStore,
+		setupStore:       deps.setupStore,
 		imageStorage:     deps.imageStorage,
 		emailSender:      deps.emailSender,
 		storageMode:      deps.storageMode,
@@ -205,6 +223,10 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	mux.HandleFunc("/api/v1/auth/github", s.handleGitHubAuthStart)
 	mux.HandleFunc("/api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("/api/v1/auth/exchange", s.handleAuthExchange)
+	mux.HandleFunc("/api/v1/setup/status", s.handleSetupStatus)
+	mux.HandleFunc("/api/v1/setup/initialize", s.handleSetupInitialize)
+	mux.HandleFunc("/api/v1/setup/test-smtp", s.handleSetupTestSMTP)
+	mux.HandleFunc("/api/v1/site/info", s.handleSiteInfo)
 	mux.HandleFunc("/api/v1/user/login", s.handleLogin)
 	mux.HandleFunc("/api/v1/user/captcha", s.handleCaptcha)
 	mux.HandleFunc("/api/v1/user/password/reset", s.handleResetPassword)
@@ -225,6 +247,8 @@ func newServerWithDeps(deps serverDeps) http.Handler {
 	mux.HandleFunc("/api/v1/user/logout", s.withAuth(s.handleLogout))
 	mux.HandleFunc("/api/v1/users/", s.handleUserAction)
 	mux.HandleFunc("/api/v1/admin/", s.withAdmin(s.handleAdmin))
+	mux.HandleFunc("/api/v1/admin/settings", s.withAdmin(s.handleAdminSettings))
+	mux.HandleFunc("/api/v1/admin/settings/test-smtp", s.withAdmin(s.handleAdminTestSMTP))
 	mux.HandleFunc("/uploads/", s.handleStaticUpload)
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))

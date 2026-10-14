@@ -124,7 +124,7 @@ func (s *server) handleCaptcha(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.config.IsProduction() {
-		if s.emailSender == nil {
+		if !s.emailConfigured() {
 			s.discardRedisCaptcha(r.Context(), payload.Email)
 			writeJSON(w, http.StatusServiceUnavailable, apiResponse[any]{Code: 503, Message: "Email service is not configured", ErrorCode: "EMAIL_NOT_CONFIGURED"})
 			return
@@ -275,6 +275,13 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	if strings.TrimSpace(payload.Username) == "" || strings.TrimSpace(payload.Email) == "" || strings.TrimSpace(payload.Password) == "" {
 		writeJSON(w, http.StatusBadRequest, apiResponse[any]{Code: 400, ErrorCode: "INVALID_REQUEST", Message: "Username, email, and password are required"})
+		return
+	}
+
+	// The site-wide registration toggle is configurable from the setup wizard
+	// and the admin settings console; check it before consuming a captcha.
+	if s.registrationDisabled() {
+		writeJSON(w, http.StatusForbidden, apiResponse[any]{Code: 403, ErrorCode: "REGISTRATION_DISABLED", Message: "Registration is currently disabled"})
 		return
 	}
 

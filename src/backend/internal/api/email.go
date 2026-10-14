@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"promptos-backend/internal/config"
+	"promptos-backend/internal/store"
 )
 
 type emailSender interface {
@@ -26,6 +27,60 @@ func newSMTPEmailSender(cfg config.Config) emailSender {
 		return nil
 	}
 	return &smtpEmailSender{host: cfg.SMTPHost, port: cfg.SMTPPort, username: cfg.SMTPUser, password: cfg.SMTPPassword, from: cfg.SMTPFrom}
+}
+
+// newSMTPSenderFromSettings builds a one-shot sender from typed settings. It
+// returns nil when the settings do not carry both required fields.
+func newSMTPSenderFromSettings(s store.SiteSettings) *smtpEmailSender {
+	if !s.SMTPConfigured() {
+		return nil
+	}
+	port := s.SMTPPort
+	if port == "" {
+		port = "587"
+	}
+	return &smtpEmailSender{host: s.SMTPHost, port: port, username: s.SMTPUser, password: s.SMTPPassword, from: s.SMTPFrom}
+}
+
+// settingsEmailSender resolves the effective sender per send: wizard/admin
+// settings override environment configuration, so SMTP can be configured at
+// runtime without a restart. When neither source is configured it behaves
+// like the legacy nil sender (Send fails, Configured reports false).
+type settingsEmailSender struct {
+	settings store.SettingsManager
+	fallback emailSender
+}
+
+func newSettingsEmailSender(settings store.SettingsManager, cfg config.Config) emailSender {
+	return &settingsEmailSender{settings: settings, fallback: newSMTPEmailSender(cfg)}
+}
+
+func (s *settingsEmailSender) resolve() emailSender {
+	if s == nil {
+		return nil
+	}
+	if s.settings != nil {
+		if all, err := s.settings.GetAll(); err == nil {
+			if sender := newSMTPSenderFromSettings(store.ParseSiteSettings(all)); sender != nil {
+				return sender
+			}
+		}
+	}
+	return s.fallback
+}
+
+// Configured reports whether any sender source is usable, replacing the old
+// `emailSender == nil` checks at call sites.
+func (s *settingsEmailSender) Configured() bool {
+	return s.resolve() != nil
+}
+
+func (s *settingsEmailSender) Send(ctx context.Context, recipient, subject, body string) error {
+	sender := s.resolve()
+	if sender == nil {
+		return fmt.Errorf("SMTP sender is not configured")
+	}
+	return sender.Send(ctx, recipient, subject, body)
 }
 
 func (s *smtpEmailSender) Send(ctx context.Context, recipient, subject, body string) error {
