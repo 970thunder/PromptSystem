@@ -190,7 +190,7 @@ func (s *server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: authResponse{
 			Token: s.authResponseToken(token),
-			User:  store.ToPrivateUser(user),
+			User:  s.privateUserWithRole(user),
 		},
 	})
 }
@@ -337,7 +337,7 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: authResponse{
 			Token: s.authResponseToken(token),
-			User:  store.ToPrivateUser(user),
+			User:  s.privateUserWithRole(user),
 		},
 	})
 }
@@ -369,7 +369,7 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
 			Message: "Success",
-			Data:    store.ToPrivateUser(user),
+			Data:    s.privateUserWithRole(user),
 		})
 	case http.MethodPut:
 		var payload updateUserRequest
@@ -388,7 +388,7 @@ func (s *server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, apiResponse[store.PrivateUser]{
 			Code:    200,
 			Message: "Success",
-			Data:    store.ToPrivateUser(user),
+			Data:    s.privateUserWithRole(user),
 		})
 	default:
 		writeMethodNotAllowed(w)
@@ -809,4 +809,18 @@ func userIDFromContext(ctx context.Context) (int, bool) {
 	value := ctx.Value(userContextKey)
 	userID, ok := value.(int)
 	return userID, ok
+}
+
+// privateUserWithRole annotates the self DTO with the administrator role so
+// the frontend can gate admin surfaces without an extra probe. It is only for
+// self responses (login/register/session/profile/export); public DTOs never
+// carry the flag, and a missing/unavailable moderation store yields false.
+func (s *server) privateUserWithRole(user store.AuthUser) store.PrivateUser {
+	private := store.ToPrivateUser(user)
+	if s.moderationStore != nil {
+		if admin, err := s.moderationStore.IsAdmin(user.ID); err == nil && admin {
+			private.IsAdmin = true
+		}
+	}
+	return private
 }

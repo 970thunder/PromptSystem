@@ -625,6 +625,7 @@ watch(() => route.params.userId, loadProfile)
               </div>
               <div class="profile-account-actions">
                 <RouterLink
+                  v-if="userStore.userInfo?.isAdmin"
                   to="/admin"
                   class="profile-account-action"
                 >

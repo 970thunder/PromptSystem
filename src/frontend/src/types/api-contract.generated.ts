@@ -25,6 +25,7 @@ export interface ApiContractUser {
   status?: number
   createdAt: string
   hasGitHubBound?: boolean
+  isAdmin?: boolean
 }
 
 export interface ApiContractPromptParams {

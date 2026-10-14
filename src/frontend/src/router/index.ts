@@ -149,6 +149,12 @@ router.beforeEach(async (to) => {
     }
   }
 
+  // 管理员路由守卫：确认过会话且明确非管理员的账号直接回首页，避免加载
+  // 控制台后收到 403 空态。后端仍逐请求校验角色，这里只是体验层拦截。
+  if (to.path === '/admin' && userStore.userInfo?.isAdmin === false) {
+    return { path: '/' }
+  }
+
   if (isAuthPage && userStore.isLoggedIn) {
     return '/'
   }

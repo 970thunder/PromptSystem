@@ -66,6 +66,9 @@ type PrivateUser struct {
 	Email          string `json:"email"`
 	Status         int    `json:"status"`
 	HasGitHubBound bool   `json:"hasGitHubBound"`
+	// IsAdmin is resolved per-request against user_roles and only ever set on
+	// self DTOs (login/register/session/profile); public DTOs never carry it.
+	IsAdmin bool `json:"isAdmin"`
 }
 
 type FollowStatus struct {

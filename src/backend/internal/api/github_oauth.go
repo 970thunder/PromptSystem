@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"promptos-backend/internal/store"
 )
 
 // oauthStateEntry is the in-memory fallback record used only when Redis is not
@@ -350,7 +348,7 @@ func (s *server) handleAuthExchange(w http.ResponseWriter, r *http.Request) {
 		Message: "Success",
 		Data: authResponse{
 			Token: s.authResponseToken(token),
-			User:  store.ToPrivateUser(user),
+			User:  s.privateUserWithRole(user),
 		},
 	})
 }

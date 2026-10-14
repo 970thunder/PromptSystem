@@ -21,4 +21,15 @@ describe('profile route access', () => {
     expect(privacy?.path).toBe('/privacy')
     expect(privacy?.meta.requiresAuth).toBeUndefined()
   })
+
+  it('keeps the admin console authenticated and registers the setup wizard', () => {
+    const admin = router.getRoutes().find((route) => route.name === 'Admin')
+    const setup = router.getRoutes().find((route) => route.name === 'Setup')
+
+    expect(admin?.path).toBe('/admin')
+    expect(admin?.meta.requiresAuth).toBe(true)
+    // 初始化向导必须匿名可达（尚未有管理员时这是唯一的引导入口）。
+    expect(setup?.path).toBe('/setup')
+    expect(setup?.meta.requiresAuth).toBeUndefined()
+  })
 })

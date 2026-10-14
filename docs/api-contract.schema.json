@@ -17,7 +17,8 @@
         "experience": {"type": "integer"},
         "status": {"type": "integer"},
         "createdAt": {"type": "string"},
-        "hasGitHubBound": {"type": "boolean"}
+        "hasGitHubBound": {"type": "boolean"},
+        "isAdmin": {"type": "boolean", "description": "Only present on self DTOs (login/register/session); public author DTOs never carry it"}
       }
     },
     "PromptParams": {
