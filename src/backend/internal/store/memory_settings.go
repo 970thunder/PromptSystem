@@ -14,6 +14,7 @@ type MemorySettingsStore struct {
 	values    map[string]string
 	adminIDs  map[int]struct{}
 	nextAdmin int
+	cipher    *SettingsCipher
 	// users, when wired, makes the wizard-created administrator a real
 	// login-able account in the development memory backend (parity with the
 	// MySQL implementation, which inserts the user in the same transaction).
@@ -28,6 +29,27 @@ func NewMemorySettingsStore() *MemorySettingsStore {
 	}
 }
 
+// SetCipher enables at-rest encryption for sensitive settings (smtp.password).
+func (s *MemorySettingsStore) SetCipher(cipher *SettingsCipher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cipher = cipher
+}
+
+func (s *MemorySettingsStore) encodeValue(key, value string) (string, error) {
+	if s.cipher == nil || key != SettingSMTPPassword || value == "" {
+		return value, nil
+	}
+	return s.cipher.Encrypt(value)
+}
+
+func (s *MemorySettingsStore) decodeValue(key, value string) string {
+	if key != SettingSMTPPassword {
+		return value
+	}
+	return s.cipher.Decrypt(value)
+}
+
 // SetUserStore wires the development user store so bootstrap creates a real
 // account. It must be called before CompleteSetup.
 func (s *MemorySettingsStore) SetUserStore(users *UserStore) {
@@ -40,7 +62,10 @@ func (s *MemorySettingsStore) Get(key string) (string, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	value, ok := s.values[key]
-	return value, ok, nil
+	if !ok {
+		return "", false, nil
+	}
+	return s.decodeValue(key, value), true, nil
 }
 
 func (s *MemorySettingsStore) GetAll() (map[string]string, error) {
@@ -48,7 +73,7 @@ func (s *MemorySettingsStore) GetAll() (map[string]string, error) {
 	defer s.mu.Unlock()
 	result := make(map[string]string, len(s.values))
 	for key, value := range s.values {
-		result[key] = value
+		result[key] = s.decodeValue(key, value)
 	}
 	return result, nil
 }
@@ -63,11 +88,15 @@ func (s *MemorySettingsStore) SetMany(values map[string]string) error {
 		if key == SettingSetupCompletedAt {
 			continue
 		}
-		if value == "" {
+		encoded, err := s.encodeValue(key, value)
+		if err != nil {
+			return err
+		}
+		if encoded == "" {
 			delete(s.values, key)
 			continue
 		}
-		s.values[key] = value
+		s.values[key] = encoded
 	}
 	return nil
 }
@@ -138,7 +167,11 @@ func (s *MemorySettingsStore) CompleteSetup(input SetupInput) (int, error) {
 	s.adminIDs[adminID] = struct{}{}
 	s.values[SettingSetupCompletedAt] = completedAt.Format(time.RFC3339)
 	for key, value := range settings {
-		s.values[key] = value
+		encoded, err := s.encodeValue(key, value)
+		if err != nil {
+			return 0, err
+		}
+		s.values[key] = encoded
 	}
 	return adminID, nil
 }

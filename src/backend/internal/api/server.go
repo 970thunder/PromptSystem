@@ -91,6 +91,13 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 	uploadStore := store.UploadManager(store.NewMemoryUploadStore())
 	memorySettings := store.NewMemorySettingsStore()
 	memorySettings.SetUserStore(memoryUsers)
+	if cfg.SettingsSecretKey != "" {
+		if cipher, cipherErr := store.NewSettingsCipher(cfg.SettingsSecretKey); cipherErr == nil {
+			memorySettings.SetCipher(cipher)
+		} else {
+			log.Printf("invalid SETTINGS_SECRET_KEY, settings stay plaintext: %v", cipherErr)
+		}
+	}
 	settingsStore := store.SettingsManager(memorySettings)
 	setupStore := store.SetupManager(memorySettings)
 	storageMode := "memory"
@@ -128,6 +135,18 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 				moderationStore = store.NewMySQLModerationStore(db)
 				uploadStore = store.NewMySQLUploadStore(db)
 				mysqlSettings := store.NewMySQLSettingsStore(db)
+				// At-rest encryption for sensitive settings (smtp.password);
+				// without a provisioned key values stay plaintext (legacy).
+				if cfg.SettingsSecretKey != "" {
+					if cipher, cipherErr := store.NewSettingsCipher(cfg.SettingsSecretKey); cipherErr == nil {
+						mysqlSettings.SetCipher(cipher)
+					} else if cfg.IsProduction() {
+						_ = migrationDB.Close()
+						return nil, fmt.Errorf("initialize settings cipher: %w", cipherErr)
+					} else {
+						log.Printf("invalid SETTINGS_SECRET_KEY, settings stay plaintext: %v", cipherErr)
+					}
+				}
 				settingsStore = mysqlSettings
 				setupStore = mysqlSettings
 				storageMode = "mysql"

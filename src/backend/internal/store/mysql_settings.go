@@ -14,11 +14,32 @@ import (
 // one-shot bootstrap. The setup marker row acts as the atomic gate: concurrent
 // CompleteSetup calls serialize on the system_settings primary key.
 type MySQLSettingsStore struct {
-	db *sql.DB
+	db     *sql.DB
+	cipher *SettingsCipher
 }
 
 func NewMySQLSettingsStore(db *sql.DB) *MySQLSettingsStore {
 	return &MySQLSettingsStore{db: db}
+}
+
+// SetCipher enables at-rest encryption for sensitive settings (smtp.password).
+// Optional: without a cipher values are stored as-is.
+func (s *MySQLSettingsStore) SetCipher(cipher *SettingsCipher) {
+	s.cipher = cipher
+}
+
+func (s *MySQLSettingsStore) encodeValue(key, value string) (string, error) {
+	if s.cipher == nil || key != SettingSMTPPassword || value == "" {
+		return value, nil
+	}
+	return s.cipher.Encrypt(value)
+}
+
+func (s *MySQLSettingsStore) decodeValue(key, value string) string {
+	if key != SettingSMTPPassword {
+		return value
+	}
+	return s.cipher.Decrypt(value)
 }
 
 func (s *MySQLSettingsStore) Get(key string) (string, bool, error) {
@@ -30,7 +51,7 @@ func (s *MySQLSettingsStore) Get(key string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	return value, true, nil
+	return s.decodeValue(key, value), true, nil
 }
 
 func (s *MySQLSettingsStore) GetAll() (map[string]string, error) {
@@ -45,7 +66,7 @@ func (s *MySQLSettingsStore) GetAll() (map[string]string, error) {
 		if err := rows.Scan(&key, &value); err != nil {
 			return nil, err
 		}
-		result[key] = value
+		result[key] = s.decodeValue(key, value)
 	}
 	return result, rows.Err()
 }
@@ -63,7 +84,11 @@ func (s *MySQLSettingsStore) SetMany(values map[string]string) error {
 		if key == SettingSetupCompletedAt {
 			continue
 		}
-		if value == "" {
+		encoded, encErr := s.encodeValue(key, value)
+		if encErr != nil {
+			return encErr
+		}
+		if encoded == "" {
 			if _, err := tx.Exec(`DELETE FROM system_settings WHERE setting_key = ?`, key); err != nil {
 				return err
 			}
@@ -72,7 +97,7 @@ func (s *MySQLSettingsStore) SetMany(values map[string]string) error {
 		if _, err := tx.Exec(`
 			INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?)
 			ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
-		`, key, value); err != nil {
+		`, key, encoded); err != nil {
 			return err
 		}
 	}
@@ -194,10 +219,14 @@ func (s *MySQLSettingsStore) CompleteSetup(input SetupInput) (int, error) {
 	}
 
 	for key, value := range settings {
+		encoded, encErr := s.encodeValue(key, value)
+		if encErr != nil {
+			return 0, encErr
+		}
 		if _, err := tx.Exec(`
 			INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?)
 			ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
-		`, key, value); err != nil {
+		`, key, encoded); err != nil {
 			return 0, err
 		}
 	}

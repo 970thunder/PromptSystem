@@ -40,6 +40,7 @@
 ## 配置与密钥
 
 - 仓库内只有 `.env.docker.example`（占位符）；真实值本地在 `E:\Web\secrets\promptsystem\`，服务器在 `/opt/secrets/promptsystem/`（chmod 600，不在任何 webroot 下）。
+- `SETTINGS_SECRET_KEY`（可选，建议生产配置）：`system_settings` 表中 SMTP 密码的静态加密密钥（AES-256-GCM，`openssl rand -base64 32` 生成）。配置后拖库不再泄露 SMTP 凭据；存量明文行保持可读，再次保存时自动转为密文。**密钥丢失 = 已加密密码不可恢复**（重新保存即可），务必随其他秘密一起备份。
 - 生产密钥位于服务器 `/opt/secrets/promptsystem/app.env`（权限 `600`），不进入仓库；Compose 通过环境变量注入；
 - 生产入口由现有 nginx 反代，证书由 Certbot webroot 自动续期；
 - 生产前端 nginx 先以 `Content-Security-Policy-Report-Only` 观察 Vue、图片和 API 来源；`v0.3.0` 已切换为强制 `Content-Security-Policy`，不得直接放宽为 `*`。

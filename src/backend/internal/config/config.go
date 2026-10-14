@@ -54,6 +54,7 @@ type Config struct {
 	SMTPPassword            string
 	SMTPFrom                string
 	EmailAuthEnabled        bool
+	SettingsSecretKey       string
 	AuthUserCacheTTLSeconds int
 }
 
@@ -109,6 +110,9 @@ func Load() Config {
 		SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:             getEnv("SMTP_FROM", ""),
 		EmailAuthEnabled:     getEnvAsBool("EMAIL_AUTH_ENABLED", true),
+		// Optional at-rest encryption key for sensitive system_settings values
+		// (smtp.password); provisioned from the deployment secret file.
+		SettingsSecretKey: getEnv("SETTINGS_SECRET_KEY", ""),
 		// Zero disables the per-process auth user cache; a plain go test
 		// Config literal therefore keeps the uncached behavior.
 		AuthUserCacheTTLSeconds: getEnvAsIntAllowZero("AUTH_USER_CACHE_TTL_SECONDS", 30),
