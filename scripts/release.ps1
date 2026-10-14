@@ -3,7 +3,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [string]$Domain = 'promptos.hyper99.top',
+    [string]$Domain = 'promptsystem.isoumao.top',
     [string]$ServerHost = '166.1.232.84',
     [string]$ServerUser = 'root',
     [int]$SshPort = 22,
