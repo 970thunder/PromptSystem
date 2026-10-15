@@ -33,3 +33,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
+
+require github.com/Tsundeer/isoumao-shared v0.0.0
+
+replace github.com/Tsundeer/isoumao-shared => ../../isoumao-shared
