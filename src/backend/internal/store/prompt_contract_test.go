@@ -68,10 +68,10 @@ func runPromptManagerContract(t *testing.T, manager PromptManager, owner User, v
 		t.Fatalf("Unfavorite() = applied=%v err=%v, want applied", applied, err)
 	}
 
-	if _, applied, err := manager.RecordView(prompt.ID, viewerID); err != nil || !applied {
+	if applied, err := manager.RecordView(prompt.ID, viewerID); err != nil || !applied {
 		t.Fatalf("RecordView() = applied=%v err=%v, want first view applied", applied, err)
 	}
-	if _, applied, err := manager.RecordView(prompt.ID, viewerID); err != nil || applied {
+	if applied, err := manager.RecordView(prompt.ID, viewerID); err != nil || applied {
 		t.Fatalf("repeat RecordView() = applied=%v err=%v, want no-op", applied, err)
 	}
 	history, total, err := manager.ListUserHistoryPage(viewerID, 1, 10)

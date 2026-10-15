@@ -284,7 +284,7 @@ func TestMySQLSoftDeleteExcludesFromLists(t *testing.T) {
 		t.Fatalf("create prompt: %v", err)
 	}
 
-	if _, _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
+	if _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
 		t.Fatalf("record view: %v", err)
 	}
 
@@ -409,7 +409,7 @@ func TestMySQLDeleteAccountAnonymizesAndClearsPersonalRows(t *testing.T) {
 	if _, _, err := prompts.Favorite(prompt.ID, user.ID); err != nil {
 		t.Fatalf("favorite: %v", err)
 	}
-	if _, _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
+	if _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
 		t.Fatalf("view: %v", err)
 	}
 	if _, _, err := users.Follow(other.ID, user.ID); err != nil {
@@ -590,10 +590,10 @@ func TestMySQLPromptCounterAuditDetectsDrift(t *testing.T) {
 	if _, _, err := prompts.Like(prompt.ID, user.ID); err != nil {
 		t.Fatalf("like: %v", err)
 	}
-	if _, _, err := prompts.RecordView(prompt.ID, 0); err != nil {
+	if _, err := prompts.RecordView(prompt.ID, 0); err != nil {
 		t.Fatalf("anonymous view: %v", err)
 	}
-	if _, _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
+	if _, err := prompts.RecordView(prompt.ID, user.ID); err != nil {
 		t.Fatalf("logged-in view: %v", err)
 	}
 	cleanReport, err := AuditMySQLPromptCounters(db)

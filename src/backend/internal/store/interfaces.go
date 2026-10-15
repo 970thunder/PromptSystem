@@ -42,7 +42,12 @@ type PromptManager interface {
 	Unlike(id int, userID int) (Prompt, bool, error)
 	Favorite(id int, userID int) (Prompt, bool, error)
 	Unfavorite(id int, userID int) (Prompt, bool, error)
-	RecordView(id int, userID int) (Prompt, bool, error)
+	// RecordView counts one view of a published prompt and reports whether
+	// the counter moved (anonymous views always do; repeat views by the same
+	// user only refresh their history timestamp). It deliberately returns no
+	// prompt: the highest-frequency write on the platform must not pay for a
+	// full detail reload (joins + tag aggregation) per view.
+	RecordView(id int, userID int) (bool, error)
 	Report(id int, userID int, reason string, detail string) (Report, bool, error)
 	// GetInteractionStatus reports whether the given user has liked/favorited a
 	// prompt. It is used by the frontend to render toggle state without guessing

@@ -81,6 +81,21 @@ export const usePromptStore = defineStore('prompt', () => {
     prompts.value = next
   }
 
+  // view 接口不再回传完整提示词（计数不付详情查询的成本）：applied 时
+  // 客户端对已持有的副本本地 +1，语义即“我自己这次的浏览”。
+  const bumpPromptViews = (id: number) => {
+    if (currentPrompt.value?.id === id) {
+      currentPrompt.value = { ...currentPrompt.value, views: currentPrompt.value.views + 1 }
+    }
+    const existingIndex = prompts.value.findIndex((item) => item.id === id)
+    if (existingIndex === -1) {
+      return
+    }
+    const next = [...prompts.value]
+    next[existingIndex] = { ...next[existingIndex], views: next[existingIndex].views + 1 }
+    prompts.value = next
+  }
+
   const setCategories = (list: Category[]) => {
     categories.value = list
   }
@@ -508,6 +523,7 @@ export const usePromptStore = defineStore('prompt', () => {
     setPrompts,
     setCurrentPrompt,
     mergePrompt,
+    bumpPromptViews,
     setCategories,
     setComments,
     setLoading,

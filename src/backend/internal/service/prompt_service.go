@@ -60,7 +60,7 @@ func (s *PromptService) GetInteractionStatus(id, userID int) (store.InteractionS
 	return s.prompts.GetInteractionStatus(id, userID)
 }
 
-func (s *PromptService) RecordView(id, userID int) (store.Prompt, bool, error) {
+func (s *PromptService) RecordView(id, userID int) (bool, error) {
 	return s.prompts.RecordView(id, userID)
 }
 

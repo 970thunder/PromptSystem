@@ -193,7 +193,9 @@ const handleLike = async () => {
   liking.value = true
   try {
     const response = await promptApi.likePrompt(prompt.value.id)
-    promptStore.mergePrompt(response.data.prompt)
+    if (response.data.prompt) {
+      promptStore.mergePrompt(response.data.prompt)
+    }
     message.success(response.data.applied ? '已点赞' : '你已经点过赞了')
   } catch {
     message.error('点赞失败，请稍后重试')
@@ -214,7 +216,9 @@ const handleFavorite = async () => {
   favoriting.value = true
   try {
     const response = await promptApi.favoritePrompt(prompt.value.id)
-    promptStore.mergePrompt(response.data.prompt)
+    if (response.data.prompt) {
+      promptStore.mergePrompt(response.data.prompt)
+    }
     message.success(response.data.applied ? '已收藏' : '你已经收藏过了')
   } catch {
     message.error('收藏失败，请稍后重试')
@@ -416,7 +420,12 @@ const loadDetail = async () => {
   if (prompt.value) {
     try {
       const response = await promptApi.recordPromptView(prompt.value.id)
-      promptStore.mergePrompt(response.data.prompt)
+      if (response.data.prompt) {
+        promptStore.mergePrompt(response.data.prompt)
+      } else if (response.data.applied) {
+        // 计数不回传完整提示词：本地自增，语义即“我自己这次的浏览”。
+        promptStore.bumpPromptViews(prompt.value.id)
+      }
     } catch {
       // Browsing should never block reading a prompt.
     }

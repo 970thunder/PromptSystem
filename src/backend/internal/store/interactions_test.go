@@ -136,7 +136,7 @@ func TestConcurrentIdenticalLoggedInViewsCountOnce(t *testing.T) {
 	store := NewMemoryPromptStore()
 
 	applied := runConcurrent(20, func(_ int, out *bool) {
-		_, a, err := store.RecordView(p.ID, user)
+		a, err := store.RecordView(p.ID, user)
 		if err != nil {
 			t.Errorf("RecordView() error = %v", err)
 		}
@@ -188,7 +188,7 @@ func TestAnonymousViewIncrementsCounterButWritesNoHistory(t *testing.T) {
 	}
 
 	applied := runConcurrent(5, func(_ int, out *bool) {
-		_, a, err := store.RecordView(p.ID, 0)
+		a, err := store.RecordView(p.ID, 0)
 		if err != nil {
 			t.Errorf("RecordView(anonymous) error = %v", err)
 		}
@@ -219,23 +219,31 @@ func TestLoggedInRepeatViewUpdatesHistoryNotCount(t *testing.T) {
 	const user = 8006
 	store := NewMemoryPromptStore()
 
-	first, applied, err := store.RecordView(p.ID, user)
+	applied, err := store.RecordView(p.ID, user)
 	if err != nil {
 		t.Fatalf("RecordView() first error = %v", err)
 	}
 	if !applied {
 		t.Fatal("expected first view to apply")
 	}
+	afterFirst, _, err := store.FindByID(p.ID)
+	if err != nil {
+		t.Fatalf("FindByID() after first view error = %v", err)
+	}
 
-	second, applied, err := store.RecordView(p.ID, user)
+	applied, err = store.RecordView(p.ID, user)
 	if err != nil {
 		t.Fatalf("RecordView() second error = %v", err)
 	}
 	if applied {
 		t.Fatal("expected repeat view not to apply (no double count)")
 	}
-	if second.Views != first.Views {
-		t.Fatalf("expected repeat view not to change counter, got %d -> %d", first.Views, second.Views)
+	afterSecond, _, err := store.FindByID(p.ID)
+	if err != nil {
+		t.Fatalf("FindByID() after second view error = %v", err)
+	}
+	if afterSecond.Views != afterFirst.Views {
+		t.Fatalf("expected repeat view not to change counter, got %d -> %d", afterFirst.Views, afterSecond.Views)
 	}
 	if len(promptViewHistory[user]) != 1 {
 		t.Fatalf("expected exactly 1 history row for repeat views, got %d", len(promptViewHistory[user]))
@@ -251,13 +259,13 @@ func TestListUserHistoryPageFiltersDeletedAndPaginates(t *testing.T) {
 	p2 := newTestPrompt(t, owner)
 	p3 := newTestPrompt(t, owner)
 
-	if _, _, err := store.RecordView(p1.ID, user); err != nil {
+	if _, err := store.RecordView(p1.ID, user); err != nil {
 		t.Fatalf("RecordView p1 error = %v", err)
 	}
-	if _, _, err := store.RecordView(p2.ID, user); err != nil {
+	if _, err := store.RecordView(p2.ID, user); err != nil {
 		t.Fatalf("RecordView p2 error = %v", err)
 	}
-	if _, _, err := store.RecordView(p3.ID, user); err != nil {
+	if _, err := store.RecordView(p3.ID, user); err != nil {
 		t.Fatalf("RecordView p3 error = %v", err)
 	}
 
@@ -354,7 +362,7 @@ func TestReportOnDeletedPromptReturnsNotFound(t *testing.T) {
 	if _, _, err := store.Like(p.ID, user); !errors.Is(err, ErrPromptNotFound) {
 		t.Fatalf("expected ErrPromptNotFound for like on deleted prompt, got %v", err)
 	}
-	if _, _, err := store.RecordView(p.ID, user); !errors.Is(err, ErrPromptNotFound) {
+	if _, err := store.RecordView(p.ID, user); !errors.Is(err, ErrPromptNotFound) {
 		t.Fatalf("expected ErrPromptNotFound for view on deleted prompt, got %v", err)
 	}
 

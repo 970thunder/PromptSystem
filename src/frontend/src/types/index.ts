@@ -89,7 +89,8 @@ export interface CreateCommentRequest {
 }
 
 export interface PromptActionResponse {
-  prompt: Prompt
+  /** 仅 view 动作为 null：计数不回传完整提示词，客户端本地自增。 */
+  prompt: Prompt | null
   applied: boolean
 }
 

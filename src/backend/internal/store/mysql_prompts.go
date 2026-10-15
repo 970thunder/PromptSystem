@@ -799,36 +799,53 @@ func (s *MySQLPromptStore) GetInteractionStatus(id int, userID int) (Interaction
 	return status, nil
 }
 
-func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) {
+// RecordView counts one view. The status=1 guard, the detail-row write, and
+// the counter increment all run in one transaction so a crash can never leave
+// a view counted without its history row (or vice versa), and a soft-deleted
+// prompt is never counted. It returns only whether the counter moved: the
+// per-view detail reload this store used to pay for was the most expensive
+// part of the hottest write path, and the API response no longer needs it.
+func (s *MySQLPromptStore) RecordView(id int, userID int) (bool, error) {
 	// The status=1 guard, the detail-row write, and the counter increment all
 	// run in one transaction so a crash can never leave a view counted without
 	// its history row (or vice versa), and a soft-deleted prompt is never
 	// counted.
 	tx, err := s.db.Begin()
 	if err != nil {
-		return Prompt{}, false, err
+		return false, err
 	}
 	defer tx.Rollback()
 
 	var published int
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM prompts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1`, id).Scan(&published); err != nil {
-		return Prompt{}, false, err
+		return false, err
 	}
 	if published == 0 {
-		return Prompt{}, false, ErrPromptNotFound
+		return false, ErrPromptNotFound
 	}
 
 	// Anonymous views (userID <= 0) increment the total views counter only and
 	// never touch view_histories, because they cannot be attributed to a user.
 	// Each anonymous view is an independent counter increment.
 	if userID <= 0 {
-		if _, err := tx.Exec(`UPDATE prompts SET views = views + 1, anonymous_views = anonymous_views + 1 WHERE id = ? AND status = 1`, id); err != nil {
-			return Prompt{}, false, err
+		result, err := tx.Exec(`
+			UPDATE prompts p
+			JOIN users u ON u.id = p.user_id
+			SET p.views = p.views + 1, p.anonymous_views = p.anonymous_views + 1
+			WHERE p.id = ? AND p.status = 1 AND u.status = 1
+		`, id)
+		if err != nil {
+			return false, err
+		}
+		if affected, err := result.RowsAffected(); err != nil {
+			return false, err
+		} else if affected == 0 {
+			return false, ErrPromptNotFound
 		}
 		if err := tx.Commit(); err != nil {
-			return Prompt{}, false, err
+			return false, err
 		}
-		return s.reloadPrompt(id)
+		return true, nil
 	}
 
 	result, err := tx.Exec(`
@@ -837,7 +854,7 @@ func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) 
 		ON DUPLICATE KEY UPDATE viewed_at = CURRENT_TIMESTAMP
 	`, userID, id)
 	if err != nil {
-		return Prompt{}, false, err
+		return false, err
 	}
 
 	// affected == 1 only for an inserted row (a new unique (user, prompt)).
@@ -846,27 +863,20 @@ func (s *MySQLPromptStore) RecordView(id int, userID int) (Prompt, bool, error) 
 	// contract for logged-in views.
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return Prompt{}, false, err
+		return false, err
 	}
 	applied := affected == 1
 	if applied {
 		if _, err := tx.Exec(`UPDATE prompts SET views = views + 1 WHERE id = ? AND status = 1`, id); err != nil {
-			return Prompt{}, false, err
+			return false, err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return Prompt{}, false, err
+		return false, err
 	}
 
-	prompt, found, err := s.FindByID(id)
-	if err != nil {
-		return Prompt{}, false, err
-	}
-	if !found {
-		return Prompt{}, false, ErrPromptNotFound
-	}
-	return prompt, applied, nil
+	return applied, nil
 }
 
 // reloadPrompt loads a published prompt for a view response.

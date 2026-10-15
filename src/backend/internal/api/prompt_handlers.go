@@ -32,6 +32,13 @@ type promptActionResponse struct {
 	Applied bool         `json:"applied"`
 }
 
+// viewActionResponse deliberately carries no prompt: counting a view must
+// not pay for a detail reload, and clients bump their local counter instead.
+type viewActionResponse struct {
+	Prompt  *store.Prompt `json:"prompt"`
+	Applied bool          `json:"applied"`
+}
+
 func (s *server) handleCategories(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -834,17 +841,19 @@ func (s *server) handlePromptView(w http.ResponseWriter, r *http.Request, id int
 	// total views counter. See store.RecordView for the contract.
 	userID, _ := s.optionalUserID(r)
 
-	prompt, applied, err := s.getPromptService().RecordView(id, userID)
+	applied, err := s.getPromptService().RecordView(id, userID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, apiResponse[promptActionResponse]{
+	// The view response carries no prompt: counting must not pay for a full
+	// detail reload. Clients that hold the prompt already increment their
+	// local counter when applied is true.
+	writeJSON(w, http.StatusOK, apiResponse[viewActionResponse]{
 		Code:    200,
 		Message: "Success",
-		Data: promptActionResponse{
-			Prompt:  prompt,
+		Data: viewActionResponse{
 			Applied: applied,
 		},
 	})

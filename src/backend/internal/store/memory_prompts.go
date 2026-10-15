@@ -126,7 +126,7 @@ func (s *MemoryPromptStore) GetInteractionStatus(id int, userID int) (Interactio
 	return GetPromptInteractionStatus(id, userID)
 }
 
-func (s *MemoryPromptStore) RecordView(id int, userID int) (Prompt, bool, error) {
+func (s *MemoryPromptStore) RecordView(id int, userID int) (bool, error) {
 	return RecordPromptView(id, userID)
 }
 

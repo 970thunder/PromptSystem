@@ -195,7 +195,7 @@ func TestUserStoreDeleteAccountAnonymizesAndRevokes(t *testing.T) {
 	if _, _, err := FavoritePrompt(prompt.ID, user.ID); err != nil {
 		t.Fatalf("FavoritePrompt() error = %v", err)
 	}
-	if _, _, err := RecordPromptView(prompt.ID, user.ID); err != nil {
+	if _, err := RecordPromptView(prompt.ID, user.ID); err != nil {
 		t.Fatalf("RecordPromptView() error = %v", err)
 	}
 

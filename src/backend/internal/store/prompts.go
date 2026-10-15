@@ -444,7 +444,7 @@ func GetPromptInteractionStatus(id int, userID int) (InteractionStatus, error) {
 	return status, nil
 }
 
-func RecordPromptView(id int, userID int) (Prompt, bool, error) {
+func RecordPromptView(id int, userID int) (bool, error) {
 	promptMu.Lock()
 	defer promptMu.Unlock()
 
@@ -459,7 +459,7 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 		// counter increment.
 		if userID <= 0 {
 			prompts[index].Views++
-			return prompts[index], true, nil
+			return true, nil
 		}
 
 		if _, ok := promptViewHistory[userID]; !ok {
@@ -473,10 +473,10 @@ func RecordPromptView(id int, userID int) (Prompt, bool, error) {
 			prompts[index].Views++
 		}
 
-		return prompts[index], !existed, nil
+		return !existed, nil
 	}
 
-	return Prompt{}, false, ErrPromptNotFound
+	return false, ErrPromptNotFound
 }
 
 func ReportPrompt(id int, userID int, reason string, detail string) (Report, bool, error) {
