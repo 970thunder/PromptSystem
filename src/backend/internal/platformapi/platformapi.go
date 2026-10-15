@@ -23,6 +23,8 @@ type Deps struct {
 	AllowedPeers []string
 	Ping         func(context.Context) error
 	StorageNote  string
+	// RequestIDFrom 取站点中间件生成的请求 id（否则平台面会读调用方可控的头）。
+	RequestIDFrom func(context.Context) string
 }
 
 // PingFromReadiness 把站点自己的就绪探测适配成平台面的 Ping。
@@ -53,6 +55,7 @@ func New(deps Deps) (http.Handler, error) {
 		TrustedProxyCIDRs: deps.TrustedAddrs,
 		AllowedPeers:      deps.AllowedPeers,
 		Ping:              deps.Ping,
+		RequestIDFrom:     deps.RequestIDFrom,
 		ExtraChecks:       []contract.Check{contract.StorageCheck(deps.StorageNote)},
 	})
 }

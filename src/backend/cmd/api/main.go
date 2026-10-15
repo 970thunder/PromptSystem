@@ -37,14 +37,16 @@ func main() {
 		TrustedAddrs: cfg.PlatformTrustedAddrs,
 		AllowedPeers: cfg.PlatformAllowedPeers,
 		// 复用站点自己的 MySQL/Redis 探活；不接的话平台面 /health 永远是 degraded（评审 P2-3）。
-		Ping:        platformapi.PingFromReadiness(ready),
-		StorageNote: "上传方式 " + cfg.UploadProvider + "，目录 " + cfg.UploadDir,
+		Ping:          platformapi.PingFromReadiness(ready),
+		StorageNote:   "上传方式 " + cfg.UploadProvider + "，目录 " + cfg.UploadDir,
+		RequestIDFrom: api.RequestIDFrom,
 	})
 	if perr != nil {
 		log.Fatalf("initialize platform API: %v", perr)
 	}
 	rootHandler := http.NewServeMux()
-	rootHandler.Handle(contract.BasePath+"/", http.StripPrefix(contract.BasePath, platformHandler))
+	// 平台面挂在站点自有链之外，必须自己套上请求 id 中间件，否则契约读不到站点 id（评审 P2-2）。
+	rootHandler.Handle(contract.BasePath+"/", http.StripPrefix(contract.BasePath, api.WithRequestID(platformHandler)))
 	rootHandler.Handle("/", handler)
 
 	server := &http.Server{
