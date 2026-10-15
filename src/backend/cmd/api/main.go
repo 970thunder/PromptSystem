@@ -9,8 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Tsundeer/isoumao-shared/contract"
+
 	"promptos-backend/internal/api"
 	"promptos-backend/internal/config"
+	"promptos-backend/internal/platformapi"
 )
 
 func main() {
@@ -24,9 +27,26 @@ func main() {
 		log.Fatalf("initialize API: %v", err)
 	}
 
+	// 平台统一契约面（/api/platform/v1）：只新增端点，PromptSystem 自有路由不受影响。
+	instanceID, _ := os.Hostname()
+	platformHandler, perr := platformapi.New(platformapi.Deps{
+		Version:      os.Getenv("PROMPTOS_VERSION"),
+		Environment:  cfg.AppEnv,
+		InstanceID:   instanceID,
+		Token:        cfg.PlatformToken,
+		TrustedAddrs: cfg.PlatformTrustedAddrs,
+		AllowedPeers: cfg.PlatformAllowedPeers,
+	})
+	if perr != nil {
+		log.Fatalf("initialize platform API: %v", perr)
+	}
+	rootHandler := http.NewServeMux()
+	rootHandler.Handle(contract.BasePath+"/", http.StripPrefix(contract.BasePath, platformHandler))
+	rootHandler.Handle("/", handler)
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           handler,
+		Handler:           rootHandler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

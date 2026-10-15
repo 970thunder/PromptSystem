@@ -36,4 +36,4 @@ require (
 
 require github.com/Tsundeer/isoumao-shared v0.0.0
 
-replace github.com/Tsundeer/isoumao-shared => ../../isoumao-shared
+replace github.com/Tsundeer/isoumao-shared => ../../../isoumao-shared

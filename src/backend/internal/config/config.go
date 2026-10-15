@@ -9,8 +9,14 @@ import (
 )
 
 type Config struct {
-	AppEnv               string
-	Port                 string
+	AppEnv string
+	Port   string
+
+	// 平台统一读写面（/api/platform/v1）：令牌与对端白名单。
+	// 对端白名单与「可信代理网段」是两件事（前者决定谁能访问，后者决定 XFF 归属信到哪一跳）。
+	PlatformToken        string
+	PlatformTrustedAddrs []string
+	PlatformAllowedPeers []string
 	JWTSecret            string
 	JWTExpireHours       int
 	AuthCookieEnabled    bool
@@ -64,6 +70,9 @@ const DefaultAllowedOrigins = "*"
 func Load() Config {
 	return Config{
 		AppEnv:               getEnv("APP_ENV", "development"),
+		PlatformToken:        getEnv("ISOUMAO_PLATFORM_TOKEN", "isoumao-local-platform-token"),
+		PlatformTrustedAddrs: splitCSV(getEnv("ISOUMAO_PLATFORM_TRUSTED_ADDRS", "")),
+		PlatformAllowedPeers: splitCSV(getEnv("ISOUMAO_PLATFORM_ALLOWED_PEERS", "")),
 		Port:                 getEnv("PORT", "8080"),
 		JWTSecret:            getEnv("JWT_SECRET", "promptos-dev-secret-change-me"),
 		JWTExpireHours:       getEnvAsInt("JWT_EXPIRE_HOURS", 72),
@@ -240,6 +249,21 @@ func validOrigin(origin string) bool {
 		return true
 	}
 	return strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://")
+}
+
+// splitCSV 解析逗号分隔配置项。
+func splitCSV(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func getEnv(key, fallback string) string {
