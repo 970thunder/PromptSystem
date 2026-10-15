@@ -67,10 +67,18 @@ type serverDeps struct {
 	readyCheck      func(context.Context) map[string]bool
 }
 
+// NewServer 组装 HTTP 处理器（不含平台面）。
 func NewServer(cfg config.Config) (http.Handler, error) {
+	handler, _, err := NewServerWithReadiness(cfg)
+	return handler, err
+}
+
+// NewServerWithReadiness 与 NewServer 相同，但额外返回站点的就绪探测，
+// 供平台统一契约的 /health 复用——否则平台面的健康会永远停在 degraded（评审 P2-3）。
+func NewServerWithReadiness(cfg config.Config) (http.Handler, func(context.Context) map[string]bool, error) {
 	imageStorage, err := storage.NewImageStorage(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("initialize image storage: %w", err)
+		return nil, nil, fmt.Errorf("initialize image storage: %w", err)
 	}
 
 	userStore := store.UserManager(store.NewUserStore())
@@ -92,7 +100,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		if migrateErr := database.RunMigrations(migrationDB, ""); migrateErr != nil {
 			_ = migrationDB.Close()
 			if cfg.IsProduction() {
-				return nil, fmt.Errorf("run MySQL migrations: %w", migrateErr)
+				return nil, nil, fmt.Errorf("run MySQL migrations: %w", migrateErr)
 			}
 			log.Printf("failed to run MySQL migrations, using development memory store: %v", migrateErr)
 		} else if seedErr := store.SeedMySQLData(migrationDB, !cfg.IsProduction()); seedErr == nil {
@@ -100,7 +108,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 			db, runtimeErr := database.OpenMySQL(cfg)
 			if runtimeErr != nil {
 				if cfg.IsProduction() {
-					return nil, fmt.Errorf("connect to MySQL as runtime user: %w", runtimeErr)
+					return nil, nil, fmt.Errorf("connect to MySQL as runtime user: %w", runtimeErr)
 				}
 				log.Printf("failed to connect to MySQL as runtime user, using development memory store: %v", runtimeErr)
 			} else {
@@ -123,13 +131,13 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		} else {
 			_ = migrationDB.Close()
 			if cfg.IsProduction() {
-				return nil, fmt.Errorf("initialize MySQL reference data: %w", seedErr)
+				return nil, nil, fmt.Errorf("initialize MySQL reference data: %w", seedErr)
 			}
 			log.Printf("failed to seed MySQL data, using development memory store: %v", seedErr)
 		}
 	} else {
 		if cfg.IsProduction() {
-			return nil, fmt.Errorf("connect to MySQL as migration user: %w", err)
+			return nil, nil, fmt.Errorf("connect to MySQL as migration user: %w", err)
 		}
 		log.Printf("failed to connect to MySQL, using development memory store: %v", err)
 	}
@@ -149,7 +157,7 @@ func NewServer(cfg config.Config) (http.Handler, error) {
 		emailSender:     newSMTPEmailSender(cfg),
 		storageMode:     storageMode,
 		readyCheck:      readyCheck,
-	}), nil
+	}), readyCheck, nil
 }
 
 // newServerWithDeps assembles the HTTP handler from explicit dependencies. It is

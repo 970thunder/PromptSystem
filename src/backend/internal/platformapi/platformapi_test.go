@@ -54,6 +54,23 @@ func TestPlatformFaceIdentifiesService(t *testing.T) {
 	}
 }
 
+// 站点的就绪探测必须能被平台面复用：全绿不报错、任一不健康即报错（评审 P2-3）。
+// 原有用例只覆盖「未接线 → degraded」那一半，接线这一半没人覆盖，
+// 于是 main.go 少传 Ping 这件事一直没被发现。
+func TestPingFromReadiness(t *testing.T) {
+	if err := platformapi.PingFromReadiness(func(context.Context) map[string]bool {
+		return map[string]bool{"mysql": true, "redis": true}
+	})(context.Background()); err != nil {
+		t.Fatalf("全部就绪时不应报错: %v", err)
+	}
+	err := platformapi.PingFromReadiness(func(context.Context) map[string]bool {
+		return map[string]bool{"mysql": true, "redis": false}
+	})(context.Background())
+	if err == nil {
+		t.Fatal("redis 不健康时必须报错（否则平台面会说一切正常）")
+	}
+}
+
 // 未接线探测必须记为 degraded，而不是让 /health 看起来一切正常。
 func TestPlatformFaceReportsUnwiredProbe(t *testing.T) {
 	srv := newServer(t, nil)

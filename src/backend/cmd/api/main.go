@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("invalid configuration: %v", err)
 	}
 
-	handler, err := api.NewServer(cfg)
+	handler, ready, err := api.NewServerWithReadiness(cfg)
 	if err != nil {
 		log.Fatalf("initialize API: %v", err)
 	}
@@ -36,6 +36,9 @@ func main() {
 		Token:        cfg.PlatformToken,
 		TrustedAddrs: cfg.PlatformTrustedAddrs,
 		AllowedPeers: cfg.PlatformAllowedPeers,
+		// 复用站点自己的 MySQL/Redis 探活；不接的话平台面 /health 永远是 degraded（评审 P2-3）。
+		Ping:        platformapi.PingFromReadiness(ready),
+		StorageNote: "上传方式 " + cfg.UploadProvider + "，目录 " + cfg.UploadDir,
 	})
 	if perr != nil {
 		log.Fatalf("initialize platform API: %v", perr)
