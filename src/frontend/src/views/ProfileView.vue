@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
-import { Download, Eraser, Shield, UserRoundX } from 'lucide-vue-next'
+import { Download, Eraser, Shield, UserRoundX } from '@lucide/vue'
 import { promptApi } from '@/api/promptApi'
 import { userApi } from '@/api/userApi'
 import { usePromptStore } from '@/stores/prompt'

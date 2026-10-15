@@ -4,7 +4,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp } from '@lucide/vue'
 import { usePromptStore } from '@/stores/prompt'
 import { useUserStore } from '@/stores/user'
 import AppShell from '@/components/layout/AppShell.vue'

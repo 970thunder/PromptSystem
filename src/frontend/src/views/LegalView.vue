@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { FileText, ShieldCheck } from 'lucide-vue-next'
+import { FileText, ShieldCheck } from '@lucide/vue'
 import AppShell from '@/components/layout/AppShell.vue'
 
 const props = defineProps<{

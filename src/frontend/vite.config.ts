@@ -29,7 +29,7 @@ export default defineConfig({
           if (!id.includes('node_modules')) return
           if (id.includes('naive-ui')) return 'vendor-ui'
           if (id.includes('date-fns')) return 'vendor-date'
-          if (id.includes('lucide-vue-next')) return 'vendor-icons'
+          if (id.includes('lucide')) return 'vendor-icons'
           if (id.includes('vue-router') || id.includes('pinia') || id.includes('/vue/') || id.includes('@vue/')) return 'vendor-vue'
           return 'vendor'
         }

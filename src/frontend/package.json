@@ -17,8 +17,8 @@
     "contract:check": "node ../../scripts/generate-api-contract.mjs --check"
   },
   "dependencies": {
+    "@lucide/vue": "^1.57.0",
     "axios": "^1.6.8",
-    "lucide-vue-next": "^1.0.0",
     "naive-ui": "^2.38.1",
     "pinia": "^2.1.7",
     "vue": "^3.5.44",

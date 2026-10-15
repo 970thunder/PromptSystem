@@ -16,7 +16,7 @@ import {
   Mail,
   Server,
   ShieldCheck
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import PageLoading from '@/components/feedback/PageLoading.vue'
 import PageError from '@/components/feedback/PageError.vue'
 import { setupApi, type SetupStatus } from '@/api/setupApi'

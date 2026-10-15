@@ -1,7 +1,7 @@
 <!-- 文件作用：主题切换按钮，触发 useSiteTheme 的圆环扩散切换。 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Moon, Sun } from 'lucide-vue-next'
+import { Moon, Sun } from '@lucide/vue'
 import { useSiteTheme } from '@/composables/useSiteTheme'
 
 const { resolvedMode, switchTheme } = useSiteTheme()
