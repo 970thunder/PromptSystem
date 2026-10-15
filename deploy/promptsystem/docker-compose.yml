@@ -120,6 +120,14 @@ services:
       SMTP_USER: ${PROMPTOS_SMTP_USER:-}
       SMTP_PASSWORD: ${PROMPTOS_SMTP_PASSWORD:-}
       SMTP_FROM: ${PROMPTOS_SMTP_FROM:-}
+      # 平台统一读写面（/api/platform/v1）。本服务 APP_ENV=production，
+      # 契约会拒绝弱令牌启动，因此这里用 :? 让 compose 在缺令牌时**部署即失败**，
+      # 而不是等容器起来才崩——也避免有人为了让它起来把 APP_ENV 改回 development。
+      ISOUMAO_PLATFORM_TOKEN: ${ISOUMAO_PLATFORM_TOKEN:?ISOUMAO_PLATFORM_TOKEN must be a strong random value}
+      # 对端白名单：默认仅本机；运维工具要访问就显式加上它的网段。
+      ISOUMAO_PLATFORM_ALLOWED_PEERS: ${ISOUMAO_PLATFORM_ALLOWED_PEERS:-127.0.0.1/32}
+      # XFF 归属信任的网段（与上面的对端白名单是两件事，勿合并）。
+      ISOUMAO_PLATFORM_TRUSTED_ADDRS: ${ISOUMAO_PLATFORM_TRUSTED_ADDRS:-127.0.0.1/32}
     ports:
       - "127.0.0.1:5092:8080"
     volumes:
