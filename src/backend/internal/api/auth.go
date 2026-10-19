@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"mime"
 	"net/http"
 	"strconv"
@@ -772,8 +773,60 @@ func (s *server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// 滑动续期：Cookie 会话进入最后 1/3 寿命时透明换发新 JWT（保持 72h 不活跃才过期）。
+		s.maybeRefreshSessionCookie(w, r, claims, userRecord.ID, userRecord.Email, userRecord.SessionVer)
+
 		ctx := context.WithValue(r.Context(), userContextKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
+// maybeRefreshSessionCookie 仅对 Cookie 会话生效（Bearer 调用方自行管理令牌）。
+// 旧令牌不进 denylist：同页并发请求可能仍带着旧 Cookie，立即作废会误踢；
+// 旧令牌按原过期时间自然失效，改密/禁用仍由 session version 与用户状态统一吊销。
+// CSRF Cookie 只续期不轮换，避免打断已读取旧 CSRF 值、尚在途中的请求。
+func (s *server) maybeRefreshSessionCookie(w http.ResponseWriter, r *http.Request, claims auth.Claims, userID int, email string, sessionVersion int) {
+	if !s.authCookieEnabled() {
+		return
+	}
+	if _, hasBearer := bearerTokenFromRequest(r); hasBearer {
+		return
+	}
+	ttl := time.Duration(s.config.JWTExpireHours) * time.Hour
+	if ttl <= 0 {
+		return
+	}
+	remaining := time.Until(time.Unix(claims.Expiry, 0))
+	if remaining <= 0 || remaining > ttl/3 {
+		return
+	}
+	token, err := s.tokenManager.Generate(userID, email, sessionVersion)
+	if err != nil {
+		log.Printf("session refresh: generate token failed: %v", err)
+		return
+	}
+	maxAge := int(ttl.Seconds())
+	http.SetCookie(w, &http.Cookie{
+		Name:     authCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   s.authCookieSecure(),
+		SameSite: http.SameSiteLaxMode,
+	})
+	if csrf, err := r.Cookie(csrfCookieName); err == nil && csrf.Value != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     csrfCookieName,
+			Value:    csrf.Value,
+			Path:     "/",
+			MaxAge:   maxAge,
+			HttpOnly: false,
+			Secure:   s.authCookieSecure(),
+			SameSite: http.SameSiteLaxMode,
+		})
+	} else {
+		s.setCSRFCookie(w)
 	}
 }
 
